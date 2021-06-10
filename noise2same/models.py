@@ -2,14 +2,16 @@ from collections import Counter
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple, Union
 
-import network
 import numpy as np
 import torch
+import wandb
 from torch import Tensor as T
 from torch import nn
 from torch.nn.functional import conv2d, conv3d
 from torch.utils.data import DataLoader
 from tqdm.auto import tqdm, trange
+
+from noise2same import network
 
 
 class DonutMask(nn.Module):
@@ -159,6 +161,7 @@ class Trainer(object):
         checkpoint_path: str = "checkpoints",
         monitor: str = "val_rec_mse",
         check: bool = False,
+        wandb_log: bool = True,
     ):
 
         self.model = model
@@ -168,14 +171,21 @@ class Trainer(object):
         self.checkpoint_path = Path(checkpoint_path)
         self.monitor = monitor
         self.check = check
+        if check:
+            wandb_log = False
+        self.wandb_log = wandb_log
 
         self.model.to(device)
         self.checkpoint_path.mkdir(parents=True, exist_ok=False)
 
-    def one_epoch(self, loader: DataLoader) -> Dict[str, float]:
+    def one_epoch(
+        self, loader: DataLoader
+    ) -> Tuple[Dict[str, float], Dict[str, np.ndarray]]:
         self.model.train()
         iterator = tqdm(loader, desc="train")
         total_loss = Counter()
+        images = {}
+
         for i, batch in enumerate(iterator):
             x, mask = map(lambda x: x.to(self.device), batch)
             self.optimizer.zero_grad()
@@ -197,16 +207,27 @@ class Trainer(object):
             if self.check and i > 3:
                 break
 
-        return {k: v / len(loader) for k, v in total_loss.items()}
+            if i == len(iterator) - 1:
+                images = {
+                    "input": x,
+                    "out_mask": out_mask,
+                    "out_raw": out_raw,
+                }
+                images = {k: v.detach().cpu().numpy() for k, v in images.items()}
+
+        return {k: v / len(loader) for k, v in total_loss.items()}, images
 
     @torch.no_grad()
-    def validate(self, loader: DataLoader) -> Dict[str, float]:
+    def validate(
+        self, loader: DataLoader
+    ) -> Tuple[Dict[str, float], Dict[str, np.ndarray]]:
         self.model.eval()
         iterator = tqdm(loader, desc="valid")
 
         total_loss = 0
+        images = {}
         for i, batch in enumerate(iterator):
-            x, mask = map(lambda x: x.to(self.device), batch)
+            x = batch[0].to(self.device)
             out_raw = self.model(x)
             rec_mse = torch.mean(torch.square(out_raw - x))
             total_loss += rec_mse.item()
@@ -215,7 +236,26 @@ class Trainer(object):
             if self.check and i > 3:
                 break
 
-        return {"val_rec_mse": total_loss / len(loader)}
+            if i == len(iterator) - 1:
+                images = {
+                    "val_input": x,
+                    "val_out_raw": out_raw,
+                }
+                images = {k: v.detach().cpu().numpy() for k, v in images.items()}
+
+        return {"val_rec_mse": total_loss / len(loader)}, images
+
+    @torch.no_grad()
+    def inference(self, loader: DataLoader) -> List[np.ndarray]:
+        self.model.eval()
+
+        outputs = []
+        iterator = tqdm(loader, desc="inference", position=0, leave=True)
+        for i, batch in enumerate(iterator):
+            x = batch[0].to(self.device)
+            out_raw = self.model(x).cpu().numpy()
+            outputs.append(out_raw)
+        return outputs
 
     def fit(
         self,
@@ -227,28 +267,47 @@ class Trainer(object):
         iterator = trange(n_epochs)
         history = []
         best_loss = np.inf
-        for i in iterator:
-            loss = self.one_epoch(loader_train)
-            if loader_valid is not None:
-                loss.update(self.validate(loader_valid))
-            # Show progress
-            iterator.set_postfix(loss)
-            history.append(loss)
-            # Sae best model
-            if self.monitor not in loss:
-                print(
-                    f"Nothing to monitor! {self.monitor} not in recorded losses {list(loss.keys())}"
-                )
-                continue
-            if loss[self.monitor] < best_loss:
-                print(
-                    f"Saved best model by {self.monitor}: {loss[self.monitor]:.4e} < {best_loss:.4e}"
-                )
-                self.save_model()
-                best_loss = loss[self.monitor]
 
-            if self.check and i > 3:
-                break
+        if self.wandb_log:
+            wandb.watch(self.model)
+
+        try:
+            for i in iterator:
+                loss, images = self.one_epoch(loader_train)
+                if loader_valid is not None:
+                    loss_valid, images_valid = self.validate(loader_valid)
+                    loss.update(loss_valid)
+                    images.update(images_valid)
+
+                # Log training
+                if self.wandb_log:
+                    images_wandb = {
+                        k: [wandb.Image(im) for im in v] for k, v in images.items()
+                    }
+                    wandb.log({**images_wandb, **loss})
+
+                # Show progress
+                iterator.set_postfix(loss)
+                history.append(loss)
+                # Save best model
+                if self.monitor not in loss:
+                    print(
+                        f"Nothing to monitor! {self.monitor} not in recorded losses {list(loss.keys())}"
+                    )
+                    continue
+
+                if loss[self.monitor] < best_loss:
+                    print(
+                        f"Saved best model by {self.monitor}: {loss[self.monitor]:.4e} < {best_loss:.4e}"
+                    )
+                    self.save_model()
+                    best_loss = loss[self.monitor]
+
+                if self.check and i > 3:
+                    break
+
+        except KeyboardInterrupt:
+            print("Interrupted")
 
         return history
 

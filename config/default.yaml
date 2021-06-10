@@ -1,4 +1,17 @@
+hydra:
+  run:
+    dir: results/${now:%Y-%m-%d_%H-%M-%S}
 
+project: noise2same
+device: 0
+seed: 56
+check: False
+
+data: bsd68
+
+loader:
+  batch_size: 8
+  num_workers: 4
 
 network:
   base_channels: 96
@@ -8,3 +21,6 @@ network:
   decoding_block_sizes: [1, 1]
   downsampling: [conv, conv]
   skip_method: concat
+
+train:
+  n_epochs: 20
