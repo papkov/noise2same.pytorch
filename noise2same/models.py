@@ -58,6 +58,7 @@ class Noise2Same(nn.Module):
         masking: str = "gaussian",
         noise_mean: float = 0,
         noise_std: float = 0.2,
+        **kwargs: Any,
     ):
         """
 
@@ -82,9 +83,7 @@ class Noise2Same(nn.Module):
 
         # TODO customize with segmentation_models
         self.net = network.UNet(
-            in_channels=in_channels,
-            n_dim=n_dim,
-            base_channels=base_channels,
+            in_channels=in_channels, n_dim=n_dim, base_channels=base_channels, **kwargs
         )
         self.head = network.RegressionHead(
             in_channels=base_channels, out_channels=in_channels
@@ -187,7 +186,9 @@ class Trainer(object):
         images = {}
 
         for i, batch in enumerate(iterator):
-            x, mask = map(lambda x: x.to(self.device), batch)
+            x = batch["image"].to(self.device)
+            mask = batch["mask"].to(self.device)
+
             self.optimizer.zero_grad()
 
             out_mask, out_raw = self.model.forward_full(x, mask)
@@ -207,13 +208,18 @@ class Trainer(object):
             if self.check and i > 3:
                 break
 
-            if i == len(iterator) - 1:
+            if i == len(iterator) - 1 or (self.check and i == 3):
                 images = {
                     "input": x,
                     "out_mask": out_mask,
                     "out_raw": out_raw,
                 }
-                images = {k: v.detach().cpu().numpy() for k, v in images.items()}
+                images = {
+                    k: (v.detach().cpu() * batch["std"] + batch["mean"])
+                    .numpy()
+                    .clip(0, 255)
+                    for k, v in images.items()
+                }
 
         return {k: v / len(loader) for k, v in total_loss.items()}, images
 
@@ -227,7 +233,7 @@ class Trainer(object):
         total_loss = 0
         images = {}
         for i, batch in enumerate(iterator):
-            x = batch[0].to(self.device)
+            x = batch["image"].to(self.device)
             out_raw = self.model(x)
             rec_mse = torch.mean(torch.square(out_raw - x))
             total_loss += rec_mse.item()
@@ -236,12 +242,17 @@ class Trainer(object):
             if self.check and i > 3:
                 break
 
-            if i == len(iterator) - 1:
+            if i == len(iterator) - 1 or (self.check and i == 3):
                 images = {
                     "val_input": x,
                     "val_out_raw": out_raw,
                 }
-                images = {k: v.detach().cpu().numpy() for k, v in images.items()}
+                images = {
+                    k: (v.detach().cpu() * batch["std"] + batch["mean"])
+                    .numpy()
+                    .clip(0, 255)
+                    for k, v in images.items()
+                }
 
         return {"val_rec_mse": total_loss / len(loader)}, images
 
@@ -252,9 +263,9 @@ class Trainer(object):
         outputs = []
         iterator = tqdm(loader, desc="inference", position=0, leave=True)
         for i, batch in enumerate(iterator):
-            x = batch[0].to(self.device)
-            out_raw = self.model(x).cpu().numpy()
-            outputs.append(out_raw)
+            x = batch["image"].to(self.device)
+            out_raw = self.model(x).cpu() * batch["std"] + batch["mean"]
+            outputs.append(out_raw.numpy().clip(0, 255))
         return outputs
 
     def fit(

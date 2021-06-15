@@ -11,7 +11,7 @@ data: bsd68
 
 loader:
   batch_size: 8
-  num_workers: 4
+  num_workers: 0
 
 network:
   base_channels: 96
@@ -22,5 +22,15 @@ network:
   downsampling: [conv, conv]
   skip_method: concat
 
+model:
+  lambda_inv: 2  # 0.95 for BSD68
+  mask_percentage: 0.5
+  masking: gaussian
+  noise_mean: 0
+  noise_std: 0.2
+
 train:
   n_epochs: 20
+
+optim:
+  lr: 4e-4

@@ -1,4 +1,5 @@
 import os
+from pathlib import Path
 
 import hydra
 import torch
@@ -7,7 +8,6 @@ from omegaconf import DictConfig, OmegaConf
 from torch.utils.data import DataLoader
 
 from noise2same import dataset, models, util
-from pathlib import Path
 
 
 @hydra.main(config_path="config", config_name="default.yaml")
@@ -25,7 +25,9 @@ def main(cfg: DictConfig) -> None:
         dataset_train = dataset.BSD68DatasetPrepared(
             path=cwd / "data/BSD68/", mode="train"
         )
-        dataset_valid = dataset.BSD68DatasetPrepared(path=cwd / "data/BSD68/", mode="val")
+        dataset_valid = dataset.BSD68DatasetPrepared(
+            path=cwd / "data/BSD68/", mode="val"
+        )
     else:
         # todo add other datasets
         raise ValueError
@@ -48,8 +50,10 @@ def main(cfg: DictConfig) -> None:
     )
 
     n_iter = cfg.train.n_epochs * len(loader_train)  # number of loader iterations
-    model = models.Noise2Same(n_dim=2, in_channels=1, masking="gaussian")
-    optimizer = torch.optim.Adam(model.parameters(), lr=3e-4)
+    # todo imply n_dim and in_channels from data
+    model = models.Noise2Same(n_dim=2, in_channels=1, **cfg.model)
+    # todo parametrize as hydra init
+    optimizer = torch.optim.Adam(model.parameters(), lr=cfg.optim.lr)
     scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=n_iter)
 
     trainer = models.Trainer(
