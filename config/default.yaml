@@ -10,8 +10,8 @@ check: False
 data: bsd68
 
 loader:
-  batch_size: 8
-  num_workers: 0
+  batch_size: 16
+  num_workers: 4
 
 network:
   base_channels: 96
@@ -34,3 +34,7 @@ train:
 
 optim:
   lr: 4e-4
+  decay_rate: 0.5
+  decay_steps: 5e3  # how many steps to decrease by decay rate
+  staircase: True  # integer division
+

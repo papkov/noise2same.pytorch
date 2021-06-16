@@ -9,7 +9,7 @@ from torch import Tensor as T
 from torch import nn
 from torch.nn.functional import conv2d, conv3d
 from torch.utils.data import DataLoader
-from tqdm.auto import tqdm, trange
+from tqdm import tqdm, trange
 
 from noise2same import network
 
@@ -220,8 +220,10 @@ class Trainer(object):
                     .clip(0, 255)
                     for k, v in images.items()
                 }
-
-        return {k: v / len(loader) for k, v in total_loss.items()}, images
+        total_loss = {k: v / len(loader) for k, v in total_loss.items()}
+        if self.scheduler is not None:
+            total_loss["lr"] = self.scheduler.get_last_lr()[0]
+        return total_loss, images
 
     @torch.no_grad()
     def validate(
@@ -279,8 +281,8 @@ class Trainer(object):
         history = []
         best_loss = np.inf
 
-        if self.wandb_log:
-            wandb.watch(self.model)
+        # if self.wandb_log:
+        #     wandb.watch(self.model)
 
         try:
             for i in iterator:

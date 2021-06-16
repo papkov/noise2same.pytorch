@@ -120,3 +120,12 @@ class BSD68DatasetPrepared(AbstractNoiseDataset2D):
 
     def _read_image(self, image_or_path: Union[str, np.ndarray]) -> np.ndarray:
         return image_or_path
+
+
+def training_augmentations():
+    return Compose(
+        [
+            albu.RandomRotate90(p=0.5),
+            albu.Flip(p=0.5),
+        ]
+    )
