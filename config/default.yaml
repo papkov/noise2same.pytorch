@@ -7,11 +7,13 @@ device: 0
 seed: 56
 check: False
 
-data: bsd68
+data:
+  name: bsd68
+  crop: 64
 
 loader:
-  batch_size: 16  # todo how batch 64 possible?
-  num_workers: 4
+  batch_size: 64  # todo how batch 64 possible?
+  num_workers: 8
 
 network:
   base_channels: 96
@@ -30,7 +32,7 @@ model:
   noise_std: 0.2
 
 train:
-  n_epochs: 20
+  n_epochs: 1600  # ~80000 steps as in the example
 
 optim:
   lr: 0.0004

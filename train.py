@@ -44,11 +44,11 @@ def main(cfg: DictConfig) -> None:
         wandb.init(project=cfg.project, config=dict(cfg))
 
     # todo parametrize everything in cfg
-    if cfg.data.lower() == "bsd68":
+    if cfg.data.name.lower() == "bsd68":
         dataset_train = dataset.BSD68DatasetPrepared(
             path=cwd / "data/BSD68/",
             mode="train",
-            transforms=dataset.training_augmentations(),
+            transforms=dataset.training_augmentations(crop=cfg.data.crop),
         )
         dataset_valid = dataset.BSD68DatasetPrepared(
             path=cwd / "data/BSD68/", mode="val"
@@ -67,7 +67,7 @@ def main(cfg: DictConfig) -> None:
     )
     loader_valid = DataLoader(
         dataset_valid,
-        batch_size=cfg.loader.batch_size,
+        batch_size=4,
         num_workers=cfg.loader.num_workers,
         shuffle=False,
         pin_memory=True,

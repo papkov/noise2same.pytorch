@@ -122,9 +122,10 @@ class BSD68DatasetPrepared(AbstractNoiseDataset2D):
         return image_or_path
 
 
-def training_augmentations():
+def training_augmentations(crop: int = 64):
     return Compose(
         [
+            albu.RandomCrop(width=crop, height=crop, p=1),
             albu.RandomRotate90(p=0.5),
             albu.Flip(p=0.5),
         ]
