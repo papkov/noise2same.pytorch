@@ -10,7 +10,7 @@ check: False
 data: bsd68
 
 loader:
-  batch_size: 16
+  batch_size: 16  # todo how batch 64 possible?
   num_workers: 4
 
 network:
@@ -24,7 +24,7 @@ network:
 
 model:
   lambda_inv: 2  # 0.95 for BSD68
-  mask_percentage: 0.5
+  mask_percentage: 0.5 # in percents
   masking: gaussian
   noise_mean: 0
   noise_std: 0.2
@@ -33,7 +33,7 @@ train:
   n_epochs: 20
 
 optim:
-  lr: 4e-4
+  lr: 0.0004
   decay_rate: 0.5
   decay_steps: 5e3  # how many steps to decrease by decay rate
   staircase: True  # integer division
