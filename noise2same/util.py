@@ -11,6 +11,8 @@ from skimage.metrics import (
     structural_similarity,
 )
 
+from functools import partial
+
 
 def clean_plot(ax: np.ndarray) -> None:
     """
@@ -59,26 +61,36 @@ def crop_as(x: np.ndarray, gt: np.ndarray) -> np.ndarray:
 
 
 def calculate_scores(
-    gt: np.ndarray, x: np.ndarray, data_range: float = 1.0, multichannel: bool = False
+    gt: np.ndarray,
+    x: np.ndarray,
+    data_range: float = 1.0,
+    normalize_pairs: bool = False,
+    scale: bool = False,
+    multichannel: bool = False,
 ) -> Dict[str, float]:
     """
     Calculates image reconstruction metrics
     :param gt: ndarray, the ground truth image
     :param x: ndarray, prediction
     :param data_range: The data range of the input image, 1 by default (0-1 normalized images)
+    :param normalize_pairs: bool, normalize and affinely scale pairs gt-x (needed for Planaria dataset)
+    :param scale: bool, scale images by min and max (needed for Imagenet dataset)
     :param multichannel: If True, treat the last dimension of the array as channels for SSIM. Similarity
         calculations are done independently for each channel then averaged.
     :return:
     """
     x_ = crop_as(x, gt)
     assert gt.shape == x_.shape, f"Different shapes {gt.shape}, {x_.shape}"
-    gt_, x_ = normalize_min_mse(gt, x_)
+    if scale:
+        x_ = normalize_zero_one(x_) * data_range
+    if normalize_pairs:
+        gt, x_ = normalize_min_mse(gt, x_)
 
     metrics = {
-        "rmse": np.sqrt(mean_squared_error(gt_, x_)),
-        "psnr": peak_signal_noise_ratio(gt_, x_, data_range=data_range),
+        "rmse": np.sqrt(mean_squared_error(gt, x_)),
+        "psnr": peak_signal_noise_ratio(gt, x_, data_range=data_range),
         "ssim": structural_similarity(
-            gt_, x_, data_range=1.0, multichannel=multichannel
+            gt, x_, data_range=data_range, multichannel=multichannel
         ),
     }
 
@@ -144,6 +156,9 @@ def normalize_percentile(
     mi = np.percentile(x, p_min, axis=axis, keepdims=True)
     ma = np.percentile(x, p_max, axis=axis, keepdims=True)
     return normalize_mi_ma(x, mi, ma, clip=clip, eps=eps, dtype=dtype)
+
+
+normalize_zero_one = partial(normalize_percentile, p_min=0, p_max=100, clip=True)
 
 
 def normalize_min_mse(gt: np.ndarray, x: np.ndarray, normalize_gt: bool = True):
