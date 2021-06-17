@@ -295,13 +295,22 @@ class Trainer(object):
                 # Log training
                 if self.wandb_log:
                     images_wandb = {
-                        k: [wandb.Image(im) for im in v] for k, v in images.items()
+                        # limit the number of uploaded images
+                        k: [wandb.Image(im) for im in v[:4]]
+                        for k, v in images.items()
                     }
                     wandb.log({**images_wandb, **loss})
 
                 # Show progress
                 iterator.set_postfix(loss)
                 history.append(loss)
+
+                # Save last model
+                self.save_model("model_last")
+
+                if self.check and i > 3:
+                    break
+
                 # Save best model
                 if self.monitor not in loss:
                     print(
@@ -315,9 +324,6 @@ class Trainer(object):
                     )
                     self.save_model()
                     best_loss = loss[self.monitor]
-
-                if self.check and i > 3:
-                    break
 
         except KeyboardInterrupt:
             print("Interrupted")

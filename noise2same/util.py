@@ -120,7 +120,7 @@ def normalize_mi_ma(
     return x
 
 
-def normalize(
+def normalize_percentile(
     x,
     p_min: float = 2.0,
     p_max: float = 99.8,
@@ -155,7 +155,9 @@ def normalize_min_mse(gt: np.ndarray, x: np.ndarray, normalize_gt: bool = True):
     :return: gt_scaled, x_scaled
     """
     if normalize_gt:
-        gt = normalize(gt, 0.1, 99.9, clip=False).astype(np.float32, copy=False)
+        gt = normalize_percentile(gt, 0.1, 99.9, clip=False).astype(
+            np.float32, copy=False
+        )
     x = x.astype(np.float32, copy=False) - np.mean(x)
     gt = gt.astype(np.float32, copy=False) - np.mean(gt)
     scale = np.cov(x.flatten(), gt.flatten())[0, 1] / np.var(x.flatten())

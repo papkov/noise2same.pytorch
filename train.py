@@ -24,6 +24,7 @@ def exponential_decay(
     :param staircase: bool, integer division global_step / decay_steps
     :return: lambda(epoch)
     """
+
     def _lambda(epoch: int):
         exp = epoch / decay_steps
         if staircase:
