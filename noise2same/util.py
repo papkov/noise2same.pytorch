@@ -1,5 +1,6 @@
 import os
 import random
+from functools import partial
 from typing import Dict, Tuple, Union
 
 import numpy as np
@@ -10,8 +11,6 @@ from skimage.metrics import (
     peak_signal_noise_ratio,
     structural_similarity,
 )
-
-from functools import partial
 
 
 def clean_plot(ax: np.ndarray) -> None:
@@ -43,7 +42,7 @@ def fix_seed(seed: int = 56) -> None:
 def crop_as(x: np.ndarray, gt: np.ndarray) -> np.ndarray:
     """
     Crops x to gt shape evenly from each side
-    (removes needed padding)
+    (assumes even padding to remove)
     :param x:
     :param gt:
     :return: cropped x

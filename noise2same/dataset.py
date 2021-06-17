@@ -47,11 +47,9 @@ def mask_like_image(image: np.ndarray, mask_percentage: float = 0.5) -> np.ndarr
 
 
 @dataclass
-class AbstractNoiseDataset2D(Dataset):
+class AbstractNoiseDataset(Dataset):
     path: Union[Path, str]
     mask_percentage: float = 0.5
-    # mean: Tuple[int, ...] = (0.485, 0.456, 0.406)
-    # std: Tuple[int, ...] = (0.229, 0.224, 0.225)
     transforms: Optional[Union[List[BasicTransform], Compose, List[Compose]]] = None
 
     def __post_init__(self):
@@ -67,8 +65,8 @@ class AbstractNoiseDataset2D(Dataset):
                 albu.PadIfNeeded(
                     min_height=None,
                     min_width=None,
-                    pad_height_divisor=32,
-                    pad_width_divisor=32,
+                    pad_height_divisor=8,
+                    pad_width_divisor=8,
                 ),
                 ToTensorV2(transpose_mask=True),
             ]
@@ -82,6 +80,14 @@ class AbstractNoiseDataset2D(Dataset):
 
     def __len__(self):
         return len(self.images)
+
+    def __getitem__(self, item):
+        raise NotImplementedError
+
+
+@dataclass
+class AbstractNoiseDataset2D(AbstractNoiseDataset):
+    normalize_by_channel: bool = False
 
     def __getitem__(self, i: int) -> Dict[str, Any]:
         """
@@ -100,8 +106,11 @@ class AbstractNoiseDataset2D(Dataset):
 
         # normalize as per the paper
         # TODO in the paper channels are not specified. do they matter? try with dim=(1, 2)
-        mean = torch.mean(ret["image"], dim=(0, 1, 2), keepdim=True)
-        std = torch.std(ret["image"], dim=(0, 1, 2), keepdim=True)
+        dim = tuple(range(1, 3))
+        if not self.normalize_by_channel:
+            dim = (0,) + dim
+        mean = torch.mean(ret["image"], dim=dim, keepdim=True)
+        std = torch.std(ret["image"], dim=dim, keepdim=True)
         ret["image"] = (ret["image"] - mean) / std
 
         ret.update({"mean": mean, "std": std})
@@ -120,6 +129,14 @@ class BSD68DatasetPrepared(AbstractNoiseDataset2D):
 
     def _read_image(self, image_or_path: Union[str, np.ndarray]) -> np.ndarray:
         return image_or_path
+
+
+@dataclass
+class AbstractNoiseDataset3D(AbstractNoiseDataset):
+    def __post_init__(self):
+        self.path = Path(self.path)
+        assert self.path.is_dir(), f"Incorrect path, {self.path} not a dir"
+        self.images = self._get_images()
 
 
 def training_augmentations(crop: int = 64):
