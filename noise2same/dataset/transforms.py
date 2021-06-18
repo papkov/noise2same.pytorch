@@ -1,7 +1,9 @@
+from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing import List, Optional, Tuple, Union
 
 import numpy as np
+import torch
 from numpy import ndarray
 from torch import Tensor as T
 
@@ -10,7 +12,7 @@ Array = Union[ndarray, T]
 
 
 @dataclass
-class BaseTransform3D:
+class BaseTransform3D(ABC):
     p: float = 0.5
     axis: int = 0
     seed: int = 43
@@ -21,9 +23,11 @@ class BaseTransform3D:
     def __post_init__(self):
         np.random.seed(self.seed)
 
+    @abstractmethod
     def apply(self, x: ndarray) -> ndarray:
         raise NotImplementedError
 
+    @abstractmethod
     def resample(self, x: ndarray) -> None:
         raise NotImplementedError
 
@@ -78,18 +82,6 @@ class RandomRotate90(BaseTransform3D):
         self.axis = (dims[a], dims[a - 1])
 
 
-@dataclass
-class Compose:
-    transforms: List[BaseTransform3D]
-
-    def __call__(self, x: ndarray, resample: bool = False):
-        out = x.copy()
-        for t in self.transforms:
-            out = t(out, resample=resample)
-        return out
-
-
-@dataclass
 class RandomCrop(BaseTransform3D):
     p: float = 1
     patch_size: Union[None, int, Tuple[int, ...]] = 64
@@ -154,3 +146,28 @@ class CenterCrop(RandomCrop):
             else slice(None)
             for c, p in zip(center, patch_size)
         )
+
+
+@dataclass
+class Compose:
+    transforms: List[BaseTransform3D]
+
+    def __call__(self, x: ndarray, resample: bool = False):
+        out = x.copy()
+        for t in self.transforms:
+            if t is not None:
+                out = t(out, resample=resample)
+        return out
+
+
+@dataclass
+class ToTensor(BaseTransform3D):
+    transpose: bool = False
+
+    def resample(self, x: ndarray) -> None:
+        pass
+
+    def apply(self, x: ndarray) -> T:
+        if self.transpose:
+            x = np.moveaxis(-1, 0)
+        return torch.from_numpy(x)

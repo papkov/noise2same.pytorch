@@ -4,11 +4,13 @@ from pathlib import Path
 import hydra
 import torch
 import wandb
-from hydra.utils import get_original_cwd, instantiate
+from hydra.utils import get_original_cwd
 from omegaconf import DictConfig, OmegaConf
 from torch.utils.data import DataLoader
 
-from noise2same import dataset, models, util
+from noise2same import models, util
+from noise2same.dataset import bsd68, hanzi, imagenet, planaria
+from noise2same.dataset.util import training_augmentations_2d
 
 
 def exponential_decay(
@@ -46,14 +48,12 @@ def main(cfg: DictConfig) -> None:
 
     # todo parametrize everything in cfg
     if cfg.data.name.lower() == "bsd68":
-        dataset_train = dataset.BSD68DatasetPrepared(
+        dataset_train = bsd68.BSD68DatasetPrepared(
             path=cwd / "data/BSD68/",
             mode="train",
-            transforms=dataset.training_augmentations(crop=cfg.data.crop),
+            transforms=training_augmentations_2d(crop=cfg.data.crop),
         )
-        dataset_valid = dataset.BSD68DatasetPrepared(
-            path=cwd / "data/BSD68/", mode="val"
-        )
+        dataset_valid = bsd68.BSD68DatasetPrepared(path=cwd / "data/BSD68/", mode="val")
     else:
         # todo add other datasets
         raise ValueError
