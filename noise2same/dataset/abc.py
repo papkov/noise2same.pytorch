@@ -38,11 +38,21 @@ class AbstractNoiseDataset(Dataset, ABC):
         ]
     ] = None
 
+    def _validate(self) -> bool:
+        """
+        Check init arguments types and values
+        :return: bool
+        """
+        return True
+
     def __post_init__(self) -> None:
         """
         Get a list of images, compose provided transforms with a list of necessary post-transforms
         :return:
         """
+        if not self._validate():
+            raise ValueError("Validation failed")
+
         self.path = Path(self.path)
         assert self.path.is_dir(), f"Incorrect path, {self.path} not a dir"
 

@@ -12,6 +12,10 @@ class BSD68DatasetPrepared(AbstractNoiseDataset2D):
     path: Union[Path, str] = "data/BSD68"
     mode: str = "train"
 
+    def _validate(self) -> bool:
+        assert self.mode in ("train", "val", "test")
+        return True
+
     def _get_images(self) -> Union[List[str], np.ndarray]:
         path = self.path / self.mode
         files = list(path.glob("*.npy"))
