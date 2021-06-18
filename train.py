@@ -8,7 +8,8 @@ from hydra.utils import get_original_cwd
 from omegaconf import DictConfig, OmegaConf
 from torch.utils.data import DataLoader
 
-from noise2same import models, util
+import noise2same.trainer
+from noise2same import model, util
 from noise2same.dataset import bsd68, hanzi, imagenet, planaria
 from noise2same.dataset.util import training_augmentations_2d
 
@@ -36,32 +37,55 @@ def exponential_decay(
     return _lambda
 
 
-@hydra.main(config_path="config", config_name="default.yaml")
+@hydra.main(config_path="config", config_name="config")
 def main(cfg: DictConfig) -> None:
+
+    if "name" not in cfg.keys():
+        print("Please specify an experiment with `+experiment=name`")
+        return
+
     print(OmegaConf.to_yaml(cfg))
     os.environ["CUDA_VISIBLE_DEVICES"] = f"{cfg.device}"
+
     util.fix_seed(cfg.seed)
     cwd = Path(get_original_cwd())
 
     if not cfg.check:
         wandb.init(project=cfg.project, config=dict(cfg))
 
-    # todo parametrize everything in cfg
-    if cfg.data.name.lower() == "bsd68":
+    if cfg.name.lower() == "bsd68":
         dataset_train = bsd68.BSD68DatasetPrepared(
             path=cwd / "data/BSD68/",
             mode="train",
-            transforms=training_augmentations_2d(crop=cfg.data.crop),
+            transforms=training_augmentations_2d(crop=cfg.training.crop),
         )
         dataset_valid = bsd68.BSD68DatasetPrepared(path=cwd / "data/BSD68/", mode="val")
+    elif cfg.name.lower() == "hanzi":
+        dataset_train = hanzi.HanziDatasetPrepared(
+            path=cwd / "data/Hanzi/tiles",
+            mode="training",
+            transforms=training_augmentations_2d(crop=cfg.training.crop),
+            version=cfg.data.version,
+            noise_level=cfg.data.noise_level,
+        )
+        dataset_valid = hanzi.HanziDatasetPrepared(
+            path=cwd / "data/Hanzi/tiles",
+            mode="validation",
+            version=cfg.data.version,
+            noise_level=cfg.data.noise_level,
+        )
+    elif cfg.name.lower() == "imagenet":
+        raise NotImplementedError
+    elif cfg.name.lower() == "planaria":
+        raise NotImplementedError
     else:
         # todo add other datasets
         raise ValueError
 
     loader_train = DataLoader(
         dataset_train,
-        batch_size=cfg.loader.batch_size,
-        num_workers=cfg.loader.num_workers,
+        batch_size=cfg.training.batch_size,
+        num_workers=cfg.training.num_workers,
         shuffle=True,
         pin_memory=True,
         drop_last=True,
@@ -69,15 +93,18 @@ def main(cfg: DictConfig) -> None:
     loader_valid = DataLoader(
         dataset_valid,
         batch_size=4,
-        num_workers=cfg.loader.num_workers,
+        num_workers=cfg.training.num_workers,
         shuffle=False,
         pin_memory=True,
         drop_last=False,
     )
 
-    # todo imply n_dim and in_channels from data
-    model = models.Noise2Same(n_dim=2, in_channels=1, **cfg.model)
-    optimizer = torch.optim.Adam(model.parameters(), lr=cfg.optim.lr)
+    mdl = model.Noise2Same(
+        n_dim=cfg.data.n_dim,
+        in_channels=cfg.data.n_channels,
+        **cfg.model,
+    )
+    optimizer = torch.optim.Adam(mdl.parameters(), lr=cfg.optim.lr)
 
     scheduler = torch.optim.lr_scheduler.LambdaLR(
         optimizer,
@@ -88,14 +115,14 @@ def main(cfg: DictConfig) -> None:
         ),
     )
 
-    trainer = models.Trainer(
-        model=model,
+    trainer = noise2same.trainer.Trainer(
+        model=mdl,
         optimizer=optimizer,
         scheduler=scheduler,
         check=cfg.check,
     )
 
-    history = trainer.fit(cfg.train.n_epochs, loader_train, loader_valid)
+    history = trainer.fit(cfg.training.n_epochs, loader_train, loader_valid)
 
     if not cfg.check:
         wandb.finish()

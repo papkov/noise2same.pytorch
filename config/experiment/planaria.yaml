@@ -1,0 +1,4 @@
+# @package _global_
+name: planaria
+data:
+  n_dim: 3

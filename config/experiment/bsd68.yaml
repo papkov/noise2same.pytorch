@@ -1,0 +1,14 @@
+# @package _global_
+name: bsd68
+
+training:
+  crop: 128
+  n_epochs: 800
+  batch_size: 32
+
+model:
+  lambda_inv: 0.95
+
+data:
+  n_dim: 2
+  n_channels: 1

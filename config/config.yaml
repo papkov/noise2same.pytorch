@@ -7,36 +7,34 @@ device: 0
 seed: 56
 check: False
 
-data:
-  name: bsd68
-  crop: 128
-
-loader:
-  batch_size: 32
-  num_workers: 8
-
 network:
   base_channels: 96
   kernel_size: 3
   depth: 3
-  encoding_block_sizes: [1, 1, 0]
-  decoding_block_sizes: [1, 1]
-  downsampling: [conv, conv]
+  encoding_block_sizes: [ 1, 1, 0 ]
+  decoding_block_sizes: [ 1, 1 ]
+  downsampling: [ conv, conv ]
   skip_method: concat
 
 model:
-  lambda_inv: 2  # 0.95 for BSD68
-  mask_percentage: 0.5 # in percents
+  lambda_inv: 2
+  mask_percentage: 0.5
   masking: gaussian
   noise_mean: 0
   noise_std: 0.2
 
-train:
-  n_epochs: 800  # ~80000 steps as in the example
+training:
+  n_epochs: 800
+  batch_size: 64
+  num_workers: 8
+  crop: 64
+
+data:
+  n_dim: 2
+  n_channels: 1
 
 optim:
   lr: 0.0004
   decay_rate: 0.5
   decay_steps: 5e3  # how many steps to decrease by decay rate
   staircase: True  # integer division
-
