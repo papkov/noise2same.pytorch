@@ -6,12 +6,12 @@ import torch
 import wandb
 from hydra.utils import get_original_cwd
 from omegaconf import DictConfig, OmegaConf
-from torch.utils.data import DataLoader, RandomSampler
+from torch.utils.data import DataLoader, RandomSampler, Subset
 
 import noise2same.trainer
 from noise2same import model, util
 from noise2same.dataset import bsd68, hanzi, imagenet, planaria
-from noise2same.dataset.util import training_augmentations_2d
+from noise2same.dataset.util import training_augmentations_2d, training_augmentations_3d
 
 
 def exponential_decay(
@@ -81,9 +81,32 @@ def main(cfg: DictConfig) -> None:
                 noise_level=cfg.data.noise_level,
             )
     elif cfg.name.lower() == "imagenet":
-        raise NotImplementedError
+        dataset_train = imagenet.ImagenetDatasetPrepared(
+            path=cwd / "data/ImageNet",
+            mode="train",
+            transforms=training_augmentations_2d(crop=cfg.training.crop),
+            version=cfg.data.version,
+        )
+        dataset_valid = None
+        if cfg.training.validate:
+            dataset_valid = imagenet.ImagenetDatasetPrepared(
+                path=cwd / "data/ImageNet",
+                mode="val",
+                version=cfg.data.version,
+            )
     elif cfg.name.lower() == "planaria":
-        raise NotImplementedError
+        dataset_train = planaria.PlanariaDatasetPrepared(
+            path=cwd / "data/ImageNet",
+            mode="train",
+            transforms=training_augmentations_3d(),
+        )
+        dataset_valid = None
+        if cfg.training.validate:
+            dataset_valid = planaria.PlanariaDatasetPrepared(
+                path=cwd / "data/ImageNet",
+                mode="val",
+                transforms=training_augmentations_3d(),
+            )
     else:
         # todo add other datasets
         raise ValueError

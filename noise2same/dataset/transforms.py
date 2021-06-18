@@ -14,7 +14,7 @@ Array = Union[ndarray, T]
 @dataclass
 class BaseTransform3D(ABC):
     p: float = 0.5
-    axis: int = 0
+    axis: Ints = 0
     seed: int = 43
     k: int = 0
     done: bool = False

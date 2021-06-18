@@ -5,6 +5,8 @@ import albumentations as albu
 import numpy as np
 from albumentations import Compose
 
+from noise2same.dataset import transforms as t3d
+
 
 def get_stratified_coords(
     box_size: int, shape: Tuple[int, ...]
@@ -57,5 +59,14 @@ def training_augmentations_2d(crop: int = 64):
             albu.RandomCrop(width=crop, height=crop, p=1),
             albu.RandomRotate90(p=0.5),
             albu.Flip(p=0.5),
+        ]
+    )
+
+
+def training_augmentations_3d():
+    return Compose(
+        [
+            t3d.RandomRotate90(p=0.5, axis=(-1, -2)),
+            t3d.RandomFlip(p=0.5, axis=(-1, -2)),
         ]
     )
