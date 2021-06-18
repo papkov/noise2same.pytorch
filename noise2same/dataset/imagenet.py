@@ -12,6 +12,7 @@ class ImagenetDatasetPrepared(AbstractNoiseDataset2D):
     path: Union[Path, str] = "data/ImageNet"
     mode: str = "train"
     version: int = 0  # two noisy copies exist (0, 1)
+    normalize_by_channel: bool = True
 
     def _validate(self) -> bool:
         assert self.mode in ("train", "val")
@@ -28,6 +29,7 @@ class ImagenetDatasetPrepared(AbstractNoiseDataset2D):
 @dataclass
 class ImagenetDatasetTest(AbstractNoiseDataset2D):
     path: Union[Path, str] = "data/ImageNet"
+    normalize_by_channel: bool = True
 
     def _get_images(self) -> Union[List[str], np.ndarray]:
         return sorted((self.path / "test").glob("*.npy"))

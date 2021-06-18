@@ -2,6 +2,7 @@
 name: imagenet
 data:
   n_channels: 3
+  version: 0
 
 training:
   steps: 50000
