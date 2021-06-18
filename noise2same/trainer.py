@@ -9,7 +9,7 @@ from torch.utils.data import DataLoader
 from tqdm import tqdm, trange
 
 from noise2same.model import Noise2Same
-
+from noise2same.util import crop_as
 
 class Trainer(object):
     def __init__(
@@ -128,7 +128,8 @@ class Trainer(object):
         for i, batch in enumerate(iterator):
             x = batch["image"].to(self.device)
             out_raw = self.model(x).cpu() * batch["std"] + batch["mean"]
-            outputs.append(out_raw.numpy().clip(0, 255))
+            out_raw = out_raw.numpy().clip(0, 255)
+            outputs.append(out_raw)
         return outputs
 
     def fit(

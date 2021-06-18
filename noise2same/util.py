@@ -51,10 +51,8 @@ def crop_as(x: np.ndarray, gt: np.ndarray) -> np.ndarray:
     assert np.all(diff >= 0)
     top_left = diff // 2
     bottom_right = diff - top_left
-    crop = x[
-        top_left[0] : x.shape[0] - bottom_right[0],
-        top_left[1] : x.shape[1] - bottom_right[1],
-    ]
+    sl = tuple(slice(tl, s - br) for tl, s, br in zip(top_left, x.shape, bottom_right))
+    crop = x[sl]
     assert crop.shape == gt.shape
     return crop
 
