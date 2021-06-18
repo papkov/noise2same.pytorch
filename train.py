@@ -6,7 +6,7 @@ import torch
 import wandb
 from hydra.utils import get_original_cwd
 from omegaconf import DictConfig, OmegaConf
-from torch.utils.data import DataLoader
+from torch.utils.data import DataLoader, RandomSampler
 
 import noise2same.trainer
 from noise2same import model, util
@@ -59,7 +59,11 @@ def main(cfg: DictConfig) -> None:
             mode="train",
             transforms=training_augmentations_2d(crop=cfg.training.crop),
         )
-        dataset_valid = bsd68.BSD68DatasetPrepared(path=cwd / "data/BSD68/", mode="val")
+        dataset_valid = None
+        if cfg.training.validate:
+            dataset_valid = bsd68.BSD68DatasetPrepared(
+                path=cwd / "data/BSD68/", mode="val"
+            )
     elif cfg.name.lower() == "hanzi":
         dataset_train = hanzi.HanziDatasetPrepared(
             path=cwd / "data/Hanzi/tiles",
@@ -68,12 +72,14 @@ def main(cfg: DictConfig) -> None:
             version=cfg.data.version,
             noise_level=cfg.data.noise_level,
         )
-        dataset_valid = hanzi.HanziDatasetPrepared(
-            path=cwd / "data/Hanzi/tiles",
-            mode="validation",
-            version=cfg.data.version,
-            noise_level=cfg.data.noise_level,
-        )
+        dataset_valid = None
+        if cfg.training.validate:
+            dataset_valid = hanzi.HanziDatasetPrepared(
+                path=cwd / "data/Hanzi/tiles",
+                mode="validation",
+                version=cfg.data.version,
+                noise_level=cfg.data.noise_level,
+            )
     elif cfg.name.lower() == "imagenet":
         raise NotImplementedError
     elif cfg.name.lower() == "planaria":
@@ -82,22 +88,26 @@ def main(cfg: DictConfig) -> None:
         # todo add other datasets
         raise ValueError
 
+    num_samples = cfg.training.batch_size * cfg.training.steps_per_epoch
     loader_train = DataLoader(
         dataset_train,
         batch_size=cfg.training.batch_size,
         num_workers=cfg.training.num_workers,
-        shuffle=True,
+        sampler=RandomSampler(dataset_train, replacement=True, num_samples=num_samples),
         pin_memory=True,
         drop_last=True,
     )
-    loader_valid = DataLoader(
-        dataset_valid,
-        batch_size=4,
-        num_workers=cfg.training.num_workers,
-        shuffle=False,
-        pin_memory=True,
-        drop_last=False,
-    )
+
+    loader_valid = None
+    if cfg.training.validate:
+        loader_valid = DataLoader(
+            dataset_valid,
+            batch_size=4,
+            num_workers=cfg.training.num_workers,
+            shuffle=False,
+            pin_memory=True,
+            drop_last=False,
+        )
 
     mdl = model.Noise2Same(
         n_dim=cfg.data.n_dim,
@@ -120,9 +130,13 @@ def main(cfg: DictConfig) -> None:
         optimizer=optimizer,
         scheduler=scheduler,
         check=cfg.check,
+        monitor=cfg.training.monitor,
     )
 
-    history = trainer.fit(cfg.training.n_epochs, loader_train, loader_valid)
+    n_epochs = cfg.training.steps // cfg.training.steps_per_epoch
+    history = trainer.fit(
+        n_epochs, loader_train, loader_valid if cfg.training.validate else None
+    )
 
     if not cfg.check:
         wandb.finish()

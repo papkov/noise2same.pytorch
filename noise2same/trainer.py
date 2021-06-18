@@ -11,6 +11,7 @@ from tqdm import tqdm, trange
 from noise2same.model import Noise2Same
 from noise2same.util import crop_as
 
+
 class Trainer(object):
     def __init__(
         self,
