@@ -2,3 +2,10 @@
 name: imagenet
 data:
   n_channels: 3
+
+training:
+  steps: 50000
+  crop: 64
+  batch_size: 64
+  validate: False
+  monitor: rec_mse

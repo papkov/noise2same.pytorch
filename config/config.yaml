@@ -24,10 +24,13 @@ model:
   noise_std: 0.2
 
 training:
-  n_epochs: 800
+  steps_per_epoch: 1000
+  steps: 50000
   batch_size: 64
   num_workers: 8
   crop: 64
+  validate: True
+  monitor: val_rec_mse
 
 data:
   n_dim: 2
