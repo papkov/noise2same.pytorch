@@ -77,9 +77,9 @@ class Trainer(object):
                     "out_raw": out_raw,
                 }
                 images = {
-                    k: (v.detach().cpu() * batch["std"] + batch["mean"])
-                    .numpy()
-                    .clip(0, 255)
+                    k: np.moveaxis(
+                        (v.detach().cpu() * batch["std"] + batch["mean"]).numpy(), 1, -1
+                    ).clip(0, 255)
                     for k, v in images.items()
                 }
         total_loss = {k: v / len(loader) for k, v in total_loss.items()}
@@ -112,25 +112,39 @@ class Trainer(object):
                     "val_out_raw": out_raw,
                 }
                 images = {
-                    k: (v.detach().cpu() * batch["std"] + batch["mean"])
-                    .numpy()
-                    .clip(0, 255)
+                    k: np.moveaxis(
+                        (v.detach().cpu() * batch["std"] + batch["mean"]).numpy(), 1, -1
+                    ).clip(0, 255)
                     for k, v in images.items()
                 }
 
         return {"val_rec_mse": total_loss / len(loader)}, images
 
     @torch.no_grad()
-    def inference(self, loader: DataLoader) -> List[np.ndarray]:
+    def inference(self, loader: DataLoader, half: bool = False, empty_cache: bool = False) -> List[np.ndarray]:
         self.model.eval()
+        if half:
+            self.model.half()
 
         outputs = []
         iterator = tqdm(loader, desc="inference", position=0, leave=True)
         for i, batch in enumerate(iterator):
-            x = batch["image"].to(self.device)
-            out_raw = self.model(x).cpu() * batch["std"] + batch["mean"]
-            out_raw = out_raw.numpy().clip(0, 255)
+            if half:
+                batch = {k: v.half() for k, v in batch.items()}
+            batch = {k: v.to(self.device) for k, v in batch.items()}
+            out_raw = self.model(batch["image"]) * batch["std"] + batch["mean"]
+            out_raw = np.moveaxis(out_raw.detach().cpu().numpy().clip(0, 255), 1, -1)
             outputs.append(out_raw)
+            iterator.set_postfix(
+                {
+                    "shape": out_raw.shape,
+                    "reserved": torch.cuda.memory_reserved(0) / (1024 ** 2),
+                    "allocated": torch.cuda.memory_allocated(0) / (1024 ** 2),
+                }
+            )
+            if empty_cache:
+                torch.cuda.empty_cache()
+
         return outputs
 
     def fit(
