@@ -121,7 +121,9 @@ class Trainer(object):
         return {"val_rec_mse": total_loss / len(loader)}, images
 
     @torch.no_grad()
-    def inference(self, loader: DataLoader, half: bool = False, empty_cache: bool = False) -> List[np.ndarray]:
+    def inference(
+        self, loader: DataLoader, half: bool = False, empty_cache: bool = False
+    ) -> List[np.ndarray]:
         self.model.eval()
         if half:
             self.model.half()

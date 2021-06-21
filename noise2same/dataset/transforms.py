@@ -151,11 +151,14 @@ class CenterCrop(RandomCrop):
 @dataclass
 class Compose:
     transforms: List[BaseTransform3D]
+    debug: bool = False
 
     def __call__(self, x: ndarray, resample: bool = False):
         out = x.copy()
         for t in self.transforms:
             if t is not None:
+                if self.debug:
+                    print(f"Apply {t}")
                 out = t(out, resample=resample)
         return out
 
@@ -163,11 +166,15 @@ class Compose:
 @dataclass
 class ToTensor(BaseTransform3D):
     transpose: bool = False
+    p: int = 1
+    done: bool = True
 
     def resample(self, x: ndarray) -> None:
-        pass
+        self.done = True
 
     def apply(self, x: ndarray) -> T:
+        out = x.copy()
         if self.transpose:
-            x = np.moveaxis(-1, 0)
-        return torch.from_numpy(x)
+            out = np.moveaxis(out, -1, 0)
+        out = torch.from_numpy(out)
+        return out

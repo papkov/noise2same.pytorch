@@ -188,7 +188,8 @@ class AbstractNoiseDataset3D(AbstractNoiseDataset, ABC):
         return [t3d.ToTensor(transpose=False)]
 
     def _apply_transforms(self, image: np.ndarray, mask: np.ndarray) -> Dict[str, T]:
-        return {
+        ret = {
             "image": self.transforms(image, resample=True),
-            "mask": self.transforms(image, resample=False),
+            "mask": self.transforms(mask, resample=False),
         }
+        return ret
