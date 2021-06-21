@@ -9,22 +9,28 @@ from noise2same.dataset import transforms as t3d
 
 
 def get_stratified_coords(
-    box_size: int, shape: Tuple[int, ...]
+    box_size: int, shape: Tuple[int, ...], resample: bool = False,
 ) -> Tuple[List[int], ...]:
     """
     Create stratified blind spot coordinates
     :param box_size: int, size of stratification box
     :param shape: tuple, image shape
+    :param resample: bool, resample if out o box
     :return:
     """
     box_count = [int(np.ceil(s / box_size)) for s in shape]
     coords = []
 
     for ic in product(*[np.arange(bc) for bc in box_count]):
-        coord = tuple(np.random.rand() * box_size for _ in shape)
-        coord = [int(i * box_size + c) for i, c in zip(ic, coord)]
-        if all(c < s for c, s in zip(coord, shape)):
-            coords.append(coord)
+        sampled = False
+        while not sampled:
+            coord = tuple(np.random.rand() * box_size for _ in shape)
+            coord = [int(i * box_size + c) for i, c in zip(ic, coord)]
+            if all(c < s for c, s in zip(coord, shape)):
+                coords.append(coord)
+                sampled = True
+            if not resample:
+                break
 
     coords = tuple(zip(*coords))  # transpose (N, 3) -> (3, N)
     return coords
