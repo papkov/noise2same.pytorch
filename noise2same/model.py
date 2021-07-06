@@ -33,7 +33,11 @@ class DonutMask(nn.Module):
         )
         kernel = kernel / kernel.sum()
         kernel = torch.from_numpy(kernel)[None, None]
-        kernel = kernel.expand(in_channels, in_channels, -1, -1)
+        shape = (
+            in_channels,
+            in_channels,
+        ) + (-1,) * n_dim
+        kernel = kernel.expand(shape)
         self.register_buffer("kernel", kernel)
 
     def forward(self, x: T) -> T:
@@ -81,7 +85,9 @@ class Noise2Same(nn.Module):
             in_channels=in_channels, n_dim=n_dim, base_channels=base_channels, **kwargs
         )
         self.head = network.RegressionHead(
-            in_channels=base_channels, out_channels=in_channels
+            in_channels=base_channels,
+            out_channels=in_channels,
+            n_dim=n_dim,
         )
 
         self.mask_kernel = DonutMask(n_dim=n_dim, in_channels=in_channels)

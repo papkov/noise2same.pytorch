@@ -96,16 +96,15 @@ def main(cfg: DictConfig) -> None:
             )
     elif cfg.name.lower() == "planaria":
         dataset_train = planaria.PlanariaDatasetPrepared(
-            path=cwd / "data/ImageNet",
+            path=cwd / "data/Denoising_Planaria",
             mode="train",
             transforms=training_augmentations_3d(),
         )
         dataset_valid = None
         if cfg.training.validate:
             dataset_valid = planaria.PlanariaDatasetPrepared(
-                path=cwd / "data/ImageNet",
+                path=cwd / "data/Denoising_Planaria",
                 mode="val",
-                transforms=training_augmentations_3d(),
             )
     else:
         # todo add other datasets

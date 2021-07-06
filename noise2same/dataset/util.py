@@ -9,7 +9,9 @@ from noise2same.dataset import transforms as t3d
 
 
 def get_stratified_coords(
-    box_size: int, shape: Tuple[int, ...], resample: bool = False,
+    box_size: int,
+    shape: Tuple[int, ...],
+    resample: bool = False,
 ) -> Tuple[List[int], ...]:
     """
     Create stratified blind spot coordinates
@@ -74,9 +76,9 @@ def training_augmentations_2d(crop: int = 64):
 
 
 def training_augmentations_3d():
-    return Compose(
+    return t3d.Compose(
         [
-            t3d.RandomRotate90(p=0.5, axis=(-1, -2)),
-            t3d.RandomFlip(p=0.5, axis=(-1, -2)),
+            t3d.RandomRotate90(p=0.5, axis=(2, 3), channel_axis=(0, 1)),
+            t3d.RandomFlip(p=0.5, axis=(2, 3), channel_axis=(0, 1)),
         ]
     )

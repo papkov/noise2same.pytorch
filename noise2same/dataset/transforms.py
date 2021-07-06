@@ -54,6 +54,8 @@ class BaseTransform3D(ABC):
 
 
 class RandomFlip(BaseTransform3D):
+    channel_axis: Ints = (0, 1)
+
     def resample(self, x: ndarray) -> None:
         dims = np.arange(x.ndim)
         dims[-1] = -1
@@ -67,7 +69,7 @@ class RandomFlip(BaseTransform3D):
 
 
 class RandomRotate90(BaseTransform3D):
-    axis: Tuple[int, int] = (0, 1)
+    channel_axis: Ints = (0, 1)
 
     def apply(self, x: ndarray) -> ndarray:
         return np.rot90(x, k=self.k, axes=self.axis).copy()

@@ -79,7 +79,7 @@ class Trainer(object):
                 images = {
                     k: np.moveaxis(
                         (v.detach().cpu() * batch["std"] + batch["mean"]).numpy(), 1, -1
-                    ).clip(0, 255)
+                    )
                     for k, v in images.items()
                 }
         total_loss = {k: v / len(loader) for k, v in total_loss.items()}
@@ -114,7 +114,7 @@ class Trainer(object):
                 images = {
                     k: np.moveaxis(
                         (v.detach().cpu() * batch["std"] + batch["mean"]).numpy(), 1, -1
-                    ).clip(0, 255)
+                    )
                     for k, v in images.items()
                 }
 
@@ -175,7 +175,11 @@ class Trainer(object):
                 if self.wandb_log:
                     images_wandb = {
                         # limit the number of uploaded images
-                        k: [wandb.Image(im) for im in v[:4]]
+                        # if image is 3d, reduce it
+                        k: [
+                            wandb.Image(im.max(0) if self.model.n_dim == 3 else im)
+                            for im in v[:4]
+                        ]
                         for k, v in images.items()
                     }
                     wandb.log({**images_wandb, **loss})
