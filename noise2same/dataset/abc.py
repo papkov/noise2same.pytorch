@@ -25,7 +25,8 @@ class AbstractNoiseDataset(Dataset, ABC):
     mask_percentage: float = 0.5
     pad_divisor: int = 8
     channel_last: bool = True
-    normalize_by_channel: bool = False
+    standardize: bool = True
+    standardize_by_channel: bool = False
     n_dim: int = 2
     transforms: Optional[
         Union[
@@ -54,7 +55,10 @@ class AbstractNoiseDataset(Dataset, ABC):
             raise ValueError("Validation failed")
 
         self.path = Path(self.path)
-        assert self.path.is_dir(), f"Incorrect path, {self.path} not a dir"
+        assert self.path.is_dir() or self.path.suffix in (
+            ".tif",
+            ".tiff",
+        ), f"Incorrect path, {self.path} not a dir"
 
         self.images = self._get_images()
         if not isinstance(self.transforms, list):
@@ -127,7 +131,12 @@ class AbstractNoiseDataset(Dataset, ABC):
         # https://github.com/divelab/Noise2Same/blob/main/models.py#L154
         # noise_mask = np.concatenate([noise, mask], axis=-1)
         ret = self._apply_transforms(image, mask)
-        ret["image"], ret["mean"], ret["std"] = self._normalize(ret["image"])
+        if self.standardize:
+            ret["image"], ret["mean"], ret["std"] = self._standardize(ret["image"])
+        else:
+            # in case the data was normalized or standardized before
+            ret["mean"] = torch.tensor(0).view((1,) * ret["image"].ndim)
+            ret["std"] = torch.tensor(1).view((1,) * ret["image"].ndim)
         return ret
 
     def _mask_like_image(self, image: np.ndarray) -> np.ndarray:
@@ -135,7 +144,7 @@ class AbstractNoiseDataset(Dataset, ABC):
             image, mask_percentage=self.mask_percentage, channels_last=self.channel_last
         )
 
-    def _normalize(self, image: T) -> Tuple[T, T, T]:
+    def _standardize(self, image: T) -> Tuple[T, T, T]:
         """
         Normalize an image by mean and std
         :param image: tensor
@@ -143,7 +152,7 @@ class AbstractNoiseDataset(Dataset, ABC):
         """
         # Image is already a tensor, hence channel-first
         dim = tuple(range(1, image.ndim))
-        if not self.normalize_by_channel:
+        if not self.standardize_by_channel:
             dim = (0,) + dim
         # normalize as per the paper
         # TODO in the paper channels are not specified. do they matter? try with dim=(1, 2)

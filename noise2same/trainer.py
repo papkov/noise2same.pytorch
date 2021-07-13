@@ -135,7 +135,7 @@ class Trainer(object):
                 batch = {k: v.half() for k, v in batch.items()}
             batch = {k: v.to(self.device) for k, v in batch.items()}
             out_raw = self.model(batch["image"]) * batch["std"] + batch["mean"]
-            out_raw = np.moveaxis(out_raw.detach().cpu().numpy().clip(0, 255), 1, -1)
+            out_raw = np.moveaxis(out_raw.detach().cpu().numpy(), 1, -1)
             outputs.append(out_raw)
             iterator.set_postfix(
                 {
