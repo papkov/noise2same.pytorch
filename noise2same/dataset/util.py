@@ -1,11 +1,13 @@
 from itertools import product
-from typing import List, Tuple
+from typing import Any, List, Optional, Tuple, Union
 
 import albumentations as albu
 import numpy as np
 from albumentations import Compose
 
 from noise2same.dataset import transforms as t3d
+
+Ints = Optional[Union[int, List[int], Tuple[int, ...]]]
 
 
 def get_stratified_coords(
@@ -82,3 +84,61 @@ def training_augmentations_3d():
             t3d.RandomFlip(p=0.5, axis=(2, 3), channel_axis=(0, 1)),
         ]
     )
+
+
+def _raise(e):
+    raise e
+
+
+class PadAndCropResizer(object):
+    """
+    https://github.com/divelab/Noise2Same/blob/8cdbfef5c475b9f999dcb1a942649af7026c887b/utils/predict_utils.py#L115
+    """
+
+    def __init__(
+        self, mode: str = "reflect", div_n: Optional[int] = None, **kwargs: Any
+    ):
+        self.mode = mode
+        self.kwargs = kwargs
+        self.pad = None
+        self.div_n = div_n
+
+    def _normalize_exclude(self, exclude: Ints, n_dim: int):
+        """Return normalized list of excluded axes."""
+        if exclude is None:
+            return []
+        exclude_list = [exclude] if np.isscalar(exclude) else list(exclude)
+        exclude_list = [d % n_dim for d in exclude_list]
+        len(exclude_list) == len(np.unique(exclude_list)) or _raise(ValueError())
+        all((isinstance(d, int) and 0 <= d < n_dim for d in exclude_list)) or _raise(
+            ValueError()
+        )
+        return exclude_list
+
+    def before(self, x: np.ndarray, div_n: int = None, exclude: Ints = None):
+        def _split(v):
+            a = v // 2
+            return a, v - a
+
+        if div_n is None:
+            div_n = self.div_n
+        assert div_n is not None
+
+        exclude = self._normalize_exclude(exclude, x.ndim)
+        self.pad = [
+            _split((div_n - s % div_n) % div_n) if (i not in exclude) else (0, 0)
+            for i, s in enumerate(x.shape)
+        ]
+        x_pad = np.pad(x, self.pad, mode=self.mode, **self.kwargs)
+        for i in exclude:
+            del self.pad[i]
+        return x_pad
+
+    def after(self, x: np.ndarray, exclude: Ints = None):
+
+        pads = self.pad[: len(x.shape)]  # ?
+        crop = [slice(p[0], -p[1] if p[1] > 0 else None) for p in self.pad]
+        for i in self._normalize_exclude(exclude, x.ndim):
+            crop.insert(i, slice(None))
+        len(crop) == x.ndim or _raise(ValueError())
+        return x[tuple(crop)]

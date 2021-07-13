@@ -5,9 +5,12 @@ from typing import Dict, List, Optional, Tuple
 import numpy as np
 import torch
 import wandb
-from torch.utils.data import DataLoader
+from pytorch_toolbelt.inference.tiles import TileMerger
+from torch import Tensor
+from torch.utils.data import DataLoader, Dataset
 from tqdm import tqdm, trange
 
+from noise2same.dataset.util import PadAndCropResizer
 from noise2same.model import Noise2Same
 from noise2same.util import crop_as
 
@@ -38,6 +41,9 @@ class Trainer(object):
 
         self.model.to(device)
         self.checkpoint_path.mkdir(parents=True, exist_ok=False)
+        self.resizer = PadAndCropResizer(
+            mode="reflect", div_n=2 ** self.model.net.depth
+        )
 
     def one_epoch(
         self, loader: DataLoader
@@ -148,6 +154,95 @@ class Trainer(object):
                 torch.cuda.empty_cache()
 
         return outputs
+
+    @torch.no_grad()
+    def inference_large(
+        self,
+        test_ds: Dataset,
+        batch_size: int = 1,
+        crop_border: int = 0,
+        device: str = "cpu",
+        num_workers: int = 0,
+        half: bool = False,
+    ):
+        # TODO fix weird bug when all tiles are stacked in the bottom right corner
+        self.model.eval()
+        if half:
+            self.model.half()
+
+        merger = TileMerger(
+            test_ds.tiler.target_shape,
+            channels=self.model.in_channels,
+            weight=test_ds.tiler.weight,
+            device=device,
+            crop_border=crop_border,
+            default_value=0,
+        )
+        # print(f'Created merger for image {merger.image.shape}')
+
+        iterator = test_ds
+        if batch_size > 1:
+            iterator = torch.utils.data.DataLoader(
+                test_ds,
+                batch_size=batch_size,
+                num_workers=num_workers,
+                shuffle=False,
+                pin_memory=False,
+                drop_last=False,
+            )
+        iterator = tqdm(iterator, desc="Predict")
+
+        for i, batch in enumerate(iterator):
+            # Iterate over dataset, hence need to unsqueeze batch dim
+            if batch_size == 1:
+                batch["image"] = batch["image"][None, ...]
+                batch["crop"] = batch["crop"][None, ...]
+
+            if half:
+                batch = {k: v.half() if k != "crop" else v for k, v in batch.items()}
+            batch = {
+                k: v.to(self.device) if k != "crop" else v for k, v in batch.items()
+            }
+
+            pred_batch = self.model(batch["image"]) * batch["std"] + batch["mean"]
+            iterator.set_postfix(
+                {
+                    "in_shape": tuple(batch["image"].shape),
+                    "out_shape": tuple(pred_batch.shape),
+                    "crop": batch["crop"],
+                }
+            )
+
+            merger.integrate_batch(batch=pred_batch, crop_coords=batch["crop"])
+            merger.merge_()
+
+        return test_ds.tiler.crop_to_original_size(merger.image.cpu().numpy()[0])
+
+    @torch.no_grad()
+    def inference_image(
+        self,
+        image: Tensor,
+        standardize: bool = True,
+        im_mean: Optional[float] = None,
+        im_std: Optional[float] = None,
+    ):
+        if not standardize:
+            im_mean, im_std = 0, 1
+
+        if im_mean is None:
+            im_mean = image.mean()
+
+        if im_std is None:
+            im_std = image.std()
+
+        image = (image - im_mean) / im_std
+
+        image = self.resizer.before(image, exclude=0)[None, ...]
+        out = self.model(image.to(self.device)).detach().cpu()
+        out = self.resizer.after(out[0], exclude=0)
+        out = out * im_std + im_mean
+
+        return out
 
     def fit(
         self,
