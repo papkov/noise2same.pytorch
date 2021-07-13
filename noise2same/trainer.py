@@ -79,8 +79,8 @@ class Trainer(object):
             if i == len(iterator) - 1 or (self.check and i == 3):
                 images = {
                     "input": x,
-                    "out_mask": out_mask,
-                    "out_raw": out_raw,
+                    "out_mask": out_mask["img"],
+                    "out_raw": out_raw["img"],
                 }
                 images = {
                     k: np.moveaxis(
@@ -104,7 +104,7 @@ class Trainer(object):
         images = {}
         for i, batch in enumerate(iterator):
             x = batch["image"].to(self.device)
-            out_raw = self.model(x)
+            out_raw = self.model(x)["img"]
             rec_mse = torch.mean(torch.square(out_raw - x))
             total_loss += rec_mse.item()
             iterator.set_postfix({"val_rec_mse": total_loss / (i + 1)})
@@ -140,7 +140,7 @@ class Trainer(object):
             if half:
                 batch = {k: v.half() for k, v in batch.items()}
             batch = {k: v.to(self.device) for k, v in batch.items()}
-            out_raw = self.model(batch["image"]) * batch["std"] + batch["mean"]
+            out_raw = self.model(batch["image"])["img"] * batch["std"] + batch["mean"]
             out_raw = np.moveaxis(out_raw.detach().cpu().numpy(), 1, -1)
             outputs.append(out_raw)
             iterator.set_postfix(

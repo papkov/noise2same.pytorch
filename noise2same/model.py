@@ -57,6 +57,7 @@ class Noise2Same(nn.Module):
         masking: str = "gaussian",
         noise_mean: float = 0,
         noise_std: float = 0.2,
+        lambda_proj: float = 0,
         **kwargs: Any,
     ):
         """
@@ -75,6 +76,7 @@ class Noise2Same(nn.Module):
         self.n_dim = n_dim
         self.in_channels = in_channels
         self.lambda_inv = lambda_inv
+        self.lambda_inv = lambda_proj
         self.mask_percentage = mask_percentage
         self.masking = masking
         self.noise_mean = noise_mean
@@ -90,9 +92,16 @@ class Noise2Same(nn.Module):
             n_dim=n_dim,
         )
 
+        # TODO parametrize project head
+        self.project_head = None
+        if lambda_proj > 0:
+            self.project_head = network.ProjectHead(
+                in_channels=in_channels, n_dim=n_dim, out_channels=256, kernel_size=1
+            )
+
         self.mask_kernel = DonutMask(n_dim=n_dim, in_channels=in_channels)
 
-    def forward_full(self, x: T, mask: T) -> Tuple[T, T]:
+    def forward_full(self, x: T, mask: T) -> Tuple[Dict[str, T], Dict[str, T]]:
         """
         Make two forward passes: with mask and without mask
         :param x:
@@ -103,7 +112,7 @@ class Noise2Same(nn.Module):
         out_raw = self.forward(x)
         return out_mask, out_raw
 
-    def forward_masked(self, x: T, mask: T) -> T:
+    def forward_masked(self, x: T, mask: T) -> Dict[str, T]:
         """
         Mask the image according to selected masking, then do the forward pass:
         substitute with gaussian noise or local average excluding center pixel (donut)
@@ -121,22 +130,28 @@ class Noise2Same(nn.Module):
         x = (1 - mask) * x + mask * noise
         return self.forward(x)
 
-    def forward(self, x: T, *args: Any, **kwargs: Any) -> T:
+    def forward(self, x: T, *args: Any, **kwargs: Any) -> Dict[str, T]:
         """
         Plain raw forward pass without masking
         :param x:
         :return:
         """
+        out = {}
         x = self.net(x)
-        x = self.head(x)
-        return x
+        out["img"] = self.head(x)
+        if self.project_head is not None:
+            out["proj"] = self.project_head(x)
+        return out
 
     def compute_losses_from_output(
-        self, x: T, mask: T, out_mask: T, out_raw: T
+        self, x: T, mask: T, out_mask: Dict[str, T], out_raw: Dict[str, T]
     ) -> Tuple[T, Dict[str, float]]:
-        rec_mse = torch.mean(torch.square(out_raw - x))
-        inv_mse = torch.sum(torch.square(out_raw - out_mask) * mask) / torch.sum(mask)
-        bsp_mse = torch.sum(torch.square(x - out_mask) * mask) / torch.sum(mask)
+        rec_mse = torch.mean(torch.square(out_raw["img"] - x))
+        inv_mse = torch.sum(
+            torch.square(out_raw["img"] - out_mask["img"]) * mask
+        ) / torch.sum(mask)
+        bsp_mse = torch.sum(torch.square(x - out_mask["img"]) * mask) / torch.sum(mask)
+        # todo add projection loss here
         loss = rec_mse + self.lambda_inv * torch.sqrt(inv_mse)
         loss_log = {
             "loss": loss.item(),
