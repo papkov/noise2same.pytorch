@@ -138,7 +138,7 @@ class Noise2Same(nn.Module):
         """
         out = {}
         x = self.net(x)
-        out["img"] = self.head(x)
+        out["image"] = self.head(x)
         if self.project_head is not None:
             out["proj"] = self.project_head(x)
         return out
@@ -146,11 +146,13 @@ class Noise2Same(nn.Module):
     def compute_losses_from_output(
         self, x: T, mask: T, out_mask: Dict[str, T], out_raw: Dict[str, T]
     ) -> Tuple[T, Dict[str, float]]:
-        rec_mse = torch.mean(torch.square(out_raw["img"] - x))
-        inv_mse = torch.sum(
-            torch.square(out_raw["img"] - out_mask["img"]) * mask
-        ) / torch.sum(mask)
-        bsp_mse = torch.sum(torch.square(x - out_mask["img"]) * mask) / torch.sum(mask)
+        masked = torch.sum(mask)
+        rec_mse = torch.mean(torch.square(out_raw["image"] - x))
+        inv_mse = (
+            torch.sum(torch.square(out_raw["image"] - out_mask["image"]) * mask)
+            / masked
+        )
+        bsp_mse = torch.sum(torch.square(x - out_mask["image"]) * mask) / masked
         # todo add projection loss here
         loss = rec_mse + self.lambda_inv * torch.sqrt(inv_mse)
         loss_log = {

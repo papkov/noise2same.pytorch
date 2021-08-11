@@ -79,8 +79,8 @@ class Trainer(object):
             if i == len(iterator) - 1 or (self.check and i == 3):
                 images = {
                     "input": x,
-                    "out_mask": out_mask["img"],
-                    "out_raw": out_raw["img"],
+                    "out_mask": out_mask["image"],
+                    "out_raw": out_raw["image"],
                 }
                 images = {
                     k: np.moveaxis(
@@ -104,7 +104,7 @@ class Trainer(object):
         images = {}
         for i, batch in enumerate(iterator):
             x = batch["image"].to(self.device)
-            out_raw = self.model(x)["img"]
+            out_raw = self.model(x)["image"]
             rec_mse = torch.mean(torch.square(out_raw - x))
             total_loss += rec_mse.item()
             iterator.set_postfix({"val_rec_mse": total_loss / (i + 1)})
@@ -140,7 +140,7 @@ class Trainer(object):
             if half:
                 batch = {k: v.half() for k, v in batch.items()}
             batch = {k: v.to(self.device) for k, v in batch.items()}
-            out_raw = self.model(batch["image"])["img"] * batch["std"] + batch["mean"]
+            out_raw = self.model(batch["image"])["image"] * batch["std"] + batch["mean"]
             out_raw = np.moveaxis(out_raw.detach().cpu().numpy(), 1, -1)
             outputs.append(out_raw)
             iterator.set_postfix(
@@ -165,10 +165,11 @@ class Trainer(object):
         num_workers: int = 0,
         half: bool = False,
     ):
-        # TODO fix weird bug when all tiles are stacked in the bottom right corner
         self.model.eval()
         if half:
             self.model.half()
+        else:
+            self.model.float()
 
         merger = TileMerger(
             test_ds.tiler.target_shape,
@@ -204,7 +205,9 @@ class Trainer(object):
                 k: v.to(self.device) if k != "crop" else v for k, v in batch.items()
             }
 
-            pred_batch = self.model(batch["image"]) * batch["std"] + batch["mean"]
+            pred_batch = (
+                self.model(batch["image"])["image"] * batch["std"] + batch["mean"]
+            )
             iterator.set_postfix(
                 {
                     "in_shape": tuple(batch["image"].shape),
@@ -214,8 +217,8 @@ class Trainer(object):
             )
 
             merger.integrate_batch(batch=pred_batch, crop_coords=batch["crop"])
-            merger.merge_()
 
+        merger.merge_()
         return test_ds.tiler.crop_to_original_size(merger.image.cpu().numpy()[0])
 
     @torch.no_grad()
