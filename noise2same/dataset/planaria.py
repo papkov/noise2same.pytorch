@@ -33,11 +33,12 @@ class PlanariaDatasetPrepared(AbstractNoiseDataset3D):
 class PlanariaDatasetTiff(AbstractNoiseDataset3D):
     path: Union[Path, str]
     tile_size: int = 256
-    tile_step: int = 224
+    tile_step: int = 128
+    crop_border: int = 32
     weight: str = "pyramid"
     mean: float = 0
     std: float = 1
-    standardize: bool = False
+    standardize: bool = True
 
     def _get_images(self) -> Union[List[str], np.ndarray]:
         self.image = tifffile.imread(self.path)[..., None]
@@ -55,6 +56,7 @@ class PlanariaDatasetTiff(AbstractNoiseDataset3D):
             tile_step=(96, self.tile_step, self.tile_step),
             weight=self.weight,
             is_channels=True,
+            crop_border=(0, self.crop_border, self.crop_border),
         )
         return self.tiler.crops
 
@@ -74,8 +76,8 @@ class PlanariaDatasetTiff(AbstractNoiseDataset3D):
         ret = self._apply_transforms(image.astype(np.float32), mask)
         # standardization/normalization step removed since we process the full-sized image
         ret["mean"], ret["std"] = (
-            torch.tensor(self.mean).view(1, 1, 1, 1),
-            torch.tensor(self.std).view(1, 1, 1, 1),
+            torch.tensor(self.mean if self.standardize else 0).view(1, 1, 1, 1),
+            torch.tensor(self.std if self.standardize else 1).view(1, 1, 1, 1),
         )
         ret["crop"] = crop
         return ret
