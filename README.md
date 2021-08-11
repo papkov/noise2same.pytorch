@@ -24,5 +24,5 @@ We replicate the main results of Noise2Same (Table 3)
 | BSD68               | 27.95                 | 28.12 |
 | HanZi               | 14.38                 | 14.83 |
 | ImageNet            | 22.26                 | 22.81 |
-| Planaria (C1/C2/C3) | 29.48 / 26.93 / 22.41 | WIP   |
+| Planaria (C1/C2/C3) | 29.48 / 26.93 / 22.41 | 29.14 / 27.11 / 22.80   |
 
