@@ -76,7 +76,7 @@ class Noise2Same(nn.Module):
         self.n_dim = n_dim
         self.in_channels = in_channels
         self.lambda_inv = lambda_inv
-        self.lambda_inv = lambda_proj
+        self.lambda_proj = lambda_proj
         self.mask_percentage = mask_percentage
         self.masking = masking
         self.noise_mean = noise_mean
