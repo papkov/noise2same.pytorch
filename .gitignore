@@ -1,4 +1,6 @@
 .idea
+weights/*.pth
+weights/*.zip
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
