@@ -7,7 +7,7 @@ import tifffile
 import torch
 from pytorch_toolbelt.inference.tiles import ImageSlicer
 
-from noise2same.dataset.abc import AbstractNoiseDataset3D
+from noise2same.dataset.abc import AbstractNoiseDataset3D, AbstractNoiseDataset3DLarge
 from noise2same.util import normalize_percentile
 
 
@@ -30,15 +30,12 @@ class PlanariaDatasetPrepared(AbstractNoiseDataset3D):
         return image_or_path
 
 
-class PlanariaDatasetTiff(AbstractNoiseDataset3D):
-    path: Union[Path, str]
+@dataclass
+class PlanariaDatasetTiff(AbstractNoiseDataset3DLarge):
     tile_size: int = 256
-    tile_step: int = 128
+    tile_step: int = 192
     crop_border: int = 32
     weight: str = "pyramid"
-    mean: float = 0
-    std: float = 1
-    standardize: bool = True
 
     def _get_images(self) -> Union[List[str], np.ndarray]:
         self.image = tifffile.imread(self.path)[..., None]
@@ -60,24 +57,6 @@ class PlanariaDatasetTiff(AbstractNoiseDataset3D):
         )
         return self.tiler.crops
 
-    def _read_image(
-        self, image_or_path: Union[str, np.ndarray]
-    ) -> Tuple[np.ndarray, List[int]]:
+    def _read_image(self, image_or_path: List[int]) -> Tuple[np.ndarray, List[int]]:
         image, crop = self.tiler.crop_tile(image=self.image, crop=image_or_path)
         return np.moveaxis(image, -1, 0), crop
-
-    def __getitem__(self, i: int) -> Dict[str, Any]:
-        """
-        :param i: int, index
-        :return: dict(image, mask, mean, std)
-        """
-        image, crop = self._read_image(self.images[i])
-        mask = self._mask_like_image(image)
-        ret = self._apply_transforms(image.astype(np.float32), mask)
-        # standardization/normalization step removed since we process the full-sized image
-        ret["mean"], ret["std"] = (
-            torch.tensor(self.mean if self.standardize else 0).view(1, 1, 1, 1),
-            torch.tensor(self.std if self.standardize else 1).view(1, 1, 1, 1),
-        )
-        ret["crop"] = crop
-        return ret
