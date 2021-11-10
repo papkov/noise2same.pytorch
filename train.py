@@ -4,14 +4,12 @@ from pathlib import Path
 import hydra
 import torch
 import wandb
-from hydra.utils import get_original_cwd
 from omegaconf import DictConfig, OmegaConf
 from torch.utils.data import DataLoader, RandomSampler, Subset
 
 import noise2same.trainer
 from noise2same import model, util
-from noise2same.dataset import bsd68, hanzi, imagenet, planaria
-from noise2same.dataset.util import training_augmentations_2d, training_augmentations_3d
+from noise2same.dataset.getter import get_dataset
 
 
 def exponential_decay(
@@ -46,70 +44,15 @@ def main(cfg: DictConfig) -> None:
 
     print(OmegaConf.to_yaml(cfg))
     os.environ["CUDA_VISIBLE_DEVICES"] = f"{cfg.device}"
+    print(f"Run experiment {cfg.name}, work in {os.getcwd()}")
 
     util.fix_seed(cfg.seed)
-    cwd = Path(get_original_cwd())
 
     if not cfg.check:
         wandb.init(project=cfg.project, config=dict(cfg))
 
-    if cfg.name.lower() == "bsd68":
-        dataset_train = bsd68.BSD68DatasetPrepared(
-            path=cwd / "data/BSD68/",
-            mode="train",
-            transforms=training_augmentations_2d(crop=cfg.training.crop),
-        )
-        dataset_valid = None
-        if cfg.training.validate:
-            dataset_valid = bsd68.BSD68DatasetPrepared(
-                path=cwd / "data/BSD68/", mode="val"
-            )
-    elif cfg.name.lower() == "hanzi":
-        dataset_train = hanzi.HanziDatasetPrepared(
-            path=cwd / "data/Hanzi/tiles",
-            mode="training",
-            transforms=training_augmentations_2d(crop=cfg.training.crop),
-            version=cfg.data.version,
-            noise_level=cfg.data.noise_level,
-        )
-        dataset_valid = None
-        if cfg.training.validate:
-            dataset_valid = hanzi.HanziDatasetPrepared(
-                path=cwd / "data/Hanzi/tiles",
-                mode="validation",
-                version=cfg.data.version,
-                noise_level=cfg.data.noise_level,
-            )
-    elif cfg.name.lower() == "imagenet":
-        dataset_train = imagenet.ImagenetDatasetPrepared(
-            path=cwd / "data/ImageNet",
-            mode="train",
-            transforms=training_augmentations_2d(crop=cfg.training.crop),
-            version=cfg.data.version,
-        )
-        dataset_valid = None
-        if cfg.training.validate:
-            dataset_valid = imagenet.ImagenetDatasetPrepared(
-                path=cwd / "data/ImageNet",
-                mode="val",
-                version=cfg.data.version,
-            )
-    elif cfg.name.lower() == "planaria":
-        dataset_train = planaria.PlanariaDatasetPrepared(
-            path=cwd / "data/Denoising_Planaria",
-            mode="train",
-            transforms=training_augmentations_3d(),
-        )
-        dataset_valid = None
-        if cfg.training.validate:
-            dataset_valid = planaria.PlanariaDatasetPrepared(
-                path=cwd / "data/Denoising_Planaria",
-                mode="val",
-            )
-    else:
-        # todo add other datasets
-        raise ValueError
-
+    # Data
+    dataset_train, dataset_valid = get_dataset(cfg)
     num_samples = cfg.training.batch_size * cfg.training.steps_per_epoch
     loader_train = DataLoader(
         dataset_train,
@@ -131,13 +74,15 @@ def main(cfg: DictConfig) -> None:
             drop_last=False,
         )
 
+    # Model
     mdl = model.Noise2Same(
         n_dim=cfg.data.n_dim,
         in_channels=cfg.data.n_channels,
         **cfg.model,
     )
-    optimizer = torch.optim.Adam(mdl.parameters(), lr=cfg.optim.lr)
 
+    # Optimization
+    optimizer = torch.optim.Adam(mdl.parameters(), lr=cfg.optim.lr)
     scheduler = torch.optim.lr_scheduler.LambdaLR(
         optimizer,
         lr_lambda=exponential_decay(
@@ -147,6 +92,7 @@ def main(cfg: DictConfig) -> None:
         ),
     )
 
+    # Trainer
     trainer = noise2same.trainer.Trainer(
         model=mdl,
         optimizer=optimizer,
