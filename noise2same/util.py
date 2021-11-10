@@ -6,11 +6,13 @@ from typing import Dict, Tuple, Union
 import numpy as np
 import torch
 from matplotlib import pyplot as plt
+from numpy import ndarray
 from skimage.metrics import (
     mean_squared_error,
     peak_signal_noise_ratio,
     structural_similarity,
 )
+from torch.nn import Module
 
 
 def clean_plot(ax: np.ndarray) -> None:
@@ -55,6 +57,18 @@ def crop_as(x: np.ndarray, gt: np.ndarray) -> np.ndarray:
     crop = x[sl]
     assert crop.shape == gt.shape
     return crop
+
+
+def center_crop(x: np.ndarray, size: int = 63) -> np.ndarray:
+    """
+    Crops a central part of an array
+    (used for PSF)
+    :param x: source
+    :param size: to crop
+    :return: cropped array
+    """
+    h = size // 2
+    return x[tuple(slice(d // 2 - h, d // 2 + h + 1) for d in x.shape)]
 
 
 def calculate_scores(
@@ -174,3 +188,92 @@ def normalize_min_mse(gt: np.ndarray, x: np.ndarray, normalize_gt: bool = True):
     gt = gt.astype(np.float32, copy=False) - np.mean(gt)
     scale = np.cov(x.flatten(), gt.flatten())[0, 1] / np.var(x.flatten())
     return gt, scale * x
+
+
+def plot_3d(im: ndarray) -> None:
+    """
+    Plot 3D image as three max projections
+    :param im: image to plot
+    :return: none
+    """
+    fig = plt.figure(constrained_layout=False, figsize=(12, 7))
+    gs = fig.add_gridspec(nrows=3, ncols=5)
+
+    ax_0 = fig.add_subplot(gs[:-1, :-1])
+    ax_0.imshow(np.max(im, 0))
+
+    ax_1 = fig.add_subplot(gs[-1, :-1])
+    ax_1.imshow(np.max(im, 1))
+
+    ax_2 = fig.add_subplot(gs[:-1, -1])
+    ax_2.imshow(np.rot90(np.max(im, 2)))
+
+    plt.setp([ax_0, ax_1, ax_2], xticks=[], yticks=[])
+    plt.tight_layout()
+    plt.show()
+
+
+def concat_projections(im: ndarray, axis: int = 1) -> ndarray:
+    """
+    Do max projection of an image to all axes and concatenate them in 2D image
+    Expects image to be a cube
+    :param im: ND image
+    :param axis: concatenate projections along it (0 - vertical concatenation, 1 - horizontal)
+    :return: 2D concatenation of max projections
+    """
+    projections = []
+    for i in range(im.ndim):
+        p = np.max(im, axis=i)
+        if i > 0 and axis > 0:
+            p = np.rot90(p)
+        projections.append(p)
+    projections = np.concatenate(projections, axis=axis)
+    return projections
+
+
+def concat_projections_3d(im: ndarray, projection_func: callable = np.max) -> ndarray:
+    """
+    Do max projection of an image to all axes and concatenate them in 2D image
+    :param im: ND image
+    :param projection_func: function to make 2d from 3d, np.max by default
+    :return: 2D concatenation of max projections
+    """
+    projections = np.zeros((im.shape[0] + im.shape[1], im.shape[0] + im.shape[2]))
+    shifts = [(0, 0), (im.shape[1], 0), (0, im.shape[2])]
+    for i, s in enumerate(im.shape):
+        p = projection_func(im, axis=i)
+        if i == 2:
+            p = np.rot90(p)
+        ps = tuple(slice(0 + sh, d + sh) for d, sh in zip(p.shape, shifts[i]))
+        projections[ps] = p
+    return projections
+
+
+def plot_projections(im: ndarray, axis: int = 1) -> None:
+    """
+    Plot batch projections from `concat_projections`
+    :param im: ND image
+    :param axis: concatenate projections along it (0 - vertical concatenation, 1 - horizontal)
+    :return:
+    """
+    projections = concat_projections(im, axis)
+    fig, ax = plt.subplots()
+    ax.imshow(projections)
+    clean_plot(ax)
+
+
+def load_checkpoint_to_module(module, checkpoint_path: str):
+    """
+    Loads PyTorch state checkpoint to module
+    :param module: nn.Module
+    :param checkpoint_path: str, path to checkpoint
+    :return:
+    """
+    checkpoint = torch.load(checkpoint_path)
+    for attr, state_dict in checkpoint.items():
+        try:
+            getattr(module, attr).load_state_dict(state_dict)
+        except AttributeError:
+            print(
+                f"Attribute {attr} is present in the checkpoint but absent in the class, do not load"
+            )
