@@ -4,15 +4,19 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple, Union
 
 import albumentations as albu
+import h5py
 import numpy as np
 import torch
 from albumentations import BasicTransform, Compose
 from albumentations.pytorch import ToTensorV2
+from pytorch_toolbelt.inference.tiles import ImageSlicer
+from skimage import io
 from torch import tensor as T
 from torch.utils.data import Dataset
 
 from noise2same.dataset import transforms as t3d
 from noise2same.dataset.util import mask_like_image
+from noise2same.util import normalize_percentile
 
 
 @dataclass
@@ -202,3 +206,70 @@ class AbstractNoiseDataset3D(AbstractNoiseDataset, ABC):
             "mask": self.transforms(mask, resample=False),
         }
         return ret
+
+
+@dataclass
+class AbstractNoiseDataset3DLarge(AbstractNoiseDataset3D, ABC):
+    """
+    For large images where we standardize a full-size image
+    """
+
+    input_name: str = None
+    tile_size: int = 64
+    tile_step: int = 48
+    mean: float = 0
+    std: float = 1
+    weight: str = "pyramid"
+
+    def __getitem__(self, i: int) -> Dict[str, Any]:
+        """
+        :param i: int, index
+        :return: dict(image, mask, mean, std)
+        """
+        image, crop = self._read_image(self.images[i])
+        mask = self._mask_like_image(image)
+        ret = self._apply_transforms(image.astype(np.float32), mask)
+        # standardization/normalization step removed since we process the full-sized image
+        ret["mean"], ret["std"] = (
+            torch.tensor(self.mean if self.standardize else 0).view(1, 1, 1, 1),
+            torch.tensor(self.std if self.standardize else 1).view(1, 1, 1, 1),
+        )
+        ret["crop"] = crop
+        return ret
+
+    def _read_image(self, image_or_path: List[int]) -> Tuple[np.ndarray, List[int]]:
+        image, crop = self.tiler.crop_tile(image=self.image, crop=image_or_path)
+        return np.moveaxis(image, -1, 0), crop
+
+    def _read_large_image(self):
+        self.image = io.imread(str(self.path / self.input_name)).astype(np.float32)
+
+    def _get_images(self) -> Union[List[str], np.ndarray]:
+        self._read_large_image()
+
+        if len(self.image.shape) < 4:
+            self.image = self.image[..., np.newaxis]
+
+        if self.standardize:
+            self.mean = self.image.mean()
+            self.std = self.image.std()
+            self.image = (self.image - self.mean) / self.std
+        else:
+            self.image = normalize_percentile(self.image)
+
+        self.tiler = ImageSlicer(
+            self.image.shape,
+            tile_size=self.tile_size,
+            tile_step=self.tile_step,
+            weight=self.weight,
+            is_channels=True,
+        )
+
+        return self.tiler.crops
+
+
+@dataclass
+class AbstractNoiseDataset3DLargeH5(AbstractNoiseDataset3DLarge):
+    def _read_large_image(self):
+        with h5py.File(str(self.path / self.input_name), "r") as f:
+            self.image = np.array(f["image"], dtype=np.float32)
