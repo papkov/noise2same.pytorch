@@ -68,3 +68,66 @@ class PSF(nn.Module):
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         x = torch.nn.functional.pad(x, (self.pad,) * self.n_dim * 2, mode=self.pad_mode)
         return self.psf(x)
+
+
+class PSFParameter(nn.Module):
+    def __init__(
+        self,
+        kernel_psf: np.ndarray,
+        in_channels: int = 1,
+        pad_mode="reflect",
+        trainable=False,
+    ):
+        """
+        Parametrized trainable version of PSF
+        :param kernel_psf:
+        :param in_channels:
+        :param pad_mode:
+        :param trainable:
+        """
+        super().__init__()
+        self.kernel_size = kernel_psf.shape[0]
+        self.n_dim = len(kernel_psf.shape)
+        self.in_channels = in_channels
+        self.pad_mode = pad_mode
+        self.pad = (self.kernel_size - 1) // 2
+        assert self.n_dim in (2, 3)
+
+        self.psf = torch.from_numpy(kernel_psf.squeeze()[(None,) * 2]).float()
+        self.psf = nn.Parameter(self.psf, requires_grad=trainable)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        pad = torch.nn.functional.pad(
+            x, (self.pad,) * self.n_dim * 2, mode=self.pad_mode
+        )
+        conv = torch.conv2d if self.n_dim == 2 else torch.conv3d
+
+        x = pad(x)
+        x = conv(x, self.psf, groups=self.in_channels, stride=1)
+        return x
+
+
+def read_psf(
+    path: Union[Path, str], psf_size: Optional[int] = None, normalize: bool = True
+) -> np.ndarray:
+    """
+    Reads PSF from .h5 or .tif file
+    :param path: absolute path to file
+    :param psf_size: int, optional, crop PSF to a cube of this size if provided
+    :param normalize: bool, is divide PSF by its sum
+    :return: PSF as numpy array
+    """
+    path = str(path)
+    if path.endswith(".h5"):
+        with h5py.File(path, "r") as f:
+            psf = f["psf"]
+    else:
+        psf = io.imread(path)
+
+    if psf_size is not None:
+        psf = center_crop(psf, psf_size)
+
+    if normalize:
+        psf /= psf.sum()
+
+    return psf
