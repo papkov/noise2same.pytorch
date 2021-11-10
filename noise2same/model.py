@@ -8,6 +8,7 @@ from torch.nn.functional import conv2d, conv3d
 
 from noise2same import network
 from noise2same.contrast import PixelContrastLoss
+from noise2same.psf import PSF, read_psf
 
 
 class DonutMask(nn.Module):
@@ -59,6 +60,9 @@ class Noise2Same(nn.Module):
         noise_mean: float = 0,
         noise_std: float = 0.2,
         lambda_proj: float = 0,
+        psf: Optional[str] = None,
+        psf_size: Optional[int] = None,
+        psf_pad_mode: str = "reflect",
         **kwargs: Any,
     ):
         """
@@ -71,6 +75,8 @@ class Noise2Same(nn.Module):
         :param masking:
         :param noise_mean:
         :param noise_std:
+        :param lambda_proj:
+        :param psf:
         """
         super(Noise2Same, self).__init__()
         assert masking in ("gaussian", "donut")
@@ -101,6 +107,14 @@ class Noise2Same(nn.Module):
             )
 
         self.mask_kernel = DonutMask(n_dim=n_dim, in_channels=in_channels)
+
+        # TODO parametrize psf
+        self.psf = None
+        if psf is not None:
+            psf = read_psf(psf, psf_size=psf_size)
+            self.psf = PSF(psf, pad_mode=psf_pad_mode)
+            for param in self.psf.parameters():
+                param.requires_grad = False
 
     def forward_full(self, x: T, mask: T) -> Tuple[Dict[str, T], Dict[str, T]]:
         """
@@ -140,6 +154,9 @@ class Noise2Same(nn.Module):
         out = {}
         x = self.net(x)
         out["image"] = self.head(x)
+        if self.psf is not None:
+            out["deconv"] = out["image"]
+            out["image"] = self.psf(out["image"])
         if self.project_head is not None:
             out["proj"] = self.project_head(x)
         return out

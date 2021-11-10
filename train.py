@@ -78,6 +78,7 @@ def main(cfg: DictConfig) -> None:
     mdl = model.Noise2Same(
         n_dim=cfg.data.n_dim,
         in_channels=cfg.data.n_channels,
+        psf=cfg.psf.path if "psf" in cfg else None,
         **cfg.model,
     )
 
