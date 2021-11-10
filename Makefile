@@ -1,6 +1,6 @@
 TEST_PATH=./tests
 MODULES_PATH=./noise2same
-TRAIN_PATH=train.py inference.py
+TRAIN_PATH=train.py evaluate.py
 
 .PHONY: format lint test commit
 
