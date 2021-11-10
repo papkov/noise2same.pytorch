@@ -5,6 +5,7 @@ from einops import rearrange
 
 from noise2same.contrast import PixelContrastLoss
 
+
 class MyTestCase(unittest.TestCase):
     def test_masking(self, bs: int = 2, n_emb: int = 8, h: int = 4, w: int = 4):
 
@@ -30,15 +31,13 @@ class MyTestCase(unittest.TestCase):
         # out_raw = out_raw.reshape(bs, n_emb, h, w)
         # out_mask = out_mask.reshape(bs, n_emb, h, w)
 
-        mask = torch.randn((bs, 1, h, w)).ge(0.5)
+        mask = torch.randn((bs, 1, h, w)).ge(0.5).float()
         out_raw = torch.randn((bs, n_emb, h, w))
         out_mask = torch.randn((bs, n_emb, h, w))
 
         loss = PixelContrastLoss()
         res = loss(out_raw, out_mask, mask)
         print(res.mean())
-
-
 
 
 if __name__ == "__main__":
