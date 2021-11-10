@@ -18,6 +18,7 @@ network:
 
 model:
   lambda_inv: 2
+  lambda_proj: 0
   mask_percentage: 0.5
   masking: gaussian
   noise_mean: 0

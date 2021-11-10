@@ -22,8 +22,8 @@ class PixelContrastLoss(_Loss):
         """
         mask = rearrange(mask, "b e h w -> (b e h w)")  # e == 1
 
-        emb_raw = rearrange(out_raw, "b e h w -> (b h w) e")[mask]
-        emb_mask = rearrange(out_mask, "b e h w -> (b h w) e")[mask]
+        emb_raw = rearrange(out_raw, "b e h w -> (b h w) e")[mask.bool()]
+        emb_mask = rearrange(out_mask, "b e h w -> (b h w) e")[mask.bool()]
         rand_idx = torch.randperm(emb_raw.size(0))
 
         pos_dot = torch.einsum("be,be->b", emb_raw, emb_mask) / self.temperature

@@ -1,4 +1,4 @@
-from typing import Any, Dict, Tuple
+from typing import Any, Dict, Optional, Tuple
 
 import numpy as np
 import torch
@@ -7,6 +7,7 @@ from torch import nn
 from torch.nn.functional import conv2d, conv3d
 
 from noise2same import network
+from noise2same.contrast import PixelContrastLoss
 
 
 class DonutMask(nn.Module):
@@ -94,9 +95,9 @@ class Noise2Same(nn.Module):
 
         # TODO parametrize project head
         self.project_head = None
-        if lambda_proj > 0:
+        if self.lambda_proj > 0:
             self.project_head = network.ProjectHead(
-                in_channels=in_channels, n_dim=n_dim, out_channels=256, kernel_size=1
+                in_channels=base_channels, n_dim=n_dim, out_channels=256, kernel_size=1
             )
 
         self.mask_kernel = DonutMask(n_dim=n_dim, in_channels=in_channels)
@@ -153,7 +154,6 @@ class Noise2Same(nn.Module):
             / masked
         )
         bsp_mse = torch.sum(torch.square(x - out_mask["image"]) * mask) / masked
-        # todo add projection loss here
         loss = rec_mse + self.lambda_inv * torch.sqrt(inv_mse)
         loss_log = {
             "loss": loss.item(),
@@ -161,6 +161,12 @@ class Noise2Same(nn.Module):
             "inv_mse": inv_mse.item(),
             "bsp_mse": bsp_mse.item(),
         }
+        if self.lambda_proj > 0:
+            contrastive_loss = PixelContrastLoss(temperature=0.1)
+            proj_loss = contrastive_loss(out_raw["proj"], out_mask["proj"], mask).mean()
+            loss = loss + self.lambda_proj * proj_loss
+            loss_log.update({"loss": loss.item(), "proj_loss": proj_loss.item()})
+
         return loss, loss_log
 
     def compute_losses(self, x: T, mask: T) -> Tuple[T, Dict[str, float]]:
