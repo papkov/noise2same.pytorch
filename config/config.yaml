@@ -23,6 +23,7 @@ model:
   masking: gaussian
   noise_mean: 0
   noise_std: 0.2
+  residual: False
 
 training:
   steps_per_epoch: 1000

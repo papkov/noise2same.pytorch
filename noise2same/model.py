@@ -5,6 +5,7 @@ import torch
 from torch import Tensor as T
 from torch import nn
 from torch.nn.functional import conv2d, conv3d
+from torchvision.transforms import GaussianBlur
 
 from noise2same import network
 from noise2same.contrast import PixelContrastLoss
@@ -63,6 +64,7 @@ class Noise2Same(nn.Module):
         psf: Optional[str] = None,
         psf_size: Optional[int] = None,
         psf_pad_mode: str = "reflect",
+        residual: bool = False,
         **kwargs: Any,
     ):
         """
@@ -88,6 +90,7 @@ class Noise2Same(nn.Module):
         self.masking = masking
         self.noise_mean = noise_mean
         self.noise_std = noise_std
+        self.residual = residual
 
         # TODO customize with segmentation_models
         self.net = network.UNet(
@@ -99,6 +102,9 @@ class Noise2Same(nn.Module):
             n_dim=n_dim,
         )
 
+        # todo parametrize
+        self.blur = GaussianBlur(5, sigma=0.2)
+
         # TODO parametrize project head
         self.project_head = None
         if self.lambda_proj > 0:
@@ -108,10 +114,10 @@ class Noise2Same(nn.Module):
 
         self.mask_kernel = DonutMask(n_dim=n_dim, in_channels=in_channels)
 
-        # TODO parametrize psf
         self.psf = None
         if psf is not None:
             psf = read_psf(psf, psf_size=psf_size)
+            # print("PSF shape", psf.shape)
             self.psf = PSF(psf, pad_mode=psf_pad_mode)
             for param in self.psf.parameters():
                 param.requires_grad = False
@@ -152,13 +158,17 @@ class Noise2Same(nn.Module):
         :return:
         """
         out = {}
-        x = self.net(x)
-        out["image"] = self.head(x)
+        features = self.net(x)
+        out["image"] = self.head(features)
+
+        if self.residual:
+            out["image"] = self.blur(x) + out["image"]
+
         if self.psf is not None:
             out["deconv"] = out["image"]
             out["image"] = self.psf(out["image"])
         if self.project_head is not None:
-            out["proj"] = self.project_head(x)
+            out["proj"] = self.project_head(features)
         return out
 
     def compute_losses_from_output(
