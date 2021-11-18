@@ -75,10 +75,13 @@ def main(cfg: DictConfig) -> None:
         )
 
     # Model
+    # TODO less ugly way to parametrize psf
     mdl = model.Noise2Same(
         n_dim=cfg.data.n_dim,
         in_channels=cfg.data.n_channels,
         psf=cfg.psf.path if "psf" in cfg else None,
+        psf_size=cfg.psf.psf_size if "psf" in cfg else None,
+        psf_pad_mode=cfg.psf.psf_pad_mode if "psf" in cfg else None,
         **cfg.model,
     )
 

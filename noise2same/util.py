@@ -68,7 +68,7 @@ def center_crop(x: np.ndarray, size: int = 63) -> np.ndarray:
     :return: cropped array
     """
     h = size // 2
-    return x[tuple(slice(d // 2 - h, d // 2 + h + 1) for d in x.shape)]
+    return x[tuple(slice(max(0, d // 2 - h), min(d // 2 + h + 1, d)) for d in x.shape)]
 
 
 def calculate_scores(
