@@ -10,6 +10,7 @@ from torch.utils.data import DataLoader, RandomSampler, Subset
 import noise2same.trainer
 from noise2same import model, util
 from noise2same.dataset.getter import get_dataset
+from noise2same.optimizers.esadam import ESAdam
 
 
 def exponential_decay(
@@ -86,7 +87,13 @@ def main(cfg: DictConfig) -> None:
     )
 
     # Optimization
-    optimizer = torch.optim.Adam(mdl.parameters(), lr=cfg.optim.lr)
+    if cfg.optim.optimizer == "adam":
+        optimizer = torch.optim.Adam(mdl.parameters(), lr=cfg.optim.lr)
+    elif cfg.optim.optimizer == "esadam":
+        optimizer = ESAdam(mdl.parameters(), lr=cfg.optim.lr)
+    else:
+        raise ValueError(f"Unknown optimizer {cfg.optim.optimizer}")
+
     scheduler = torch.optim.lr_scheduler.LambdaLR(
         optimizer,
         lr_lambda=exponential_decay(
