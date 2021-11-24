@@ -19,12 +19,14 @@ class Evaluator(object):
         model: Noise2Same,
         device: str = "cuda",
         checkpoint_path: Optional[str] = None,
+        masked: bool = False,
     ):
         """
         Model evaluator, describes inference for different data formats
         :param model: model architecture to evaluate
         :param device: str, device to run inference
         :param checkpoint_path: optional str, path to the model checkpoint
+        :param masked: if perform forward pass masked
         """
 
         self.model = model
@@ -32,6 +34,7 @@ class Evaluator(object):
         self.checkpoint_path = checkpoint_path
         if checkpoint_path is not None:
             self.load_checkpoint(checkpoint_path)
+        self.masked = masked
 
         self.model.to(device)
 
@@ -58,7 +61,12 @@ class Evaluator(object):
             batch = {k: v.to(self.device) for k, v in batch.items()}
 
             with autocast(enabled=half):
-                out = self.model(batch["image"])
+                if self.masked:
+                    # TODO remove randomness
+                    # idea: use the same mask for all images? mask as tta?
+                    out = self.model.forward_masked(batch["image"], batch["mask"])
+                else:
+                    out = self.model.forward(batch["image"])
                 out_raw = out["image"] * batch["std"] + batch["mean"]
 
             out_raw = {"image": np.moveaxis(out_raw.detach().cpu().numpy(), 1, -1)}

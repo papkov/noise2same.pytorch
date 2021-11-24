@@ -62,13 +62,14 @@ def main(cfg: DictConfig) -> None:
     )
 
     # Run evaluation
-    # TODO parametrize half
-    evaluator = Evaluator(mdl, checkpoint_path=checkpoint_path)
+    half = getattr(cfg, "amp", False)
+    masked = getattr(cfg, "masked", False)
+    evaluator = Evaluator(mdl, checkpoint_path=checkpoint_path, masked=masked)
     if cfg.name in ("bsd68", "hanzi", "imagenet"):
-        predictions = evaluator.inference(loader, half=True)
+        predictions = evaluator.inference(loader, half=half)
     elif cfg.name in ("microtubules",):
         predictions = evaluator.inference_single_image_dataset(
-            dataset, half=True, batch_size=1
+            dataset, half=half, batch_size=1
         )
     elif cfg.name in ("planaria",):
         files = sorted(
@@ -81,7 +82,7 @@ def main(cfg: DictConfig) -> None:
             for c in range(1, 4):
                 predictions[f"c{c}"].append(
                     evaluator.inference_single_image_dataset(
-                        datasets[f"c{c}"], half=True, batch_size=1
+                        datasets[f"c{c}"], half=half, batch_size=1
                     )
                 )
     else:
