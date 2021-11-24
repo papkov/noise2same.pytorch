@@ -65,6 +65,7 @@ class Noise2Same(nn.Module):
         psf_size: Optional[int] = None,
         psf_pad_mode: str = "reflect",
         residual: bool = False,
+        skip_method: str = "concat",
         **kwargs: Any,
     ):
         """
@@ -94,7 +95,11 @@ class Noise2Same(nn.Module):
 
         # TODO customize with segmentation_models
         self.net = network.UNet(
-            in_channels=in_channels, n_dim=n_dim, base_channels=base_channels, **kwargs
+            in_channels=in_channels,
+            n_dim=n_dim,
+            base_channels=base_channels,
+            skip_method=skip_method,
+            **kwargs,
         )
         self.head = network.RegressionHead(
             in_channels=base_channels,
@@ -103,7 +108,7 @@ class Noise2Same(nn.Module):
         )
 
         # todo parametrize
-        self.blur = GaussianBlur(5, sigma=0.2)
+        self.blur = GaussianBlur(5, sigma=0.2) if residual else None
 
         # TODO parametrize project head
         self.project_head = None

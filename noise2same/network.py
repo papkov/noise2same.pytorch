@@ -271,7 +271,8 @@ class UNet(nn.Module):
         self.encoding_block_sizes = encoding_block_sizes
         self.decoding_block_sizes = decoding_block_sizes
         self.downsampling = downsampling
-        self.skip = torch.cat if skip_method in ("cat", "concat") else torch.add
+        self.skip_method = skip_method
+        print(f"Use {self.skip_method} skip method")
 
         conv = nn.Conv2d if n_dim == 2 else nn.Conv3d
         conv_transpose = nn.ConvTranspose2d if n_dim == 2 else nn.ConvTranspose3d
@@ -348,7 +349,7 @@ class UNet(nn.Module):
             # Here goes skip connection, then decoder block
             self.decoder_blocks.append(
                 ResidualBlock(
-                    in_channels=out_channels * 2,
+                    in_channels=out_channels * (2 if self.skip_method != "add" else 1),
                     out_channels=out_channels,
                     n_dim=n_dim,
                     kernel_size=kernel_size,
@@ -376,8 +377,12 @@ class UNet(nn.Module):
         ):
             x = upsampling_block(x)
             # print(f"Upsampling {i}", x.shape)
-            # todo customize to use add
-            x = torch.cat([x, skip], dim=1)
+            if self.skip_method == "add":
+                x.add_(skip)
+            elif self.skip_method in ("cat", "concat"):
+                x = torch.cat([x, skip], dim=1)
+            else:
+                raise ValueError
             x = decoder_block(x)
             # print(f"Decoder {i}", x.shape)
 
