@@ -5,6 +5,7 @@ from typing import Any, Dict, List, Optional, Tuple
 import numpy as np
 import torch
 import wandb
+from torch.cuda.amp import GradScaler, autocast
 from torch.utils.data import DataLoader
 from tqdm import tqdm, trange
 
@@ -24,6 +25,7 @@ class Trainer(object):
         monitor: str = "val_rec_mse",
         check: bool = False,
         wandb_log: bool = True,
+        amp: bool = False,
     ):
 
         self.model = model
@@ -41,6 +43,9 @@ class Trainer(object):
         self.checkpoint_path.mkdir(parents=True, exist_ok=False)
         self.evaluator = Evaluator(model=model, device=device)
 
+        self.amp = amp
+        self.scaler = GradScaler() if amp else None
+
     def one_epoch(
         self, loader: DataLoader
     ) -> Tuple[Dict[str, float], Dict[str, np.ndarray]]:
@@ -55,14 +60,21 @@ class Trainer(object):
 
             self.optimizer.zero_grad()
 
-            out_mask, out_raw = self.model.forward_full(x, mask)
-            loss, loss_log = self.model.compute_losses_from_output(
-                x, mask, out_mask, out_raw
-            )
-
             # todo gradient accumulation
-            loss.backward()
-            self.optimizer.step()
+            with autocast(enabled=self.amp):
+                out_mask, out_raw = self.model.forward_full(x, mask)
+                loss, loss_log = self.model.compute_losses_from_output(
+                    x, mask, out_mask, out_raw
+                )
+
+            if self.scaler is not None:
+                self.scaler.scale(loss).backward()
+                self.scaler.step(self.optimizer)
+                self.scaler.update()
+            else:
+                loss.backward()
+                self.optimizer.step()
+
             if self.scheduler is not None:
                 self.scheduler.step()
 
@@ -100,7 +112,10 @@ class Trainer(object):
         images = {}
         for i, batch in enumerate(iterator):
             x = batch["image"].to(self.device)
-            out_raw = self.model(x)["image"]
+
+            with autocast(enabled=self.amp):
+                out_raw = self.model(x)["image"]
+
             rec_mse = torch.mean(torch.square(out_raw - x))
             total_loss += rec_mse.item()
             iterator.set_postfix({"val_rec_mse": total_loss / (i + 1)})

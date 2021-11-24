@@ -110,6 +110,7 @@ def main(cfg: DictConfig) -> None:
         scheduler=scheduler,
         check=cfg.check,
         monitor=cfg.training.monitor,
+        amp=cfg.training.amp,
     )
 
     n_epochs = cfg.training.steps // cfg.training.steps_per_epoch

@@ -4,6 +4,7 @@ from typing import Dict, List, Optional, Tuple
 import numpy as np
 import torch
 from pytorch_toolbelt.inference.tiles import TileMerger
+from torch.cuda.amp import autocast
 from torch.utils.data import DataLoader, Dataset
 from tqdm import tqdm, trange
 
@@ -50,20 +51,16 @@ class Evaluator(object):
         :return: List[Dict[key, output]]
         """
         self.model.eval()
-        if half:
-            self.model.half()
-        else:
-            self.model.float()
 
         outputs = []
         iterator = tqdm(loader, desc="inference", position=0, leave=True)
         for i, batch in enumerate(iterator):
-            if half:
-                batch = {k: v.half() for k, v in batch.items()}
             batch = {k: v.to(self.device) for k, v in batch.items()}
-            out = self.model(batch["image"])
 
-            out_raw = out["image"] * batch["std"] + batch["mean"]
+            with autocast(enabled=half):
+                out = self.model(batch["image"])
+                out_raw = out["image"] * batch["std"] + batch["mean"]
+
             out_raw = {"image": np.moveaxis(out_raw.detach().cpu().numpy(), 1, -1)}
             if self.model.lambda_proj > 0:
                 out_raw.update(
@@ -112,10 +109,6 @@ class Evaluator(object):
         assert hasattr(dataset, "tiler"), "Dataset should have a `tiler` attribute"
 
         self.model.eval()
-        if half:
-            self.model.half()
-        else:
-            self.model.float()
 
         merger = TileMerger(
             dataset.tiler.target_shape,
@@ -145,14 +138,14 @@ class Evaluator(object):
                 batch["image"] = batch["image"][None, ...]
                 batch["crop"] = batch["crop"][None, ...]
 
-            # We don't need to half and move to device for `crop`
-            if half:
-                batch = {k: v.half() if k != "crop" else v for k, v in batch.items()}
+            # We don't need move to device for `crop`
             batch = {
                 k: v.to(self.device) if k != "crop" else v for k, v in batch.items()
             }
-
-            pred_batch = self.model(batch["image"])[key] * batch["std"] + batch["mean"]
+            with autocast(enabled=half):
+                pred_batch = (
+                    self.model(batch["image"])[key] * batch["std"] + batch["mean"]
+                )
             iterator.set_postfix(
                 {
                     "in_shape": tuple(batch["image"].shape),
