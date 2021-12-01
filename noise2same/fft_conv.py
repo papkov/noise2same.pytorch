@@ -91,6 +91,7 @@ def fft_conv(
         for i in reversed(range(2, signal_.ndim))
         for pad in [0, signal_.size(i) - kernel.size(i)]
     ]
+
     padded_kernel = f.pad(kernel, kernel_padding)
 
     # Perform fourier convolution -- FFT, matrix multiply, then IFFT
@@ -104,7 +105,9 @@ def fft_conv(
 
     # Remove extra padded values
     crop_slices = [slice(0, output.size(0)), slice(0, output.size(1))] + [
-        slice(0, (signal.size(i) - kernel.size(i) + 1), stride_[i - 2])
+        slice(
+            0, (signal.size(i) - kernel.size(i) + (kernel.size(i) % 2)), stride_[i - 2]
+        )
         for i in range(2, signal.ndim)
     ]
     output = output[crop_slices].contiguous()
