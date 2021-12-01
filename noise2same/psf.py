@@ -4,10 +4,11 @@ from typing import Optional, Union
 import h5py
 import numpy as np
 import torch
+import torch.nn.functional as f
 from skimage import io
 from torch import nn
 
-from noise2same.fft_conv import FFTConv2d, FFTConv3d
+from noise2same.fft_conv import FFTConv2d, FFTConv3d, fft_conv
 from noise2same.util import center_crop
 
 
@@ -66,7 +67,7 @@ class PSF(nn.Module):
             f.data.copy_(torch.from_numpy(kernel_psf))
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        x = torch.nn.functional.pad(x, (self.pad,) * self.n_dim * 2, mode=self.pad_mode)
+        x = f.pad(x, (self.pad,) * self.n_dim * 2, mode=self.pad_mode)
         return self.psf(x)
 
 
@@ -77,6 +78,7 @@ class PSFParameter(nn.Module):
         in_channels: int = 1,
         pad_mode="reflect",
         trainable=False,
+        fft: Union[str, bool] = "auto",
     ):
         """
         Parametrized trainable version of PSF
@@ -86,23 +88,44 @@ class PSFParameter(nn.Module):
         :param trainable:
         """
         super().__init__()
-        self.kernel_size = kernel_psf.shape[0]
+        self.kernel_size = kernel_psf.shape
         self.n_dim = len(kernel_psf.shape)
+
+        if self.n_dim == 3 and pad_mode == "reflect":
+            # Not supported yet
+            pad_mode = "replicate"
+
         self.in_channels = in_channels
         self.pad_mode = pad_mode
-        self.pad = (self.kernel_size - 1) // 2
+        self.pad = [k // 2 for k in reversed(self.kernel_size)]
         assert self.n_dim in (2, 3)
+
+        self.fft = fft
+        if self.fft == "auto":
+            # Use FFT Conv if kernel has > 100 elements
+            self.fft = np.product(self.kernel_size) > 100
+        if isinstance(self.fft, str):
+            raise ValueError(f"Invalid fft value {self.fft}")
 
         self.psf = torch.from_numpy(kernel_psf.squeeze()[(None,) * 2]).float()
         self.psf = nn.Parameter(self.psf, requires_grad=trainable)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        pad = torch.nn.functional.pad(
-            x, (self.pad,) * self.n_dim * 2, mode=self.pad_mode
-        )
-        conv = torch.conv2d if self.n_dim == 2 else torch.conv3d
+        # if self.fft:
+        #     # recalculate padding for large PSF
+        #     for i, (p, xs, ks) in enumerate(zip(self.pad, x.shape[2:], self.kernel_size)):
+        #         if ks > xs:  # kernel dimension is larger than image dimension
+        #             self.pad[i] = (ks - xs) // 2
+        #         else:
+        #             self.pad[i] = 0
 
-        x = pad(x)
+        x = f.pad(x, tuple(np.repeat(self.pad, 2)), mode=self.pad_mode)
+
+        if self.fft:
+            conv = fft_conv
+        else:
+            conv = torch.conv2d if self.n_dim == 2 else torch.conv3d
+
         x = conv(x, self.psf, groups=self.in_channels, stride=1)
         return x
 
