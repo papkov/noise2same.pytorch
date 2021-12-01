@@ -180,7 +180,12 @@ class Noise2Same(nn.Module):
         self, x: T, mask: T, out_mask: Dict[str, T], out_raw: Dict[str, T]
     ) -> Tuple[T, Dict[str, float]]:
         masked = torch.sum(mask)
-        rec_mse = torch.mean(torch.square(out_raw["image"] - x))
+        try:
+            rec_mse = torch.mean(torch.square(out_raw["image"] - x))
+        except RuntimeError as e:
+            print(out_raw["image"].shape, x.shape)
+            raise e
+
         inv_mse = (
             torch.sum(torch.square(out_raw["image"] - out_mask["image"]) * mask)
             / masked
