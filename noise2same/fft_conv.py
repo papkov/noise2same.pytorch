@@ -95,8 +95,8 @@ def fft_conv(
 
     # Perform fourier convolution -- FFT, matrix multiply, then IFFT
     # signal_ = signal_.reshape(signal_.size(0), groups, -1, *signal_.shape[2:])
-    signal_fr = rfftn(signal_, dim=tuple(range(2, signal.ndim)))
-    kernel_fr = rfftn(padded_kernel, dim=tuple(range(2, signal.ndim)))
+    signal_fr = rfftn(signal_.float(), dim=tuple(range(2, signal.ndim)))
+    kernel_fr = rfftn(padded_kernel.float(), dim=tuple(range(2, signal.ndim)))
 
     kernel_fr.imag *= -1
     output_fr = complex_matmul(signal_fr, kernel_fr, groups=groups)
