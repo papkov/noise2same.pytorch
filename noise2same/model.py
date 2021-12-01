@@ -9,7 +9,7 @@ from torchvision.transforms import GaussianBlur
 
 from noise2same import network
 from noise2same.contrast import PixelContrastLoss
-from noise2same.psf import PSF, read_psf
+from noise2same.psf import PSF, PSFParameter, read_psf
 
 
 class DonutMask(nn.Module):
@@ -122,8 +122,8 @@ class Noise2Same(nn.Module):
         self.psf = None
         if psf is not None:
             psf = read_psf(psf, psf_size=psf_size)
-            # print("PSF shape", psf.shape)
-            self.psf = PSF(psf, pad_mode=psf_pad_mode)
+            print("PSF shape", psf.shape)
+            self.psf = PSFParameter(psf, pad_mode=psf_pad_mode)
             for param in self.psf.parameters():
                 param.requires_grad = False
 
