@@ -53,9 +53,10 @@ def fft_conv(
     signal: Tensor,
     kernel: Tensor,
     bias: Tensor = None,
-    padding: Union[int, Iterable[int]] = 0,
+    padding: Union[int, Iterable[int], str] = 0,
     stride: Union[int, Iterable[int]] = 1,
     groups: int = 1,
+    padding_mode: str = "constant",
 ) -> Tensor:
     """Performs N-d convolution of Tensors using a fast fourier transform, which
     is very fast for large kernel sizes. Also, optionally adds a bias Tensor after
@@ -68,35 +69,49 @@ def fft_conv(
             input on the last dimension.
         stride: (Union[int, Iterable[int]) Stride size for computing output values.
         groups: (Union[int, Iterable[int]])
+        padding_mode: (str) Padding mode to use from {constant, reflection, replication}.
+                      reflection not available for 3d.
     Returns:
         (Tensor) Convolved tensor
     """
-    # Cast padding & stride to tuples.
-    padding_ = to_ntuple(padding, n=signal.ndim - 2)
+    # Cast stride to tuple.
     stride_ = to_ntuple(stride, n=signal.ndim - 2)
 
-    # Pad the input signal & kernel tensors
+    if padding != "same":
+        padding_ = to_ntuple(padding, n=signal.ndim - 2)
+        signal_padding = [p for p in padding_[::-1] for _ in range(2)]
+    else:
+        # signal_padding = [
+        #     (0, 0) if k <= s else ((k - s) // 2, k - (k - s) // 2)
+        #     for s, k, in zip(signal.shape[2:], kernel.shape[2:])
+        # ]
+        # signal_padding = [p for pd in signal_padding[::-1] for p in pd]
+        padding_ = [k // 2 for k in kernel.shape[2:]]
+
     signal_padding = [p for p in padding_[::-1] for _ in range(2)]
-    signal = f.pad(signal, signal_padding)
+    # Pad the input signal & kernel tensors
+    signal = f.pad(signal, signal_padding, mode=padding_mode)
 
     # Because PyTorch computes a *one-sided* FFT, we need the final dimension to
     # have *even* length.  Just pad with one more zero if the final dimension is odd.
+    signal_size = signal.size()  # original signal size without padding to even
     if signal.size(-1) % 2 != 0:
-        signal_ = f.pad(signal, [0, 1])
-    else:
-        signal_ = signal
+        signal = f.pad(signal, [0, 1])
 
     kernel_padding = [
         pad
-        for i in reversed(range(2, signal_.ndim))
-        for pad in [0, signal_.size(i) - kernel.size(i)]
+        for i in reversed(range(2, signal.ndim))
+        for pad in [0, signal.size(i) - kernel.size(i)]
     ]
 
     padded_kernel = f.pad(kernel, kernel_padding)
+    assert (
+        padded_kernel.shape[1:] == signal.shape[1:]
+    ), f"padded kernel shape {padded_kernel.shape} not equal to signal shape {signal.shape}"
 
     # Perform fourier convolution -- FFT, matrix multiply, then IFFT
-    # signal_ = signal_.reshape(signal_.size(0), groups, -1, *signal_.shape[2:])
-    signal_fr = rfftn(signal_.float(), dim=tuple(range(2, signal.ndim)))
+    # signal = signal.reshape(signal.size(0), groups, -1, *signal.shape[2:])
+    signal_fr = rfftn(signal.float(), dim=tuple(range(2, signal.ndim)))
     kernel_fr = rfftn(padded_kernel.float(), dim=tuple(range(2, signal.ndim)))
 
     kernel_fr.imag *= -1
@@ -104,9 +119,13 @@ def fft_conv(
     output = irfftn(output_fr, dim=tuple(range(2, signal.ndim)))
 
     # Remove extra padded values
-    crop_slices = [slice(0, output.size(0)), slice(0, output.size(1))] + [
+    crop_slices = [slice(None), slice(None)] + [
         slice(
-            0, (signal.size(i) - kernel.size(i) + (kernel.size(i) % 2)), stride_[i - 2]
+            0,
+            (signal_size[i] - kernel.size(i) + (kernel.size(i) % 2)),
+            # if padding != "same"
+            # else None,
+            stride_[i - 2],
         )
         for i in range(2, signal.ndim)
     ]

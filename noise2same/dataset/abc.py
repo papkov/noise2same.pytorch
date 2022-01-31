@@ -224,7 +224,7 @@ class AbstractNoiseDataset3DLarge(AbstractNoiseDataset3D, ABC):
     def __getitem__(self, i: int) -> Dict[str, Any]:
         """
         :param i: int, index
-        :return: dict(image, mask, mean, std)
+        :return: dict(image, mask, mean, std, crop)
         """
         image, crop = self._read_image(self.images[i])
         mask = self._mask_like_image(image)
