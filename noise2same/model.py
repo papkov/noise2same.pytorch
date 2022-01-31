@@ -127,23 +127,27 @@ class Noise2Same(nn.Module):
             for param in self.psf.parameters():
                 param.requires_grad = False
 
-    def forward_full(self, x: T, mask: T) -> Tuple[Dict[str, T], Dict[str, T]]:
+    def forward_full(
+        self, x: T, mask: T, convolve: bool = True, *args: Any, **kwargs: Any
+    ) -> Tuple[Dict[str, T], Dict[str, T]]:
         """
         Make two forward passes: with mask and without mask
         :param x:
         :param mask:
+        :param convolve: if True, convolve the output with the PSF
         :return: tuple of tensors: output for masked input, output for raw input
         """
-        out_mask = self.forward_masked(x, mask)
-        out_raw = self.forward(x)
+        out_mask = self.forward_masked(x, mask, convolve)
+        out_raw = self.forward(x, convolve)
         return out_mask, out_raw
 
-    def forward_masked(self, x: T, mask: T) -> Dict[str, T]:
+    def forward_masked(self, x: T, mask: T, convolve: bool = True) -> Dict[str, T]:
         """
         Mask the image according to selected masking, then do the forward pass:
         substitute with gaussian noise or local average excluding center pixel (donut)
         :param x:
         :param mask:
+        :param convolve: if True, convolve the output with the PSF
         :return:
         """
         noise = (
@@ -154,12 +158,15 @@ class Noise2Same(nn.Module):
             else self.mask_kernel(x)
         )
         x = (1 - mask) * x + mask * noise
-        return self.forward(x)
+        return self.forward(x, convolve)
 
-    def forward(self, x: T, *args: Any, **kwargs: Any) -> Dict[str, T]:
+    def forward(
+        self, x: T, convolve: bool = True, *args: Any, **kwargs: Any
+    ) -> Dict[str, T]:
         """
         Plain raw forward pass without masking
         :param x:
+        :param convolve: if True, convolve the output with the PSF
         :return:
         """
         out = {}
@@ -169,7 +176,7 @@ class Noise2Same(nn.Module):
         if self.residual:
             out["image"] = self.blur(x) + out["image"]
 
-        if self.psf is not None:
+        if self.psf is not None and convolve:
             out["deconv"] = out["image"]
             out["image"] = self.psf(out["image"])
         if self.project_head is not None:
@@ -206,6 +213,8 @@ class Noise2Same(nn.Module):
 
         return loss, loss_log
 
-    def compute_losses(self, x: T, mask: T) -> Tuple[T, Dict[str, float]]:
-        out_mask, out_raw = self.forward_full(x, mask)
+    def compute_losses(
+        self, x: T, mask: T, convolve: bool = True
+    ) -> Tuple[T, Dict[str, float]]:
+        out_mask, out_raw = self.forward_full(x, mask, convolve)
         return self.compute_losses_from_output(x, mask, out_mask, out_raw)
