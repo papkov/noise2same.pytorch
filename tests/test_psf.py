@@ -65,6 +65,19 @@ class PSFTestCase(unittest.TestCase):
 
         self.assertTrue(patch.shape == psf_out.shape, f"Output shape: {psf_out.shape}")
 
+    def test_psf_auto_padding(self):
+        kernel = np.random.rand(7, 7, 7)
+        patch = torch.rand(1, 1, 64, 64, 64)
+
+        psf = PSFParameter(kernel, fft=True, auto_padding=False)
+        psf_auto = PSFParameter(kernel, fft=True, auto_padding=True)
+
+        psf_out = psf(patch)
+        psf_auto_out = psf_auto(patch)
+
+        self.assertTrue(patch.shape == psf_auto_out.shape)
+        self.assertTrue(torch.allclose(psf_out, psf_auto_out))
+
 
 if __name__ == "__main__":
     unittest.main()
