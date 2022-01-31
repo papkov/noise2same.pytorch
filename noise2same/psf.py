@@ -1,3 +1,4 @@
+from functools import partial
 from pathlib import Path
 from typing import Optional, Union
 
@@ -17,7 +18,7 @@ class PSF(nn.Module):
         self,
         kernel_psf: np.ndarray,
         in_channels: int = 1,
-        pad_mode="reflect",
+        pad_mode="replicate",
         fft: Union[str, bool] = "auto",
     ):
         """
@@ -76,9 +77,10 @@ class PSFParameter(nn.Module):
         self,
         kernel_psf: np.ndarray,
         in_channels: int = 1,
-        pad_mode="reflect",
+        pad_mode="replicate",
         trainable=False,
         fft: Union[str, bool] = "auto",
+        auto_padding: bool = False,
     ):
         """
         Parametrized trainable version of PSF
@@ -86,6 +88,8 @@ class PSFParameter(nn.Module):
         :param in_channels:
         :param pad_mode:
         :param trainable:
+        :param auto_padding: (bool) If True, automatically computes padding based on the
+                             signal size, kernel size and stride.
         """
         super().__init__()
         self.kernel_size = kernel_psf.shape
@@ -97,7 +101,8 @@ class PSFParameter(nn.Module):
 
         self.in_channels = in_channels
         self.pad_mode = pad_mode
-        self.pad = [k // 2 for k in reversed(self.kernel_size)]
+
+        self.pad = [k // 2 for k in self.kernel_size]
         assert self.n_dim in (2, 3)
 
         self.fft = fft
@@ -107,23 +112,24 @@ class PSFParameter(nn.Module):
         if isinstance(self.fft, str):
             raise ValueError(f"Invalid fft value {self.fft}")
 
+        if not self.fft:
+            auto_padding = False
+        self.auto_padding = auto_padding
+
         self.psf = torch.from_numpy(kernel_psf.squeeze()[(None,) * 2]).float()
         self.psf = nn.Parameter(self.psf, requires_grad=trainable)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        # if self.fft:
-        #     # recalculate padding for large PSF
-        #     for i, (p, xs, ks) in enumerate(zip(self.pad, x.shape[2:], self.kernel_size)):
-        #         if ks > xs:  # kernel dimension is larger than image dimension
-        #             self.pad[i] = (ks - xs) // 2
-        #         else:
-        #             self.pad[i] = 0
-
-        x = f.pad(x, tuple(np.repeat(self.pad, 2)), mode=self.pad_mode)
 
         if self.fft:
-            conv = fft_conv
+            conv = partial(
+                fft_conv,
+                padding_mode=self.pad_mode,
+                padding="same" if self.auto_padding else self.pad,
+            )
         else:
+            signal_padding = tuple(np.repeat(self.pad[::-1], 2))
+            x = f.pad(x, signal_padding, mode=self.pad_mode)
             conv = torch.conv2d if self.n_dim == 2 else torch.conv3d
 
         x = conv(x, self.psf, groups=self.in_channels, stride=1)
