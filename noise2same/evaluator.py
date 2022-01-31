@@ -99,6 +99,7 @@ class Evaluator(object):
         half: bool = False,
         empty_cache: bool = False,
         key: str = "image",
+        convolve: bool = False,
     ) -> np.ndarray:
         """
         Run inference for a single image represented as Dataset
@@ -119,7 +120,7 @@ class Evaluator(object):
         self.model.eval()
 
         merger = TileMerger(
-            dataset.tiler.target_shape,
+            image_shape=dataset.tiler.target_shape,
             channels=self.model.in_channels,
             weight=dataset.tiler.weight,
             device=device,
@@ -152,7 +153,9 @@ class Evaluator(object):
             }
             with autocast(enabled=half):
                 pred_batch = (
-                    self.model(batch["image"])[key] * batch["std"] + batch["mean"]
+                    self.model.forward(batch["image"], convolve=convolve)[key]
+                    * batch["std"]
+                    + batch["mean"]
                 )
             iterator.set_postfix(
                 {
