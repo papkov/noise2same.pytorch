@@ -1,0 +1,26 @@
+# @package _global_
+name: microtubules
+data:
+  n_dim: 3
+  path: data/microtubules-simulation
+  input_name: input-generated-poisson-gaussian-2e-4.tif
+
+network:
+  base_channels: 48
+  skip_method: add
+
+training:
+  steps_per_epoch: 100
+  steps: 15000
+  crop: 64
+  batch_size: 4
+  validate: False
+  monitor: rec_mse
+
+optim:
+  decay_steps: 2000
+
+psf:
+  path: data/microtubules-simulation/psf-bw-31.tif  # near the data by default; parametrize?
+  psf_size: null
+  psf_pad_mode: replicate  # check if reflect affected anything

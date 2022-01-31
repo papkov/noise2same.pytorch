@@ -127,6 +127,8 @@ def get_test_dataset_and_gt(cfg: DictConfig) -> Tuple[Dataset, np.ndarray]:
         dataset = microtubules.MicrotubulesDataset(
             path=cfg.data.path,
             input_name=cfg.data.input_name,
+            tile_size=cfg.data.crop,
+            tile_step=cfg.data.crop - cfg.data.crop // 4,
         )
         # dataset.mean, dataset.std = 0, 1
 
