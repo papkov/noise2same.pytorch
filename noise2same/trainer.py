@@ -14,6 +14,22 @@ from noise2same.model import Noise2Same
 from noise2same.util import load_checkpoint_to_module
 
 
+def detach_to_np(
+    images: Dict[str, torch.Tensor], mean: torch.Tensor, std: torch.Tensor
+) -> Dict[str, torch.Tensor]:
+    """
+    Detaches and denormalizes all tensors in the given dictionary, then converts to np.array.
+    """
+    return {
+        k: np.moveaxis(
+            (v.detach().cpu() * std + mean).numpy(),
+            1,
+            -1,
+        )
+        for k, v in images.items()
+    }
+
+
 class Trainer(object):
     def __init__(
         self,
@@ -46,6 +62,23 @@ class Trainer(object):
         self.amp = amp
         self.scaler = GradScaler() if amp else None
 
+    def optimizer_scheduler_step(self, loss: torch.Tensor):
+        """
+        Step the optimizer and scheduler given the loss
+        :param loss:
+        :return:
+        """
+        if self.scaler is not None:
+            self.scaler.scale(loss).backward()
+            self.scaler.step(self.optimizer)
+            self.scaler.update()
+        else:
+            loss.backward()
+            self.optimizer.step()
+
+        if self.scheduler is not None:
+            self.scheduler.step()
+
     def one_epoch(
         self, loader: DataLoader
     ) -> Tuple[Dict[str, float], Dict[str, np.ndarray]]:
@@ -53,11 +86,9 @@ class Trainer(object):
         iterator = tqdm(loader, desc="train")
         total_loss = Counter()
         images = {}
-
         for i, batch in enumerate(iterator):
             x = batch["image"].to(self.device)
             mask = batch["mask"].to(self.device)
-
             self.optimizer.zero_grad()
 
             # todo gradient accumulation
@@ -67,17 +98,7 @@ class Trainer(object):
                     x, mask, out_mask, out_raw
                 )
 
-            if self.scaler is not None:
-                self.scaler.scale(loss).backward()
-                self.scaler.step(self.optimizer)
-                self.scaler.update()
-            else:
-                loss.backward()
-                self.optimizer.step()
-
-            if self.scheduler is not None:
-                self.scheduler.step()
-
+            self.optimizer_scheduler_step(loss)
             total_loss += loss_log
             iterator.set_postfix({k: v / (i + 1) for k, v in total_loss.items()})
 
@@ -90,12 +111,8 @@ class Trainer(object):
                     "out_mask": out_mask["image"],
                     "out_raw": out_raw["image"],
                 }
-                images = {
-                    k: np.moveaxis(
-                        (v.detach().cpu() * batch["std"] + batch["mean"]).numpy(), 1, -1
-                    )
-                    for k, v in images.items()
-                }
+                images = detach_to_np(images, mean=batch["mean"], std=batch["std"])
+
         total_loss = {k: v / len(loader) for k, v in total_loss.items()}
         if self.scheduler is not None:
             total_loss["lr"] = self.scheduler.get_last_lr()[0]
@@ -128,12 +145,7 @@ class Trainer(object):
                     "val_input": x,
                     "val_out_raw": out_raw,
                 }
-                images = {
-                    k: np.moveaxis(
-                        (v.detach().cpu() * batch["std"] + batch["mean"]).numpy(), 1, -1
-                    )
-                    for k, v in images.items()
-                }
+                images = detach_to_np(images, mean=batch["mean"], std=batch["std"])
 
         return {"val_rec_mse": total_loss / len(loader)}, images
 
