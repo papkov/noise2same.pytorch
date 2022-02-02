@@ -128,27 +128,51 @@ class Noise2Same(nn.Module):
                 param.requires_grad = False
 
     def forward_full(
-        self, x: T, mask: T, convolve: bool = True, *args: Any, **kwargs: Any
+        self,
+        x: T,
+        mask: T,
+        convolve: bool = True,
+        crops: Optional[T] = None,
+        full_size_image: Optional[T] = None,
+        *args: Any,
+        **kwargs: Any,
     ) -> Tuple[Dict[str, T], Dict[str, T]]:
         """
         Make two forward passes: with mask and without mask
         :param x:
         :param mask:
         :param convolve: if True, convolve the output with the PSF
-        :return: tuple of tensors: output for masked input, output for raw input
+        :param crops: if not None, positions of crops `x` in full size image. NB! we assume that crops do not overlap
+        :param full_size_image: if not None, full size image from which `x` was taken by `crops` coordinates
+        :return: tuple of dictionaries of tensors (output for masked input, output for raw input):
+                    image - final output, always present
+                    deconv - output before PSF if PSF is provided and `convolve` is True
+                    proj - output features of projection head if `lambda_proj` > 0
         """
-        out_mask = self.forward_masked(x, mask, convolve)
-        out_raw = self.forward(x, convolve)
+        out_mask = self.forward_masked(x, mask, convolve, crops, full_size_image)
+        out_raw = self.forward(x, convolve, crops, full_size_image)
         return out_mask, out_raw
 
-    def forward_masked(self, x: T, mask: T, convolve: bool = True) -> Dict[str, T]:
+    def forward_masked(
+        self,
+        x: T,
+        mask: T,
+        convolve: bool = True,
+        crops: Optional[T] = None,
+        full_size_image: Optional[T] = None,
+    ) -> Dict[str, T]:
         """
         Mask the image according to selected masking, then do the forward pass:
         substitute with gaussian noise or local average excluding center pixel (donut)
         :param x:
         :param mask:
         :param convolve: if True, convolve the output with the PSF
-        :return:
+        :param crops: if not None, positions of crops `x` in full size image. NB! we assume that crops do not overlap
+        :param full_size_image: if not None, full size image from which `x` was taken by `crops` coordinates
+        :return: dictionary of outputs:
+                    image - final output, always present
+                    deconv - output before PSF if PSF is provided and `convolve` is True
+                    proj - output features of projection head if `lambda_proj` > 0
         """
         noise = (
             torch.randn(*x.shape, device=x.device, requires_grad=False) * self.noise_std
@@ -158,16 +182,27 @@ class Noise2Same(nn.Module):
             else self.mask_kernel(x)
         )
         x = (1 - mask) * x + mask * noise
-        return self.forward(x, convolve)
+        return self.forward(x, convolve, crops, full_size_image)
 
     def forward(
-        self, x: T, convolve: bool = True, *args: Any, **kwargs: Any
+        self,
+        x: T,
+        convolve: bool = True,
+        crops: Optional[T] = None,
+        full_size_image: Optional[T] = None,
+        *args: Any,
+        **kwargs: Any,
     ) -> Dict[str, T]:
         """
         Plain raw forward pass without masking
-        :param x:
+        :param x: batch (N, C, H, W, [D])
         :param convolve: if True, convolve the output with the PSF
-        :return:
+        :param crops: if not None, positions of crops `x` in full size image. NB! we assume that crops do not overlap
+        :param full_size_image: if not None, full size image from which `x` was taken by `crops` coordinates
+        :return: dictionary of outputs:
+                    image - final output, always present
+                    deconv - output before PSF if PSF is provided and `convolve` is True
+                    proj - output features of projection head if `lambda_proj` > 0
         """
         out = {}
         features = self.net(x)
@@ -178,7 +213,28 @@ class Noise2Same(nn.Module):
 
         if self.psf is not None and convolve:
             out["deconv"] = out["image"]
-            out["image"] = self.psf(out["image"])
+
+            if crops is not None and full_size_image is not None:
+                # convolve with padding approximation from full size image
+                for tile, crop in zip(x, crops):
+                    # substitute processed crop in blurry image
+                    image_slice = tuple(
+                        slice(x, x + ts) for x, ts in zip(crop, x.shape[2:])
+                    )
+                    full_size_image[image_slice] = tile
+
+                full_size_image = self.psf(full_size_image)
+                tiles = []
+                for crop in crops:
+                    image_slice = tuple(
+                        slice(x, x + ts) for x, ts in zip(crop, x.shape[2:])
+                    )
+                    tiles.append(full_size_image[image_slice])
+                out["image"] = torch.stack(tiles, dim=0)
+
+            else:
+                # just convolve
+                out["image"] = self.psf(out["image"])
         if self.project_head is not None:
             out["proj"] = self.project_head(features)
         return out
