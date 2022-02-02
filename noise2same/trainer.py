@@ -42,6 +42,7 @@ class Trainer(object):
         check: bool = False,
         wandb_log: bool = True,
         amp: bool = False,
+        info_padding: bool = False,
     ):
 
         self.model = model
@@ -54,6 +55,7 @@ class Trainer(object):
         if check:
             wandb_log = False
         self.wandb_log = wandb_log
+        self.info_padding = info_padding
 
         self.model.to(device)
         self.checkpoint_path.mkdir(parents=True, exist_ok=False)
@@ -93,7 +95,11 @@ class Trainer(object):
 
             # todo gradient accumulation
             with autocast(enabled=self.amp):
-                out_mask, out_raw = self.model.forward_full(x, mask)
+                if self.info_padding:
+                    # provide full size image to avoid zero padding
+                    out_mask, out_raw = self.model.forward_full(x, mask)
+                else:
+                    out_mask, out_raw = self.model.forward_full(x, mask)
                 loss, loss_log = self.model.compute_losses_from_output(
                     x, mask, out_mask, out_raw
                 )
