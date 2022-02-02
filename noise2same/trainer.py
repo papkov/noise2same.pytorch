@@ -97,9 +97,21 @@ class Trainer(object):
             with autocast(enabled=self.amp):
                 if self.info_padding:
                     # provide full size image to avoid zero padding
-                    out_mask, out_raw = self.model.forward_full(x, mask)
+                    padding = [
+                        (b, a)
+                        for b, a in zip(
+                            loader.dataset.tiler.margin_start,
+                            loader.dataset.tiler.margin_end,
+                        )
+                    ]
+                    full_size_image = np.pad(loader.dataset.image, padding)
+                    full_size_image = torch.from_numpy(full_size_image).to(self.device)
+                    out_mask, out_raw = self.model.forward_full(
+                        x, mask, batch["crop"], full_size_image
+                    )
                 else:
                     out_mask, out_raw = self.model.forward_full(x, mask)
+
                 loss, loss_log = self.model.compute_losses_from_output(
                     x, mask, out_mask, out_raw
                 )
