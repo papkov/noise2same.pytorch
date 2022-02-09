@@ -1,4 +1,5 @@
-from typing import Any, Dict, Optional, Tuple
+from pathlib import Path
+from typing import Any, Dict, Optional, Tuple, Union
 
 import numpy as np
 import torch
@@ -61,11 +62,12 @@ class Noise2Same(nn.Module):
         noise_mean: float = 0,
         noise_std: float = 0.2,
         lambda_proj: float = 0,
-        psf: Optional[str] = None,
+        psf: Optional[Union[str, np.ndarray]] = None,
         psf_size: Optional[int] = None,
         psf_pad_mode: str = "reflect",
         residual: bool = False,
         skip_method: str = "concat",
+        arch: str = "unet",
         **kwargs: Any,
     ):
         """
@@ -83,6 +85,7 @@ class Noise2Same(nn.Module):
         """
         super(Noise2Same, self).__init__()
         assert masking in ("gaussian", "donut")
+        assert arch in ("unet", "identity")
         self.n_dim = n_dim
         self.in_channels = in_channels
         self.lambda_inv = lambda_inv
@@ -92,20 +95,25 @@ class Noise2Same(nn.Module):
         self.noise_mean = noise_mean
         self.noise_std = noise_std
         self.residual = residual
+        self.arch = arch
 
         # TODO customize with segmentation_models
-        self.net = network.UNet(
-            in_channels=in_channels,
-            n_dim=n_dim,
-            base_channels=base_channels,
-            skip_method=skip_method,
-            **kwargs,
-        )
-        self.head = network.RegressionHead(
-            in_channels=base_channels,
-            out_channels=in_channels,
-            n_dim=n_dim,
-        )
+        if self.arch == "unet":
+            self.net = network.UNet(
+                in_channels=in_channels,
+                n_dim=n_dim,
+                base_channels=base_channels,
+                skip_method=skip_method,
+                **kwargs,
+            )
+            self.head = network.RegressionHead(
+                in_channels=base_channels,
+                out_channels=in_channels,
+                n_dim=n_dim,
+            )
+        else:
+            self.net = nn.Identity()
+            self.head = nn.Identity()
 
         # todo parametrize
         self.blur = GaussianBlur(5, sigma=0.2) if residual else None
@@ -121,7 +129,10 @@ class Noise2Same(nn.Module):
 
         self.psf = None
         if psf is not None:
-            psf = read_psf(psf, psf_size=psf_size)
+            if isinstance(psf, (str, Path)):
+                # read by path, otherwise assume ndarray
+                # TODO check
+                psf = read_psf(psf, psf_size=psf_size)
             print("PSF shape", psf.shape)
             self.psf = PSFParameter(psf, pad_mode=psf_pad_mode)
             for param in self.psf.parameters():
@@ -216,18 +227,20 @@ class Noise2Same(nn.Module):
 
             if crops is not None and full_size_image is not None:
                 # convolve with padding approximation from full size image
-                for tile, crop in zip(x, crops):
+                for tile, crop in zip(out["image"], crops):
                     # substitute processed crop in blurry image
-                    image_slice = tuple(
-                        slice(x, x + ts) for x, ts in zip(crop, x.shape[2:])
+                    # (we need None for channel axis)
+                    image_slice = (slice(None),) + tuple(
+                        slice(c, c + ts) for c, ts in zip(crop, x.shape[2:])
                     )
                     full_size_image[image_slice] = tile
 
-                full_size_image = self.psf(full_size_image)
+                # Convolve full size image with PSF (None emulates batch dimension)
+                full_size_image = self.psf(full_size_image[None, ...])[0]
                 tiles = []
                 for crop in crops:
-                    image_slice = tuple(
-                        slice(x, x + ts) for x, ts in zip(crop, x.shape[2:])
+                    image_slice = (slice(None),) + tuple(
+                        slice(c, c + ts) for c, ts in zip(crop, x.shape[2:])
                     )
                     tiles.append(full_size_image[image_slice])
                 out["image"] = torch.stack(tiles, dim=0)

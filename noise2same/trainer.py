@@ -105,9 +105,11 @@ class Trainer(object):
                         )
                     ]
                     full_size_image = np.pad(loader.dataset.image, padding)
-                    full_size_image = torch.from_numpy(full_size_image).to(self.device)
+                    full_size_image = torch.from_numpy(
+                        np.moveaxis(full_size_image, -1, 0)
+                    ).to(self.device)
                     out_mask, out_raw = self.model.forward_full(
-                        x, mask, batch["crop"], full_size_image
+                        x, mask, crops=batch["crop"], full_size_image=full_size_image
                     )
                 else:
                     out_mask, out_raw = self.model.forward_full(x, mask)
