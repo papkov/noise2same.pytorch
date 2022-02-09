@@ -34,6 +34,7 @@ training:
   validate: True
   monitor: val_rec_mse
   amp: True
+  info_padding: False
 
 data:
   n_dim: 2
