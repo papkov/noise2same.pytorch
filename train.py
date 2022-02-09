@@ -4,6 +4,7 @@ from pathlib import Path
 import hydra
 import torch
 import wandb
+from hydra.utils import get_original_cwd
 from omegaconf import DictConfig, OmegaConf
 from torch.utils.data import DataLoader, RandomSampler, Subset
 
@@ -46,6 +47,7 @@ def main(cfg: DictConfig) -> None:
     print(OmegaConf.to_yaml(cfg))
     os.environ["CUDA_VISIBLE_DEVICES"] = f"{cfg.device}"
     print(f"Run experiment {cfg.name}, work in {os.getcwd()}")
+    cwd = Path(get_original_cwd())
 
     util.fix_seed(cfg.seed)
 
@@ -80,7 +82,7 @@ def main(cfg: DictConfig) -> None:
     mdl = model.Noise2Same(
         n_dim=cfg.data.n_dim,
         in_channels=cfg.data.n_channels,
-        psf=cfg.psf.path if "psf" in cfg else None,
+        psf=cwd / cfg.psf.path if "psf" in cfg else None,
         psf_size=cfg.psf.psf_size if "psf" in cfg else None,
         psf_pad_mode=cfg.psf.psf_pad_mode if "psf" in cfg else None,
         skip_method=cfg.network.skip_method,
@@ -112,6 +114,7 @@ def main(cfg: DictConfig) -> None:
         check=cfg.check,
         monitor=cfg.training.monitor,
         amp=cfg.training.amp,
+        info_padding=cfg.training.info_padding,
     )
 
     n_epochs = cfg.training.steps // cfg.training.steps_per_epoch
