@@ -103,7 +103,7 @@ class Trainer(object):
                             loader.dataset.tiler.margin_start,
                             loader.dataset.tiler.margin_end,
                         )
-                    ]
+                    ] + [(0, 0)]
                     full_size_image = np.pad(loader.dataset.image, padding)
                     full_size_image = torch.from_numpy(
                         np.moveaxis(full_size_image, -1, 0)
