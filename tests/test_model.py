@@ -30,7 +30,7 @@ class ModelTestCase(unittest.TestCase):
         mdl.train()
 
         # Fetch dummy data batch
-        dataset = DummyDataset3DLarge(n_dim=n_dim, image_size=256)
+        dataset = DummyDataset3DLarge(n_dim=n_dim, image_size=230)
         loader = DataLoader(
             dataset,
             batch_size=4,
@@ -48,6 +48,7 @@ class ModelTestCase(unittest.TestCase):
                 loader.dataset.tiler.margin_end,
             )
         ] + [(0, 0)]
+        print(padding)
 
         x = batch["image"].to(device)
         mask = batch["mask"].to(device)
