@@ -74,9 +74,11 @@ def get_dataset(cfg: DictConfig) -> Tuple[Dataset, Dataset]:
 
     elif cfg.name.lower() == "microtubules":
         dataset_train = microtubules.MicrotubulesDataset(
-            path=cfg.data.path,
+            path=cwd / cfg.data.path,
             input_name=cfg.data.input_name,
             transforms=training_augmentations_3d(),
+            tile_size=cfg.data.tile_size,
+            tile_step=cfg.data.tile_step,
         )
 
     else:

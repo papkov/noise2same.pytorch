@@ -4,23 +4,25 @@ data:
   n_dim: 3
   path: data/microtubules-simulation
   input_name: input.tif
-  accumulate: True
+  tile_size: 64
+  tile_step: 64  # to prevent overlap
 
 network:
   base_channels: 48
   skip_method: add
 
 training:
-  steps_per_epoch: 1
-  steps: 5000
+  steps_per_epoch: 100
+  steps: 15000
   crop: 64
   batch_size: 4
   validate: False
   monitor: rec_mse
-  amp: False # No inf checks were recorded for this optimizer
+  amp: True # No inf checks were recorded for this optimizer
+  info_padding: True
 
 optim:
-  decay_steps: 1000
+  decay_steps: 2000
 
 psf:
   path: data/microtubules-simulation/psf.tif  # near the data by default; parametrize?
