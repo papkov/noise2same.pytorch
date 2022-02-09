@@ -59,10 +59,13 @@ class AbstractNoiseDataset(Dataset, ABC):
             raise ValueError("Validation failed")
 
         self.path = Path(self.path)
-        assert self.path.is_dir() or self.path.suffix in (
+        if not self.path.is_dir() and self.path.suffix not in (
             ".tif",
             ".tiff",
-        ), f"Incorrect path, {self.path} not a dir"
+        ):
+            raise ValueError(
+                f"Incorrect path, {self.path} not a dir and {self.path.suffix} is not TIF "
+            )
 
         self.images = self._get_images()
         if not isinstance(self.transforms, list):
