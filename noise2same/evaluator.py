@@ -113,6 +113,7 @@ class Evaluator(object):
         :param half: bool, if use half precision
         :param empty_cache: bool, if empty CUDA cache after
         :param key: str, which output key to accumulate
+        :param convolve: bool, if convolve the output
         :return: numpy array, merged image
         """
         assert hasattr(dataset, "tiler"), "Dataset should have a `tiler` attribute"
@@ -170,7 +171,7 @@ class Evaluator(object):
                 torch.cuda.empty_cache()
 
         merger.merge_()
-        return dataset.tiler.crop_to_original_size(merger.image.cpu().numpy()[0])
+        return dataset.tiler.crop_to_original_size(merger.image["image"].cpu().numpy()[0])
 
     @torch.no_grad()
     def inference_single_image_tensor(
