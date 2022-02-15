@@ -61,12 +61,24 @@ class Evaluator(object):
             batch = {k: v.to(self.device) for k, v in batch.items()}
 
             with autocast(enabled=half):
+
                 if self.masked:
                     # TODO remove randomness
                     # idea: use the same mask for all images? mask as tta?
                     out = self.model.forward_masked(batch["image"], batch["mask"])
                 else:
+                    large_side = max(batch["image"].shape[2:])
+                    padding_tuple = [((large_side - s) // 2, (large_side - s) // 2) for s in
+                               batch["image"].shape[2:]]
+                    padding = [i for sub in padding_tuple for i in sub][::-1]
+
+                    batch["image"] = torch.nn.functional.pad(batch["image"], padding, mode="constant")
                     out = self.model.forward(batch["image"])
+
+                    crop = [slice(p[0],s-p[1]) for p, s in zip(padding_tuple,batch["image"].shape[2:])]
+                    crop = [slice(None)]*2+crop
+
+                    out["image"] = out["image"][crop]
                 out_raw = out["image"] * batch["std"] + batch["mean"]
 
             out_raw = {"image": np.moveaxis(out_raw.detach().cpu().numpy(), 1, -1)}

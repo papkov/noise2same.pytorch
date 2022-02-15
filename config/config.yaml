@@ -1,6 +1,6 @@
 hydra:
   run:
-    dir: results/${name}/${hydra.job.name}/${now:%Y-%m-%d_%H-%M-%S}
+    dir: results/${name}/check=${check}/${hydra.job.name}/${now:%Y-%m-%d_%H-%M-%S}
 
 project: noise2same
 device: 0

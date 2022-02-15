@@ -1,13 +1,14 @@
 # translated from
 # https://github.com/divelab/Noise2Same/blob/main/network.py
 # https://github.com/divelab/Noise2Same/blob/main/resnet_module.py
-from functools import partial
 from typing import Tuple
 
 import torch
 from torch import Tensor as T
 from torch import nn
 from torch.nn.functional import normalize
+
+from noise2same.ffc import FFC_BN_ACT
 
 
 class ProjectHead(nn.Sequential):
@@ -21,11 +22,11 @@ class ProjectHead(nn.Sequential):
     """
 
     def __init__(
-        self,
-        in_channels: int,
-        out_channels: int = 256,
-        n_dim: int = 2,
-        kernel_size: int = 1,
+            self,
+            in_channels: int,
+            out_channels: int = 256,
+            n_dim: int = 2,
+            kernel_size: int = 1,
     ):
         assert n_dim in (2, 3)
         conv = nn.Conv2d if n_dim == 2 else nn.Conv3d
@@ -49,7 +50,7 @@ class ProjectHead(nn.Sequential):
 
 class RegressionHead(nn.Sequential):
     def __init__(
-        self, in_channels: int, out_channels: int, n_dim: int = 2, kernel_size: int = 1
+            self, in_channels: int, out_channels: int, n_dim: int = 2, kernel_size: int = 1
     ):
         """
         Denoising regression head BN-ReLU-Conv
@@ -78,12 +79,12 @@ class RegressionHead(nn.Sequential):
 
 class ResidualUnit(nn.Module):
     def __init__(
-        self,
-        in_channels: int,
-        out_channels: int,
-        n_dim: int = 2,
-        kernel_size: int = 3,
-        downsample: bool = False,
+            self,
+            in_channels: int,
+            out_channels: int,
+            n_dim: int = 2,
+            kernel_size: int = 3,
+            downsample: bool = False,
     ):
         super().__init__()
         self.in_channels = in_channels
@@ -141,13 +142,13 @@ class ResidualUnit(nn.Module):
 
 class ResidualBlock(nn.Module):
     def __init__(
-        self,
-        in_channels: int,
-        out_channels: int,
-        block_size: int = 1,
-        n_dim: int = 2,
-        kernel_size: int = 3,
-        downsample: bool = False,
+            self,
+            in_channels: int,
+            out_channels: int,
+            block_size: int = 1,
+            n_dim: int = 2,
+            kernel_size: int = 3,
+            downsample: bool = False,
     ):
         super().__init__()
         self.in_channels = in_channels
@@ -173,16 +174,31 @@ class ResidualBlock(nn.Module):
     def forward(self, x: T) -> T:
         return self.block(x)
 
+class FFC_bottom_block(nn.Module):
+    def __init__(self,params):
+        super().__init__()
+
+        self.bottom_FFC1 = FFC_BN_ACT(**params, ratio_gin=0, ratio_gout=0.5)
+
+        self.bottom_FFC2 = FFC_BN_ACT(**params, ratio_gin=0.5, ratio_gout=0.5)
+
+        self.bottom_FFC3 = FFC_BN_ACT(**params, ratio_gin=0.5, ratio_gout=0)
+
+    def forward(self,x:T):
+        x = self.bottom_FFC1(x)
+        x = self.bottom_FFC2(x)
+        x = self.bottom_FFC3(x)
+        return x[0]
 
 class EncoderBlock(nn.Module):
     def __init__(
-        self,
-        in_channels: int,
-        out_channels: int,
-        block_size: int = 1,
-        n_dim: int = 2,
-        kernel_size: int = 3,
-        downsampling: str = "conv",
+            self,
+            in_channels: int,
+            out_channels: int,
+            block_size: int = 1,
+            n_dim: int = 2,
+            kernel_size: int = 3,
+            downsampling: str = "conv",
     ):
         super().__init__()
         self.in_channels = in_channels
@@ -231,16 +247,16 @@ class EncoderBlock(nn.Module):
 
 class UNet(nn.Module):
     def __init__(
-        self,
-        in_channels: int,
-        base_channels: int = 96,
-        kernel_size: int = 3,
-        n_dim: int = 2,
-        depth: int = 3,
-        encoding_block_sizes: Tuple[int, ...] = (1, 1, 0),
-        decoding_block_sizes: Tuple[int, ...] = (1, 1),
-        downsampling: Tuple[str, ...] = ("conv", "conv"),
-        skip_method: str = "concat",
+            self,
+            in_channels: int,
+            base_channels: int = 96,
+            kernel_size: int = 3,
+            n_dim: int = 2,
+            depth: int = 3,
+            encoding_block_sizes: Tuple[int, ...] = (1, 1, 0),
+            decoding_block_sizes: Tuple[int, ...] = (1, 1),
+            downsampling: Tuple[str, ...] = ("conv", "conv"),
+            skip_method: str = "concat",
     ):
         """
 
@@ -318,15 +334,24 @@ class UNet(nn.Module):
                     downsampling=downsampling[i - 2],
                 )
             )
+        # def calculate_same_padding(S,W,F):
+        #     P = ((S - 1) * W - S + F) / 2,
+        #     with F = filter size, S = stride, W = input size
+        #     return P
+        # P = ceil(calculate_same_padding(1,32,3)
+        ffc_params = dict(in_channels=out_channels, out_channels=base_channels * (2 ** (depth - 1)),
+                                      stride=1, activation_layer=nn.ReLU, enable_lfu=True,
+                                      kernel_size=3, padding=1)
+        self.bottom_FFC = FFC_bottom_block(ffc_params)
 
         # Bottom block
-        self.bottom_block = ResidualBlock(
-            in_channels=out_channels,
-            out_channels=base_channels * (2 ** (depth - 1)),
-            n_dim=n_dim,
-            kernel_size=kernel_size,
-            block_size=1,
-        )
+        # self.bottom_block = ResidualBlock(
+        #     in_channels=out_channels,
+        #     out_channels=base_channels * (2 ** (depth - 1)),
+        #     n_dim=n_dim,
+        #     kernel_size=kernel_size,
+        #     block_size=1,
+        # )
 
         # Decoder
         self.decoder_blocks = nn.ModuleList()
@@ -368,12 +393,10 @@ class UNet(nn.Module):
             encoder_outputs.append(x)
             x = encoder_block(x)
             # print(f"Encoder {i+1}", x.shape)
-
-        x = self.bottom_block(x)
-        # print("Bottom", x.shape)
+        x = self.bottom_FFC(x)
 
         for i, (upsampling_block, decoder_block, skip) in enumerate(
-            zip(self.upsampling_blocks, self.decoder_blocks, encoder_outputs[::-1])
+                zip(self.upsampling_blocks, self.decoder_blocks, encoder_outputs[::-1])
         ):
             x = upsampling_block(x)
             # print(f"Upsampling {i}", x.shape)
