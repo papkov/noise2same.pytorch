@@ -169,14 +169,14 @@ class Trainer(object):
 
         return {"val_rec_mse": total_loss / len(loader)}, images
 
-    def inference(self, **kwargs: Any):
-        return self.evaluator.inference(**kwargs)
+    def inference(self, *args: Any, **kwargs: Any):
+        return self.evaluator.inference(*args, **kwargs)
 
-    def inference_single_image_dataset(self, **kwargs: Any):
-        return self.evaluator.inference_single_image_dataset(**kwargs)
+    def inference_single_image_dataset(self, *args: Any, **kwargs: Any):
+        return self.evaluator.inference_single_image_dataset(*args, **kwargs)
 
-    def inference_single_image_tensor(self, **kwargs: Any):
-        return self.evaluator.inference_single_image_tensor(**kwargs)
+    def inference_single_image_tensor(self, *args: Any, **kwargs: Any):
+        return self.evaluator.inference_single_image_tensor(*args, **kwargs)
 
     def fit(
         self,
