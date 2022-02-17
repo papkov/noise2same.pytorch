@@ -10,7 +10,7 @@ from torchvision.transforms import GaussianBlur
 
 from noise2same import network
 from noise2same.contrast import PixelContrastLoss
-from noise2same.psf import PSF, PSFParameter, read_psf
+from noise2same.psf.psf_convolution import PSFParameter, read_psf
 
 
 class DonutMask(nn.Module):
