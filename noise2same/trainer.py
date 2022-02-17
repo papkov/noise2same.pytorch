@@ -125,12 +125,17 @@ class Trainer(object):
             if self.check and i > 3:
                 break
 
+            # Log last batch of images
             if i == len(iterator) - 1 or (self.check and i == 3):
                 images = {
                     "input": x,
                     "out_mask": out_mask["image"],
                     "out_raw": out_raw["image"],
                 }
+
+                if "deconv" in out_raw:
+                    images["out_raw_deconv"] = out_raw["deconv"]
+
                 images = detach_to_np(images, mean=batch["mean"], std=batch["std"])
 
         total_loss = {k: v / len(loader) for k, v in total_loss.items()}
