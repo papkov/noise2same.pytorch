@@ -1,5 +1,6 @@
 import os
 from pathlib import Path
+from pprint import pprint
 
 import hydra
 import torch
@@ -10,7 +11,7 @@ from torch.utils.data import DataLoader, RandomSampler, Subset
 
 import noise2same.trainer
 from noise2same import model, util
-from noise2same.dataset.getter import get_dataset
+from noise2same.dataset.getter import get_dataset, get_test_dataset_and_gt
 from noise2same.optimizers.esadam import ESAdam
 
 
@@ -128,11 +129,27 @@ def main(cfg: DictConfig) -> None:
         n_epochs, loader_train, loader_valid if cfg.training.validate else None
     )
 
+    if cfg.evaluate and cfg.name == "ssi":
+        test_dataset, ground_truth = get_test_dataset_and_gt(cfg)
+        loader = DataLoader(
+            test_dataset,
+            batch_size=1,  # todo customize
+            num_workers=cfg.training.num_workers,
+            shuffle=False,
+            pin_memory=True,
+            drop_last=False,
+        )
+        predictions = trainer.inference(loader, half=cfg.training.amp)
+        scores = util.calculate_scores(
+            ground_truth, predictions[0]["image"].squeeze(), data_range=1
+        )
+        pprint(scores)
+
+        if not cfg.check:
+            wandb.run.summary.update(scores)
+
     if not cfg.check:
         wandb.finish()
-
-    if cfg.evaluate and cfg.name == "ssi":
-        pass
 
 
 if __name__ == "__main__":
