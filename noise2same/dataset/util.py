@@ -4,8 +4,13 @@ from typing import Any, List, Optional, Tuple, Union
 import albumentations as albu
 import numpy as np
 from albumentations import Compose
+from numpy.random.mtrand import normal, uniform
+from scipy.signal import convolve, convolve2d
+from skimage.exposure import rescale_intensity
+from skimage.util import random_noise
 
 from noise2same.dataset import transforms as t3d
+from noise2same.psf.microscope_psf import SimpleMicroscopePSF
 
 Ints = Optional[Union[int, List[int], Tuple[int, ...]]]
 
@@ -142,3 +147,96 @@ class PadAndCropResizer(object):
             crop.insert(i, slice(None))
         len(crop) == x.ndim or _raise(ValueError())
         return x[tuple(crop)]
+
+
+# https://github.com/royerlab/ssi-code/blob/master/ssi/utils/io/datasets.py
+
+
+def normalize(image):
+    return rescale_intensity(
+        image.astype(np.float32), in_range="image", out_range=(0, 1)
+    )
+
+
+def add_poisson_gaussian_noise(
+    image,
+    alpha=5,
+    sigma=0.01,
+    sap=0.0,
+    quant_bits=8,
+    dtype=np.float32,
+    clip=True,
+    fix_seed=True,
+):
+    if fix_seed:
+        np.random.seed(0)
+    rnd = normal(size=image.shape)
+    rnd_bool = uniform(size=image.shape) < sap
+
+    noisy = image + np.sqrt(alpha * image + sigma ** 2) * rnd
+    noisy = noisy * (1 - rnd_bool) + rnd_bool * uniform(size=image.shape)
+    noisy = np.around((2 ** quant_bits) * noisy) / 2 ** quant_bits
+    noisy = np.clip(noisy, 0, 1) if clip else noisy
+    noisy = noisy.astype(dtype)
+    return noisy
+
+
+def add_noise(image, intensity=5, variance=0.01, sap=0.0, dtype=np.float32, clip=True):
+    np.random.seed(0)
+    noisy = image
+    if intensity is not None:
+        noisy = np.random.poisson(image * intensity) / intensity
+    noisy = random_noise(noisy, mode="gaussian", var=variance, seed=0, clip=clip)
+    noisy = random_noise(noisy, mode="s&p", amount=sap, seed=0, clip=clip)
+    noisy = noisy.astype(dtype)
+    return noisy
+
+
+def add_blur_2d(image, k=17, sigma=5, multi_channel=False):
+    from numpy import exp, pi, sqrt
+
+    #  generate a (2k+1)x(2k+1) gaussian kernel with mean=0 and sigma = s
+    probs = [
+        exp(-z * z / (2 * sigma * sigma)) / sqrt(2 * pi * sigma * sigma)
+        for z in range(-k, k + 1)
+    ]
+    psf_kernel = np.outer(probs, probs)
+
+    def conv(_image):
+        return convolve2d(_image, psf_kernel, mode="same").astype(np.float32)
+
+    if multi_channel:
+        image = np.moveaxis(image.copy(), -1, 0)
+        return (
+            np.moveaxis(np.stack([conv(channel) for channel in image]), 0, -1),
+            psf_kernel,
+        )
+    else:
+        return conv(image), psf_kernel
+
+
+def add_microscope_blur_2d(image, dz=0, multi_channel=False):
+    psf = SimpleMicroscopePSF()
+    psf_xyz_array = psf.generate_xyz_psf(dxy=0.406, dz=0.406, xy_size=17, z_size=17)
+    psf_kernel = psf_xyz_array[dz]
+    psf_kernel /= psf_kernel.sum()
+
+    def conv(_image):
+        return convolve2d(_image, psf_kernel, mode="same").astype(np.float32)
+
+    if multi_channel:
+        image = np.moveaxis(image.copy(), -1, 0)
+        return (
+            np.moveaxis(np.stack([conv(channel) for channel in image]), 0, -1),
+            psf_kernel,
+        )
+    else:
+        return conv(image), psf_kernel
+
+
+def add_microscope_blur_3d(image):
+    psf = SimpleMicroscopePSF()
+    psf_xyz_array = psf.generate_xyz_psf(dxy=0.406, dz=0.406, xy_size=17, z_size=17)
+    psf_kernel = psf_xyz_array
+    psf_kernel /= psf_kernel.sum()
+    return convolve(image, psf_kernel, mode="same"), psf_kernel
