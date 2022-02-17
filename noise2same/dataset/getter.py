@@ -142,6 +142,13 @@ def get_test_dataset_and_gt(cfg: DictConfig) -> Tuple[Dataset, np.ndarray]:
 
         gt = io.imread(str(cwd / "data/microtubules-simulation/ground-truth.tif"))
         gt = normalize_percentile(gt, 0.1, 99.9)
+
+    elif cfg.name.lower() == "ssi":
+        dataset = ssi.SSIDataset(
+            path=cwd / cfg.data.path,
+            input_name=cfg.data.input_name,
+        )
+        gt = dataset.gt
     else:
         raise ValueError(f"Dataset {cfg.name} not found")
 
