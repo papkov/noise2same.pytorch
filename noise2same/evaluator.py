@@ -171,7 +171,9 @@ class Evaluator(object):
                 torch.cuda.empty_cache()
 
         merger.merge_()
-        return dataset.tiler.crop_to_original_size(merger.image["image"].cpu().numpy()[0])
+        return dataset.tiler.crop_to_original_size(
+            merger.image["image"].cpu().numpy()[0]
+        )
 
     @torch.no_grad()
     def inference_single_image_tensor(

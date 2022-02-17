@@ -1,0 +1,24 @@
+# @package _global_
+name: ssi
+
+evaluate: True
+
+data:
+  path: data/ssi
+  n_dim: 2
+  n_channels: 1
+  input_name: drosophila
+
+training:
+  crop: 128
+  steps_per_epoch: 100
+  steps: 8000
+  batch_size: 32
+  validate: False
+  monitor: rec_mse
+
+
+psf:
+  path: null
+  psf_size: null
+  psf_pad_mode: replicate  # check if reflect affected anything

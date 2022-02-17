@@ -6,6 +6,7 @@ project: noise2same
 device: 0
 seed: 56
 check: False
+evaluate: False
 
 network:
   base_channels: 96

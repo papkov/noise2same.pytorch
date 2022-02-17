@@ -9,7 +9,7 @@ from skimage import io
 from torch.utils.data import Dataset
 from tqdm.auto import tqdm
 
-from noise2same.dataset import bsd68, hanzi, imagenet, microtubules, planaria
+from noise2same.dataset import bsd68, hanzi, imagenet, microtubules, planaria, ssi
 from noise2same.dataset.util import training_augmentations_2d, training_augmentations_3d
 from noise2same.util import normalize_percentile
 
@@ -81,6 +81,12 @@ def get_dataset(cfg: DictConfig) -> Tuple[Dataset, Dataset]:
             tile_step=cfg.data.tile_step,
         )
 
+    elif cfg.name.lower() == "ssi":
+        dataset_train = ssi.SSIDataset(
+            path=cwd / cfg.data.path,
+            input_name=cfg.data.input_name,
+            transforms=training_augmentations_2d(crop=cfg.training.crop),
+        )
     else:
         # todo add other datasets
         raise ValueError

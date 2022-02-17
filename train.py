@@ -79,10 +79,16 @@ def main(cfg: DictConfig) -> None:
 
     # Model
     # TODO less ugly way to parametrize psf
+    psf = None
+    if cfg.name == "ssi":
+        psf = dataset_train.psf
+    elif getattr(cfg, "psf", None) is not None:
+        psf = cwd / cfg.psf.path
+
     mdl = model.Noise2Same(
         n_dim=cfg.data.n_dim,
         in_channels=cfg.data.n_channels,
-        psf=cwd / cfg.psf.path if "psf" in cfg else None,
+        psf=psf,
         psf_size=cfg.psf.psf_size if "psf" in cfg else None,
         psf_pad_mode=cfg.psf.psf_pad_mode if "psf" in cfg else None,
         skip_method=cfg.network.skip_method,
@@ -124,6 +130,9 @@ def main(cfg: DictConfig) -> None:
 
     if not cfg.check:
         wandb.finish()
+
+    if cfg.evaluate and cfg.name == "ssi":
+        pass
 
 
 if __name__ == "__main__":
