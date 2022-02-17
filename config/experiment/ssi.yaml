@@ -13,9 +13,19 @@ training:
   crop: 128
   steps_per_epoch: 30
   steps: 3000
-  batch_size: 32
+  batch_size: 16
   validate: False
   monitor: rec_mse
+
+model:
+  inv_mse_key: image
+
+optim:
+  optimizer: adam
+  lr: 0.0004
+  decay_rate: 0.5
+  decay_steps: 5e2  # how many steps to decrease by decay rate
+  staircase: True  # integer division
 
 
 psf:

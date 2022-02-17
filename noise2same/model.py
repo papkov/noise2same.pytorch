@@ -68,6 +68,7 @@ class Noise2Same(nn.Module):
         residual: bool = False,
         skip_method: str = "concat",
         arch: str = "unet",
+        inv_mse_key: str = "image",
         **kwargs: Any,
     ):
         """
@@ -86,6 +87,11 @@ class Noise2Same(nn.Module):
         super(Noise2Same, self).__init__()
         assert masking in ("gaussian", "donut")
         assert arch in ("unet", "identity")
+        assert inv_mse_key in ("image", "deconv")
+        if psf is None and inv_mse_key == "deconv":
+            # we don't have a psf, so we can't use deconv
+            inv_mse_key = "image"
+
         self.n_dim = n_dim
         self.in_channels = in_channels
         self.lambda_inv = lambda_inv
@@ -96,6 +102,7 @@ class Noise2Same(nn.Module):
         self.noise_std = noise_std
         self.residual = residual
         self.arch = arch
+        self.inv_mse_key = inv_mse_key
 
         # TODO customize with segmentation_models
         if self.arch == "unet":
@@ -253,7 +260,7 @@ class Noise2Same(nn.Module):
         return out
 
     def compute_losses_from_output(
-        self, x: T, mask: T, out_mask: Dict[str, T], out_raw: Dict[str, T]
+        self, x: T, mask: T, out_mask: Dict[str, T], out_raw: Dict[str, T],
     ) -> Tuple[T, Dict[str, float]]:
         masked = torch.sum(mask)
         try:
@@ -263,7 +270,7 @@ class Noise2Same(nn.Module):
             raise e
 
         inv_mse = (
-            torch.sum(torch.square(out_raw["image"] - out_mask["image"]) * mask)
+            torch.sum(torch.square(out_raw[self.inv_mse_key] - out_mask[self.inv_mse_key]) * mask)
             / masked
         )
         bsp_mse = torch.sum(torch.square(x - out_mask["image"]) * mask) / masked

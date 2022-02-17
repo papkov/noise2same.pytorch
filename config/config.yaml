@@ -25,6 +25,7 @@ model:
   noise_mean: 0
   noise_std: 0.2
   residual: False
+  inv_mse_key: image
 
 training:
   steps_per_epoch: 1000
