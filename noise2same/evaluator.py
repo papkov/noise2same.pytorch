@@ -44,13 +44,20 @@ class Evaluator(object):
 
     @torch.no_grad()
     def inference(
-        self, loader: DataLoader, half: bool = False, empty_cache: bool = False
+        self,
+        loader: DataLoader,
+        half: bool = False,
+        empty_cache: bool = False,
+        convolve: bool = False,
+        key: str = "image",
     ) -> List[Dict[str, np.ndarray]]:
         """
         Run inference for a given dataloader
         :param loader: DataLoader
         :param half: bool, if use half precision
         :param empty_cache: bool, if empty CUDA cache after each iteration
+        :param convolve: bool, if convolve the output with a PSF
+        :param key: str, key to use for the output [image, deconv]
         :return: List[Dict[key, output]]
         """
         self.model.eval()
@@ -64,10 +71,12 @@ class Evaluator(object):
                 if self.masked:
                     # TODO remove randomness
                     # idea: use the same mask for all images? mask as tta?
-                    out = self.model.forward_masked(batch["image"], batch["mask"])
+                    out = self.model.forward_masked(
+                        batch["image"], batch["mask"], convolve=convolve
+                    )
                 else:
-                    out = self.model.forward(batch["image"])
-                out_raw = out["image"] * batch["std"] + batch["mean"]
+                    out = self.model.forward(batch["image"], convolve=convolve)
+                out_raw = out[key] * batch["std"] + batch["mean"]
 
             out_raw = {"image": np.moveaxis(out_raw.detach().cpu().numpy(), 1, -1)}
             if self.model.lambda_proj > 0:
