@@ -125,9 +125,15 @@ def main(cfg: DictConfig) -> None:
     )
 
     n_epochs = cfg.training.steps // cfg.training.steps_per_epoch
-    history = trainer.fit(
-        n_epochs, loader_train, loader_valid if cfg.training.validate else None
-    )
+    try:
+        history = trainer.fit(
+            n_epochs, loader_train, loader_valid if cfg.training.validate else None
+        )
+    except KeyboardInterrupt:
+        print("Training interrupted")
+    except RuntimeError as e:
+        wandb.run.summary["error"] = "RuntimeError"
+        print(e)
 
     if cfg.evaluate and cfg.name == "ssi":
         test_dataset, ground_truth = get_test_dataset_and_gt(cfg)
