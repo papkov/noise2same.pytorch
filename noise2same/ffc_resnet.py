@@ -1,36 +1,76 @@
 import torch.nn as nn
+
 from .ffc import *
 
-
-__all__ = ['FFCResNet', 'ffc_resnet18', 'ffc_resnet34',
-           'ffc_resnet26', 'ffc_resnet50', 'ffc_resnet101',
-           'ffc_resnet152', 'ffc_resnet200', 'ffc_resnext50_32x4d',
-           'ffc_resnext101_32x8d']
+__all__ = [
+    "FFCResNet",
+    "ffc_resnet18",
+    "ffc_resnet34",
+    "ffc_resnet26",
+    "ffc_resnet50",
+    "ffc_resnet101",
+    "ffc_resnet152",
+    "ffc_resnet200",
+    "ffc_resnext50_32x4d",
+    "ffc_resnext101_32x8d",
+]
 
 
 class BasicBlock(nn.Module):
     expansion = 1
 
-    def __init__(self, inplanes, planes, stride=1, downsample=None, groups=1,
-                 base_width=64, dilation=1, ratio_gin=0.5, ratio_gout=0.5, lfu=True, use_se=False, norm_layer=None):
+    def __init__(
+        self,
+        inplanes,
+        planes,
+        stride=1,
+        downsample=None,
+        groups=1,
+        base_width=64,
+        dilation=1,
+        ratio_gin=0.5,
+        ratio_gout=0.5,
+        lfu=True,
+        use_se=False,
+        norm_layer=None,
+    ):
         super(BasicBlock, self).__init__()
         if norm_layer is None:
             norm_layer = nn.BatchNorm2d
         if groups != 1 or base_width != 64:
-            raise ValueError(
-                "BasicBlock only supports groups=1 and base_width=64")
+            raise ValueError("BasicBlock only supports groups=1 and base_width=64")
         if dilation > 1:
-            raise NotImplementedError(
-                "Dilation > 1 not supported in BasicBlock")
-        width = int(planes * (base_width / 64.)) * groups
+            raise NotImplementedError("Dilation > 1 not supported in BasicBlock")
+        width = int(planes * (base_width / 64.0)) * groups
         # Both self.conv2 and self.downsample layers downsample the input when
         # stride != 1
-        self.conv1 = FFC_BN_ACT(inplanes, width, kernel_size=3, padding=1, stride=stride,
-                                ratio_gin=ratio_gin, ratio_gout=ratio_gout, norm_layer=norm_layer, activation_layer=nn.ReLU, enable_lfu=lfu)
-        self.conv2 = FFC_BN_ACT(width, planes * self.expansion, kernel_size=3, padding=1,
-                                ratio_gin=ratio_gout, ratio_gout=ratio_gout, norm_layer=norm_layer, enable_lfu=lfu)
-        self.se_block = FFCSE_block(
-            planes * self.expansion, ratio_gout) if use_se else nn.Identity()
+        self.conv1 = FFC_BN_ACT(
+            inplanes,
+            width,
+            kernel_size=3,
+            padding=1,
+            stride=stride,
+            ratio_gin=ratio_gin,
+            ratio_gout=ratio_gout,
+            norm_layer=norm_layer,
+            activation_layer=nn.ReLU,
+            enable_lfu=lfu,
+        )
+        self.conv2 = FFC_BN_ACT(
+            width,
+            planes * self.expansion,
+            kernel_size=3,
+            padding=1,
+            ratio_gin=ratio_gout,
+            ratio_gout=ratio_gout,
+            norm_layer=norm_layer,
+            enable_lfu=lfu,
+        )
+        self.se_block = (
+            FFCSE_block(planes * self.expansion, ratio_gout)
+            if use_se
+            else nn.Identity()
+        )
         self.relu_l = nn.Identity() if ratio_gout == 1 else nn.ReLU(inplace=True)
         self.relu_g = nn.Identity() if ratio_gout == 0 else nn.ReLU(inplace=True)
         self.downsample = downsample
@@ -54,23 +94,58 @@ class BasicBlock(nn.Module):
 class Bottleneck(nn.Module):
     expansion = 4
 
-    def __init__(self, inplanes, planes, stride=1, downsample=None, groups=1,
-                 base_width=64, dilation=1, ratio_gin=0.5, ratio_gout=0.5, lfu=True, use_se=False):
+    def __init__(
+        self,
+        inplanes,
+        planes,
+        stride=1,
+        downsample=None,
+        groups=1,
+        base_width=64,
+        dilation=1,
+        ratio_gin=0.5,
+        ratio_gout=0.5,
+        lfu=True,
+        use_se=False,
+    ):
         super(Bottleneck, self).__init__()
-        width = int(planes * (base_width / 64.)) * groups
+        width = int(planes * (base_width / 64.0)) * groups
         # Both self.conv2 and self.downsample layers downsample the input when
         # stride != 1
-        self.conv1 = FFC_BN_ACT(inplanes, width, kernel_size=1,
-                                ratio_gin=ratio_gin, ratio_gout=ratio_gout,
-                                activation_layer=nn.ReLU, enable_lfu=lfu)
-        self.conv2 = FFC_BN_ACT(width, width, kernel_size=3,
-                                ratio_gin=ratio_gout, ratio_gout=ratio_gout,
-                                stride=stride, padding=1, groups=groups,
-                                activation_layer=nn.ReLU, enable_lfu=lfu)
-        self.conv3 = FFC_BN_ACT(width, planes * self.expansion, kernel_size=1,
-                                ratio_gin=ratio_gout, ratio_gout=ratio_gout, enable_lfu=lfu)
-        self.se_block = FFCSE_block(
-            planes * self.expansion, ratio_gout) if use_se else nn.Identity()
+        self.conv1 = FFC_BN_ACT(
+            inplanes,
+            width,
+            kernel_size=1,
+            ratio_gin=ratio_gin,
+            ratio_gout=ratio_gout,
+            activation_layer=nn.ReLU,
+            enable_lfu=lfu,
+        )
+        self.conv2 = FFC_BN_ACT(
+            width,
+            width,
+            kernel_size=3,
+            ratio_gin=ratio_gout,
+            ratio_gout=ratio_gout,
+            stride=stride,
+            padding=1,
+            groups=groups,
+            activation_layer=nn.ReLU,
+            enable_lfu=lfu,
+        )
+        self.conv3 = FFC_BN_ACT(
+            width,
+            planes * self.expansion,
+            kernel_size=1,
+            ratio_gin=ratio_gout,
+            ratio_gout=ratio_gout,
+            enable_lfu=lfu,
+        )
+        self.se_block = (
+            FFCSE_block(planes * self.expansion, ratio_gout)
+            if use_se
+            else nn.Identity()
+        )
         self.relu_l = nn.Identity() if ratio_gout == 1 else nn.ReLU(inplace=True)
         self.relu_g = nn.Identity() if ratio_gout == 0 else nn.ReLU(inplace=True)
         self.downsample = downsample
@@ -92,9 +167,19 @@ class Bottleneck(nn.Module):
 
 
 class FFCResNet(nn.Module):
-
-    def __init__(self, block, layers, num_classes=1000, zero_init_residual=False,
-                 groups=1, width_per_group=64, norm_layer=None, ratio=0.5, lfu=True, use_se=False):
+    def __init__(
+        self,
+        block,
+        layers,
+        num_classes=1000,
+        zero_init_residual=False,
+        groups=1,
+        width_per_group=64,
+        norm_layer=None,
+        ratio=0.5,
+        lfu=True,
+        use_se=False,
+    ):
         super(FFCResNet, self).__init__()
 
         if norm_layer is None:
@@ -110,26 +195,30 @@ class FFCResNet(nn.Module):
         self.base_width = width_per_group
         self.lfu = lfu
         self.use_se = use_se
-        self.conv1 = nn.Conv2d(3, inplanes, kernel_size=7,
-                               stride=2, padding=3, bias=False)
+        self.conv1 = nn.Conv2d(
+            3, inplanes, kernel_size=7, stride=2, padding=3, bias=False
+        )
         self.bn1 = norm_layer(inplanes)
         self.relu = nn.ReLU(inplace=True)
         self.maxpool = nn.MaxPool2d(kernel_size=3, stride=2, padding=1)
         self.layer1 = self._make_layer(
-            block, inplanes * 1, layers[0], stride=1, ratio_gin=0, ratio_gout=ratio)
+            block, inplanes * 1, layers[0], stride=1, ratio_gin=0, ratio_gout=ratio
+        )
         self.layer2 = self._make_layer(
-            block, inplanes * 2, layers[1], stride=2, ratio_gin=ratio, ratio_gout=ratio)
+            block, inplanes * 2, layers[1], stride=2, ratio_gin=ratio, ratio_gout=ratio
+        )
         self.layer3 = self._make_layer(
-            block, inplanes * 4, layers[2], stride=2, ratio_gin=ratio, ratio_gout=ratio)
+            block, inplanes * 4, layers[2], stride=2, ratio_gin=ratio, ratio_gout=ratio
+        )
         self.layer4 = self._make_layer(
-            block, inplanes * 8, layers[3], stride=2, ratio_gin=ratio, ratio_gout=0)
+            block, inplanes * 8, layers[3], stride=2, ratio_gin=ratio, ratio_gout=0
+        )
         self.avgpool = nn.AdaptiveAvgPool2d((1, 1))
         self.fc = nn.Linear(inplanes * 8 * block.expansion, num_classes)
 
         for m in self.modules():
             if isinstance(m, nn.Conv2d):
-                nn.init.kaiming_normal_(
-                    m.weight, mode='fan_out', nonlinearity='relu')
+                nn.init.kaiming_normal_(m.weight, mode="fan_out", nonlinearity="relu")
             elif isinstance(m, (nn.BatchNorm2d, nn.GroupNorm)):
                 nn.init.constant_(m.weight, 1)
                 nn.init.constant_(m.bias, 0)
@@ -145,20 +234,53 @@ class FFCResNet(nn.Module):
                 elif isinstance(m, BasicBlock):
                     nn.init.constant_(m.bn2.weight, 0)
 
-    def _make_layer(self, block, planes, blocks, stride=1, ratio_gin=0.5, ratio_gout=0.5):
+    def _make_layer(
+        self, block, planes, blocks, stride=1, ratio_gin=0.5, ratio_gout=0.5
+    ):
         norm_layer = self._norm_layer
         downsample = None
         if stride != 1 or self.inplanes != planes * block.expansion or ratio_gin == 0:
-            downsample = FFC_BN_ACT(self.inplanes, planes * block.expansion, kernel_size=1, stride=stride,
-                                    ratio_gin=ratio_gin, ratio_gout=ratio_gout, enable_lfu=self.lfu)
+            downsample = FFC_BN_ACT(
+                self.inplanes,
+                planes * block.expansion,
+                kernel_size=1,
+                stride=stride,
+                ratio_gin=ratio_gin,
+                ratio_gout=ratio_gout,
+                enable_lfu=self.lfu,
+            )
 
         layers = []
-        layers.append(block(self.inplanes, planes, stride, downsample, self.groups, self.base_width,
-                            self.dilation, ratio_gin, ratio_gout, lfu=self.lfu, use_se=self.use_se))
+        layers.append(
+            block(
+                self.inplanes,
+                planes,
+                stride,
+                downsample,
+                self.groups,
+                self.base_width,
+                self.dilation,
+                ratio_gin,
+                ratio_gout,
+                lfu=self.lfu,
+                use_se=self.use_se,
+            )
+        )
         self.inplanes = planes * block.expansion
         for _ in range(1, blocks):
-            layers.append(block(self.inplanes, planes, groups=self.groups, base_width=self.base_width, dilation=self.dilation,
-                                ratio_gin=ratio_gout, ratio_gout=ratio_gout, lfu=self.lfu, use_se=self.use_se))
+            layers.append(
+                block(
+                    self.inplanes,
+                    planes,
+                    groups=self.groups,
+                    base_width=self.base_width,
+                    dilation=self.dilation,
+                    ratio_gin=ratio_gout,
+                    ratio_gout=ratio_gout,
+                    lfu=self.lfu,
+                    use_se=self.use_se,
+                )
+            )
 
         return nn.Sequential(*layers)
 
@@ -257,8 +379,8 @@ def ffc_resnext50_32x4d(pretrained=False, **kwargs):
         pretrained (bool): If True, returns a model pre-trained on ImageNet
         progress (bool): If True, displays a progress bar of the download to stderr
     """
-    kwargs['groups'] = 32
-    kwargs['width_per_group'] = 4
+    kwargs["groups"] = 32
+    kwargs["width_per_group"] = 4
     model = FFCResNet(Bottleneck, [3, 4, 6, 3], **kwargs)
 
     return model
@@ -272,8 +394,8 @@ def ffc_resnext101_32x8d(pretrained=False, **kwargs):
         pretrained (bool): If True, returns a model pre-trained on ImageNet
         progress (bool): If True, displays a progress bar of the download to stderr
     """
-    kwargs['groups'] = 32
-    kwargs['width_per_group'] = 8
+    kwargs["groups"] = 32
+    kwargs["width_per_group"] = 8
     model = FFCResNet(Bottleneck, [3, 4, 32, 3], **kwargs)
 
     return model

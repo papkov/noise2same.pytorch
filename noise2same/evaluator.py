@@ -68,15 +68,22 @@ class Evaluator(object):
                     out = self.model.forward_masked(batch["image"], batch["mask"])
                 else:
                     large_side = max(batch["image"].shape[2:])
-                    padding_tuple = [((large_side - s) // 2, (large_side - s) // 2) for s in
-                               batch["image"].shape[2:]]
+                    padding_tuple = [
+                        ((large_side - s) // 2, (large_side - s) // 2)
+                        for s in batch["image"].shape[2:]
+                    ]
                     padding = [i for sub in padding_tuple for i in sub][::-1]
 
-                    batch["image"] = torch.nn.functional.pad(batch["image"], padding, mode="constant")
+                    batch["image"] = torch.nn.functional.pad(
+                        batch["image"], padding, mode="constant"
+                    )
                     out = self.model.forward(batch["image"])
 
-                    crop = [slice(p[0],s-p[1]) for p, s in zip(padding_tuple,batch["image"].shape[2:])]
-                    crop = [slice(None)]*2+crop
+                    crop = [
+                        slice(p[0], s - p[1])
+                        for p, s in zip(padding_tuple, batch["image"].shape[2:])
+                    ]
+                    crop = [slice(None)] * 2 + crop
 
                     out["image"] = out["image"][crop]
                 out_raw = out["image"] * batch["std"] + batch["mean"]
@@ -182,7 +189,9 @@ class Evaluator(object):
                 torch.cuda.empty_cache()
 
         merger.merge_()
-        return dataset.tiler.crop_to_original_size(merger.image.cpu().numpy()[0])
+        return dataset.tiler.crop_to_original_size(
+            merger.image["image"].cpu().numpy()[0]
+        )
 
     @torch.no_grad()
     def inference_single_image_tensor(

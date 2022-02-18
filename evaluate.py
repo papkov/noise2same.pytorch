@@ -57,7 +57,7 @@ def main(cfg: DictConfig) -> None:
     )
 
     checkpoint_path = (
-        cfg.checkpoint
+        cwd / cfg.checkpoint
         if hasattr(cfg, "checkpoint")
         else cwd / f"weights/{cfg.name}.pth"
     )
@@ -107,11 +107,7 @@ def main(cfg: DictConfig) -> None:
     elif cfg.name in ("imagenet",):
         scores = [
             util.calculate_scores(
-                gtx,
-                pred,
-                data_range=255,
-                scale=True,
-                multichannel=True,
+                gtx, pred, data_range=255, scale=True, multichannel=True,
             )
             for gtx, pred in zip(ground_truth, predictions["image"])
         ]

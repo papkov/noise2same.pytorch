@@ -55,9 +55,7 @@ def get_dataset(cfg: DictConfig) -> Tuple[Dataset, Dataset]:
         )
         if cfg.training.validate:
             dataset_valid = imagenet.ImagenetDatasetPrepared(
-                path=cwd / "data/ImageNet",
-                mode="val",
-                version=cfg.data.version,
+                path=cwd / "data/ImageNet", mode="val", version=cfg.data.version,
             )
 
     elif cfg.name.lower() == "planaria":
@@ -68,8 +66,7 @@ def get_dataset(cfg: DictConfig) -> Tuple[Dataset, Dataset]:
         )
         if cfg.training.validate:
             dataset_valid = planaria.PlanariaDatasetPrepared(
-                path=cwd / "data/Denoising_Planaria",
-                mode="val",
+                path=cwd / "data/Denoising_Planaria", mode="val",
             )
 
     elif cfg.name.lower() == "microtubules":
@@ -146,7 +143,10 @@ def get_planaria_dataset_and_gt(filename_gt: str):
     datasets = {}
     for c in range(1, 4):
         datasets[f"c{c}"] = planaria.PlanariaDatasetTiff(
-            filename_gt.replace("GT", f"condition_{c}"), standardize=True
+            filename_gt.replace("GT", f"condition_{c}"),
+            standardize=True,
+            tile_size=192,
+            tile_step=192 - 64,
         )
         datasets[f"c{c}"].mean, datasets[f"c{c}"].std = 0, 1
 

@@ -187,15 +187,7 @@ class _FFTConv(nn.Module):
         self.weight = nn.Parameter(
             torch.randn(out_channels, in_channels // groups, *kernel_size)
         )
-        self.bias = (
-            nn.Parameter(
-                torch.randn(
-                    out_channels,
-                )
-            )
-            if bias
-            else None
-        )
+        self.bias = nn.Parameter(torch.randn(out_channels,)) if bias else None
 
     def forward(self, signal):
         return fft_conv(
