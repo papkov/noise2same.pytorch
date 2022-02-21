@@ -52,8 +52,17 @@ def main(cfg: DictConfig) -> None:
 
     util.fix_seed(cfg.seed)
 
+    # flatten 2-level config
+    d_cfg = {}
+    for group, group_dict in dict(cfg).items():
+        if isinstance(group_dict, DictConfig):
+            for param, value in dict(group_dict).items():
+                d_cfg[f"{group}.{param}"] = value
+        else:
+            d_cfg[group] = group_dict
+
     if not cfg.check:
-        wandb.init(project=cfg.project, config=dict(cfg))
+        wandb.init(project=cfg.project, config=d_cfg)
 
     # Data
     dataset_train, dataset_valid = get_dataset(cfg)
@@ -132,7 +141,8 @@ def main(cfg: DictConfig) -> None:
     except KeyboardInterrupt:
         print("Training interrupted")
     except RuntimeError as e:
-        wandb.run.summary["error"] = "RuntimeError"
+        if not cfg.check:
+            wandb.run.summary["error"] = "RuntimeError"
         print(e)
 
     if cfg.evaluate and cfg.name == "ssi":
