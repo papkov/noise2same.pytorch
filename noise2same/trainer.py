@@ -259,5 +259,5 @@ class Trainer(object):
 
     def load_model(self, path: Optional[str] = None):
         if path is None:
-            path = self.checkpoint_path
+            path = self.checkpoint_path / "model.pth"
         load_checkpoint_to_module(self, path)
