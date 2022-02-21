@@ -20,12 +20,15 @@ network:
 model:
   lambda_inv: 2
   lambda_proj: 0
+  lambda_bound: 0
+  lambda_sharp: 0
   mask_percentage: 0.5
   masking: gaussian
   noise_mean: 0
   noise_std: 0.2
   residual: False
   inv_mse_key: image
+  regularization_key: image
 
 training:
   steps_per_epoch: 1000
