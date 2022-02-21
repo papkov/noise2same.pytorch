@@ -41,6 +41,9 @@ def exponential_decay(
 @hydra.main(config_path="config", config_name="config")
 def main(cfg: DictConfig) -> None:
 
+    # trying to fix: unable to open shared memory object </torch_197398_0> in read-write mode
+    # torch.multiprocessing.set_sharing_strategy("file_system")
+
     if "name" not in cfg.keys():
         print("Please specify an experiment with `+experiment=name`")
         return
@@ -155,14 +158,39 @@ def main(cfg: DictConfig) -> None:
             pin_memory=True,
             drop_last=False,
         )
+
+        # TODO refactor and select optimal evaluation strategy
+        # Predictions and scores for last model
         predictions = trainer.inference(loader, half=cfg.training.amp)
+
         scores = util.calculate_scores(
             ground_truth, predictions[0]["image"].squeeze(), data_range=1
         )
-        pprint(scores)
+        scores_clipped = util.calculate_scores(
+            ground_truth, predictions[0]["image"].squeeze(), data_range=1, clip=True
+        )
+        print("Last model scores:")
+        print(f"Scores: {scores}")
+        print(f"Scores (clipped): {scores_clipped}")
+
+        # Predictions and scores for best model
+        trainer.load_model()
+        trainer.model.eval()
 
         if not cfg.check:
             wandb.run.summary.update(scores)
+
+        predictions = trainer.inference(loader, half=cfg.training.amp)
+
+        scores = util.calculate_scores(
+            ground_truth, predictions[0]["image"].squeeze(), data_range=1
+        )
+        scores_clipped = util.calculate_scores(
+            ground_truth, predictions[0]["image"].squeeze(), data_range=1, clip=True
+        )
+        print("Best model scores:")
+        print(f"Scores: {scores}")
+        print(f"Scores (clipped): {scores_clipped}")
 
     if not cfg.check:
         wandb.finish()
