@@ -1,0 +1,1 @@
+python train.py +experiment=microtubules device=1 model.inv_mse_key=deconv model.regularization_key=deconv project=noise2same-ssi-mt model.lambda_bound=0.1
