@@ -176,6 +176,13 @@ def normalize_percentile(
 normalize_zero_one = partial(normalize_percentile, p_min=0, p_max=100, clip=True)
 
 
+def normalize_zero_one_dict(images: Dict[str, np.ndarray]) -> Dict[str, np.ndarray]:
+    """
+    Normalizes all images in the given dictionary to the range [0, 1].
+    """
+    return {k: normalize_zero_one(v) for k, v in images.items()}
+
+
 def normalize_min_mse(gt: np.ndarray, x: np.ndarray, normalize_gt: bool = True):
     """
     Normalizes and affinely scales an image pair such that the MSE is minimized
@@ -281,3 +288,19 @@ def load_checkpoint_to_module(module, checkpoint_path: str):
             print(
                 f"Attribute {attr} is present in the checkpoint but absent in the class, do not load"
             )
+
+
+def detach_to_np(
+    images: Dict[str, torch.Tensor], mean: torch.Tensor, std: torch.Tensor
+) -> Dict[str, torch.Tensor]:
+    """
+    Detaches and denormalizes all tensors in the given dictionary, then converts to np.array.
+    """
+    return {
+        k: np.moveaxis(
+            (v.detach().cpu() * std + mean).numpy(),
+            1,
+            -1,
+        )
+        for k, v in images.items()
+    }

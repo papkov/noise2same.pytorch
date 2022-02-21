@@ -11,23 +11,11 @@ from tqdm import tqdm, trange
 
 from noise2same.evaluator import Evaluator
 from noise2same.model import Noise2Same
-from noise2same.util import load_checkpoint_to_module
-
-
-def detach_to_np(
-    images: Dict[str, torch.Tensor], mean: torch.Tensor, std: torch.Tensor
-) -> Dict[str, torch.Tensor]:
-    """
-    Detaches and denormalizes all tensors in the given dictionary, then converts to np.array.
-    """
-    return {
-        k: np.moveaxis(
-            (v.detach().cpu() * std + mean).numpy(),
-            1,
-            -1,
-        )
-        for k, v in images.items()
-    }
+from noise2same.util import (
+    detach_to_np,
+    load_checkpoint_to_module,
+    normalize_zero_one_dict,
+)
 
 
 class Trainer(object):
@@ -137,6 +125,7 @@ class Trainer(object):
                     images["out_raw_deconv"] = out_raw["deconv"]
 
                 images = detach_to_np(images, mean=batch["mean"], std=batch["std"])
+                images = normalize_zero_one_dict(images)
 
         total_loss = {k: v / len(loader) for k, v in total_loss.items()}
         if self.scheduler is not None:
@@ -171,6 +160,7 @@ class Trainer(object):
                     "val_out_raw": out_raw,
                 }
                 images = detach_to_np(images, mean=batch["mean"], std=batch["std"])
+                images = normalize_zero_one_dict(images)
 
         return {"val_rec_mse": total_loss / len(loader)}, images
 
