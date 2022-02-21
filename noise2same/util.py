@@ -77,6 +77,7 @@ def calculate_scores(
     data_range: float = 1.0,
     normalize_pairs: bool = False,
     scale: bool = False,
+    clip: bool = False,
     multichannel: bool = False,
 ) -> Dict[str, float]:
     """
@@ -86,6 +87,7 @@ def calculate_scores(
     :param data_range: The data range of the input image, 1 by default (0-1 normalized images)
     :param normalize_pairs: bool, normalize and affinely scale pairs gt-x (needed for Planaria dataset)
     :param scale: bool, scale images by min and max (needed for Imagenet dataset)
+    :param clip: bool, clip an image to [0, data_range]
     :param multichannel: If True, treat the last dimension of the array as channels for SSIM. Similarity
         calculations are done independently for each channel then averaged.
     :return:
@@ -96,6 +98,8 @@ def calculate_scores(
         x_ = normalize_zero_one(x_) * data_range
     if normalize_pairs:
         gt, x_ = normalize_min_mse(gt, x_)
+    if clip:
+        x_ = np.clip(x_, 0, data_range)
 
     metrics = {
         "rmse": np.sqrt(mean_squared_error(gt, x_)),
