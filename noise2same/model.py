@@ -5,6 +5,7 @@ import numpy as np
 import torch
 from torch import Tensor as T
 from torch import nn
+from torch.nn import functional as F
 from torch.nn.functional import conv2d, conv3d
 from torchvision.transforms import GaussianBlur
 
@@ -62,6 +63,8 @@ class Noise2Same(nn.Module):
         noise_mean: float = 0,
         noise_std: float = 0.2,
         lambda_proj: float = 0,
+        lambda_bound: float = 0,
+        lambda_sharp: float = 0,
         psf: Optional[Union[str, np.ndarray]] = None,
         psf_size: Optional[int] = None,
         psf_pad_mode: str = "reflect",
@@ -69,6 +72,7 @@ class Noise2Same(nn.Module):
         skip_method: str = "concat",
         arch: str = "unet",
         inv_mse_key: str = "image",
+        regularization_key: str = "image",
         **kwargs: Any,
     ):
         """
@@ -88,9 +92,11 @@ class Noise2Same(nn.Module):
         assert masking in ("gaussian", "donut")
         assert arch in ("unet", "identity")
         assert inv_mse_key in ("image", "deconv")
-        if psf is None and inv_mse_key == "deconv":
+        assert regularization_key in ("image", "deconv")
+        if psf is None:
             # we don't have a psf, so we can't use deconv
             inv_mse_key = "image"
+            regularization_key = "image"
 
         self.n_dim = n_dim
         self.in_channels = in_channels
@@ -103,6 +109,9 @@ class Noise2Same(nn.Module):
         self.residual = residual
         self.arch = arch
         self.inv_mse_key = inv_mse_key
+        self.regularization_key = regularization_key
+        self.lambda_bound = lambda_bound
+        self.lambda_sharp = lambda_sharp
 
         # TODO customize with segmentation_models
         if self.arch == "unet":
@@ -260,7 +269,11 @@ class Noise2Same(nn.Module):
         return out
 
     def compute_losses_from_output(
-        self, x: T, mask: T, out_mask: Dict[str, T], out_raw: Dict[str, T],
+        self,
+        x: T,
+        mask: T,
+        out_mask: Dict[str, T],
+        out_raw: Dict[str, T],
     ) -> Tuple[T, Dict[str, float]]:
         masked = torch.sum(mask)
         try:
@@ -270,7 +283,10 @@ class Noise2Same(nn.Module):
             raise e
 
         inv_mse = (
-            torch.sum(torch.square(out_raw[self.inv_mse_key] - out_mask[self.inv_mse_key]) * mask)
+            torch.sum(
+                torch.square(out_raw[self.inv_mse_key] - out_mask[self.inv_mse_key])
+                * mask
+            )
             / masked
         )
         bsp_mse = torch.sum(torch.square(x - out_mask["image"]) * mask) / masked
@@ -294,3 +310,42 @@ class Noise2Same(nn.Module):
     ) -> Tuple[T, Dict[str, float]]:
         out_mask, out_raw = self.forward_full(x, mask, convolve)
         return self.compute_losses_from_output(x, mask, out_mask, out_raw)
+
+    def compute_regularization_loss(
+        self,
+        out_raw: Dict[str, T],
+        mean: Optional[T] = None,
+        std: Optional[T] = None,
+    ) -> Tuple[T, Dict[str, float]]:
+
+        x = out_raw[self.regularization_key]
+        if mean is not None and std is not None:
+            x = x * std + mean
+
+        loss = torch.tensor(0).to(x.device)
+        loss_log = {}
+        if self.lambda_bound > 0:
+            bound_loss = self.lambda_bound * self.compute_boundary_loss(x) ** 2
+            loss = bound_loss
+            loss_log["bound_loss"] = bound_loss.item()
+        if self.lambda_sharp > 0:
+            sharp_loss = self.lambda_sharp * self.compute_sharpening_loss(x)
+            loss = sharp_loss + loss
+            loss_log["sharp_loss"] = sharp_loss.item()
+
+        return loss, loss_log
+
+    @staticmethod
+    def compute_boundary_loss(x: T, epsilon: float = 1e-8) -> T:
+        bounds_loss = F.relu(-x - epsilon)
+        bounds_loss = bounds_loss + F.relu(x - 1 - epsilon)
+        return bounds_loss.mean()
+
+    @staticmethod
+    def compute_sharpening_loss(x: T) -> T:
+        num_elements = x[0, 0].nelement()
+        dim = (2, 3) if x.ndim == 4 else (2, 3, 4)
+        sharpening_loss = -torch.norm(x, dim=dim, keepdim=True, p=2) / (
+            num_elements ** 2
+        )
+        return sharpening_loss.mean()
