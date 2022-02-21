@@ -106,6 +106,16 @@ class Trainer(object):
                     x, mask, out_mask, out_raw
                 )
 
+                reg_loss, reg_loss_log = self.model.compute_regularization_loss(
+                    out_raw,
+                    mean=batch["mean"].to(self.device),
+                    std=batch["std"].to(self.device),
+                )
+
+                if reg_loss_log:
+                    loss += reg_loss
+                    loss_log.update(reg_loss_log)
+
             self.optimizer_scheduler_step(loss)
             total_loss += loss_log
             iterator.set_postfix({k: v / (i + 1) for k, v in total_loss.items()})
