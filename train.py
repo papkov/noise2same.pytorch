@@ -148,49 +148,71 @@ def main(cfg: DictConfig) -> None:
             wandb.run.summary["error"] = "RuntimeError"
         print(e)
 
-    if cfg.evaluate and cfg.name == "ssi":
+    if cfg.evaluate:
         test_dataset, ground_truth = get_test_dataset_and_gt(cfg)
-        loader = DataLoader(
-            test_dataset,
-            batch_size=1,  # todo customize
-            num_workers=cfg.training.num_workers,
-            shuffle=False,
-            pin_memory=True,
-            drop_last=False,
-        )
+        scores = {}
 
-        # TODO refactor and select optimal evaluation strategy
-        # Predictions and scores for last model
-        predictions = trainer.inference(loader, half=cfg.training.amp)
+        if cfg.name == "ssi":
+            loader = DataLoader(
+                test_dataset,
+                batch_size=1,  # todo customize
+                num_workers=cfg.training.num_workers,
+                shuffle=False,
+                pin_memory=True,
+                drop_last=False,
+            )
 
-        scores = util.calculate_scores(
-            ground_truth, predictions[0]["image"].squeeze(), data_range=1
-        )
-        scores_clipped = util.calculate_scores(
-            ground_truth, predictions[0]["image"].squeeze(), data_range=1, clip=True
-        )
-        print("Last model scores:")
+            # Predictions and scores for last model
+            predictions = trainer.inference(loader, half=cfg.training.amp)
+
+            scores = util.calculate_scores(
+                ground_truth,
+                predictions[0]["image"].squeeze(),
+                data_range=1,
+                clip=True,
+                calculate_mi=True,
+            )
+
+        elif cfg.name == "microtubules":
+
+            scores.update(
+                util.calculate_scores(
+                    gt=ground_truth,
+                    x=test_dataset.image.squeeze(),
+                    normalize_pairs=True,
+                    prefix="noisy",
+                )
+            )
+
+            # Denoise
+            predictions = trainer.inference_single_image_dataset(
+                test_dataset, half=cfg.training.amp, batch_size=1, convolve=True
+            )
+            scores.update(
+                util.calculate_scores(
+                    gt=ground_truth,
+                    x=predictions,
+                    normalize_pairs=True,
+                    prefix="denoise",
+                )
+            )
+
+            # Denoise
+            predictions = trainer.inference_single_image_dataset(
+                test_dataset, half=cfg.training.amp, batch_size=1, convolve=False
+            )
+            scores.update(
+                util.calculate_scores(
+                    gt=ground_truth,
+                    x=predictions,
+                    normalize_pairs=True,
+                )
+            )
+
         print(f"Scores: {scores}")
-        print(f"Scores (clipped): {scores_clipped}")
-
-        # Predictions and scores for best model
-        trainer.load_model()
-        trainer.model.eval()
 
         if not cfg.check:
             wandb.run.summary.update(scores)
-
-        predictions = trainer.inference(loader, half=cfg.training.amp)
-
-        scores = util.calculate_scores(
-            ground_truth, predictions[0]["image"].squeeze(), data_range=1
-        )
-        scores_clipped = util.calculate_scores(
-            ground_truth, predictions[0]["image"].squeeze(), data_range=1, clip=True
-        )
-        print("Best model scores:")
-        print(f"Scores: {scores}")
-        print(f"Scores (clipped): {scores_clipped}")
 
     if not cfg.check:
         wandb.finish()
