@@ -58,38 +58,26 @@ class FourierUnit(nn.Module):
         self.relu = torch.nn.ReLU(inplace=True)
 
     def forward(self, x):
+        batch, c, *s = x.size()
+        dim = (2, 3, 4)[:len(s)]
 
-        if self.n_dim == 2:
-            batch, c, h, w = x.size()
-            # (batch, c, h, w/2+1) complex number
-            ffted = torch.fft.rfftn(x.float(), s=(h, w), dim=(2, 3), norm="ortho")
-            ffted = torch.cat([ffted.real, ffted.imag], dim=1)
+        # (batch, c, h, w/2+1) complex number
+        ffted = torch.fft.rfftn(x.float(), s=s, dim=dim, norm="ortho")
+        ffted = torch.cat([ffted.real, ffted.imag], dim=1)
 
-            ffted = self.conv_layer(ffted)  # (batch, c*2, h, w/2+1)
-            ffted = self.relu(self.bn(ffted))
+        ffted = self.conv_layer(ffted)  # (batch, c*2, h, w/2+1)
+        ffted = self.relu(self.bn(ffted))
 
-            ffted = torch.tensor_split(ffted, 2, dim=1)
-            ffted = torch.complex(ffted[0].float(), ffted[1].float())
-            output = torch.fft.irfftn(ffted, s=(h, w), dim=(2, 3), norm="ortho")
-        else:
-            batch, c, d, h, w = x.size()
-            # (batch, c, h, w/2+1) complex number
-            ffted = torch.fft.rfftn(x.float(), s=(d, h, w), dim=(2, 3, 4), norm="ortho")
-            ffted = torch.cat([ffted.real, ffted.imag], dim=1)
-
-            ffted = self.conv_layer(ffted)  # (batch, c*2, h, w/2+1)
-            ffted = self.relu(self.bn(ffted))
-
-            ffted = torch.tensor_split(ffted, 2, dim=1)
-            ffted = torch.complex(ffted[0].float(), ffted[1].float())
-            output = torch.fft.irfftn(ffted, s=(d, h, w), dim=(2, 3, 4), norm="ortho")
+        ffted = torch.tensor_split(ffted, 2, dim=1)
+        ffted = torch.complex(ffted[0].float(), ffted[1].float())
+        output = torch.fft.irfftn(ffted, s=s, dim=dim, norm="ortho")
 
         return output
 
 
 class SpectralTransform(nn.Module):
     def __init__(
-        self, in_channels, out_channels, stride=1, groups=1, enable_lfu=True, n_dim=2
+            self, in_channels, out_channels, stride=1, groups=1, enable_lfu=True, n_dim=2
     ):
         # bn_layer not used
         super(SpectralTransform, self).__init__()
@@ -97,11 +85,9 @@ class SpectralTransform(nn.Module):
 
         conv = nn.Conv2d if n_dim == 2 else nn.Conv3d
         bn = nn.BatchNorm2d if n_dim == 2 else nn.BatchNorm3d
+        pool = nn.AvgPool2d if n_dim == 3 else nn.AvgPool3d
         if stride == 2:
-            if n_dim == 2:
-                self.downsample = nn.AvgPool2d(kernel_size=(2, 2), stride=2)
-            else:
-                self.downsample = nn.AvgPool3d(kernel_size=(2, 2, 2), stride=2)
+            self.downsample = pool(kernel_size=2, stride=2)
         else:
             self.downsample = nn.Identity()
 
@@ -127,7 +113,8 @@ class SpectralTransform(nn.Module):
         output = self.fu(x)
 
         if self.enable_lfu:
-            n, c, d, h, w = x.shape
+            n, c, *s = x.shape  # s is (d,h,w) or (h,w)
+            h = s[len(s) - 2]
             split_no = 2
             split_s = h // split_no
             split = torch.split(x[:, : c // 4], split_s, dim=-2)
@@ -136,7 +123,8 @@ class SpectralTransform(nn.Module):
             next_split = torch.split(xs, split_s, dim=-1)
             xs = torch.cat(next_split, dim=1).contiguous()
             xs = self.lfu(xs)
-            xs = xs.repeat(1, 1, 1, split_no, split_no).contiguous()
+            rep = (1,) * len(s)
+            xs = xs.repeat(*rep, split_no, split_no).contiguous()
         else:
             xs = 0
 
@@ -147,19 +135,19 @@ class SpectralTransform(nn.Module):
 
 class FFC(nn.Module):
     def __init__(
-        self,
-        in_channels,
-        out_channels,
-        kernel_size,
-        ratio_gin,
-        ratio_gout,
-        stride=1,
-        padding=0,
-        dilation=1,
-        groups=1,
-        bias=False,
-        enable_lfu=True,
-        n_dim=2,
+            self,
+            in_channels,
+            out_channels,
+            kernel_size,
+            ratio_gin,
+            ratio_gout,
+            stride=1,
+            padding=0,
+            dilation=1,
+            groups=1,
+            bias=False,
+            enable_lfu=True,
+            n_dim=2,
     ):
         super(FFC, self).__init__()
 
@@ -214,20 +202,20 @@ class FFC(nn.Module):
 
 class FFC_BN_ACT(nn.Module):
     def __init__(
-        self,
-        in_channels,
-        out_channels,
-        kernel_size,
-        ratio_gin,
-        ratio_gout,
-        stride=1,
-        padding=0,
-        dilation=1,
-        groups=1,
-        bias=False,
-        activation_layer=nn.Identity,
-        enable_lfu=True,
-        n_dim=2,
+            self,
+            in_channels,
+            out_channels,
+            kernel_size,
+            ratio_gin,
+            ratio_gout,
+            stride=1,
+            padding=0,
+            dilation=1,
+            groups=1,
+            bias=False,
+            activation_layer=nn.Identity,
+            enable_lfu=True,
+            n_dim=2,
     ):
         super(FFC_BN_ACT, self).__init__()
 
