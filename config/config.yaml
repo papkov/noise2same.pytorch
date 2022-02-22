@@ -29,6 +29,7 @@ model:
   residual: False
   inv_mse_key: image
   regularization_key: image
+  only_masked: False
 
 training:
   steps_per_epoch: 1000
