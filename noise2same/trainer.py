@@ -107,9 +107,10 @@ class Trainer(object):
                 )
 
                 reg_loss, reg_loss_log = self.model.compute_regularization_loss(
-                    out_raw,
+                    out_mask if out_raw is None else out_raw,
                     mean=batch["mean"].to(self.device),
                     std=batch["std"].to(self.device),
+                    max_value=x.max(),
                 )
 
                 if reg_loss_log:
@@ -128,10 +129,14 @@ class Trainer(object):
                 images = {
                     "input": x,
                     "out_mask": out_mask["image"],
-                    "out_raw": out_raw["image"],
                 }
 
-                if "deconv" in out_raw:
+                if out_raw is not None:
+                    images["out_raw"] = out_raw["image"]
+
+                if "deconv" in out_mask:
+                    images["out_mask_deconv"] = out_mask["deconv"]
+                if out_raw is not None and "deconv" in out_raw:
                     images["out_raw_deconv"] = out_raw["deconv"]
 
                 images = detach_to_np(images, mean=batch["mean"], std=batch["std"])
