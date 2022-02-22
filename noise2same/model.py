@@ -73,6 +73,7 @@ class Noise2Same(nn.Module):
         arch: str = "unet",
         inv_mse_key: str = "image",
         regularization_key: str = "image",
+        only_masked: bool = False,
         **kwargs: Any,
     ):
         """
@@ -112,6 +113,7 @@ class Noise2Same(nn.Module):
         self.regularization_key = regularization_key
         self.lambda_bound = lambda_bound
         self.lambda_sharp = lambda_sharp
+        self.only_masked = only_masked
 
         # TODO customize with segmentation_models
         if self.arch == "unet":
@@ -163,7 +165,7 @@ class Noise2Same(nn.Module):
         full_size_image: Optional[T] = None,
         *args: Any,
         **kwargs: Any,
-    ) -> Tuple[Dict[str, T], Dict[str, T]]:
+    ) -> Tuple[Dict[str, T], Union[Dict[str, T], None]]:
         """
         Make two forward passes: with mask and without mask
         :param x:
@@ -177,6 +179,8 @@ class Noise2Same(nn.Module):
                     proj - output features of projection head if `lambda_proj` > 0
         """
         out_mask = self.forward_masked(x, mask, convolve, crops, full_size_image)
+        if self.only_masked:
+            return out_mask, None
         out_raw = self.forward(x, convolve, crops, full_size_image)
         return out_mask, out_raw
 
@@ -273,36 +277,44 @@ class Noise2Same(nn.Module):
         x: T,
         mask: T,
         out_mask: Dict[str, T],
-        out_raw: Dict[str, T],
+        out_raw: Optional[Dict[str, T]] = None,
     ) -> Tuple[T, Dict[str, float]]:
+
+        # default Noise2Self blind-spot MSE loss
         masked = torch.sum(mask)
-        try:
-            rec_mse = torch.mean(torch.square(out_raw["image"] - x))
-        except RuntimeError as e:
-            print(out_raw["image"].shape, x.shape)
-            raise e
-
-        inv_mse = (
-            torch.sum(
-                torch.square(out_raw[self.inv_mse_key] - out_mask[self.inv_mse_key])
-                * mask
-            )
-            / masked
-        )
         bsp_mse = torch.sum(torch.square(x - out_mask["image"]) * mask) / masked
-        loss = rec_mse + self.lambda_inv * torch.sqrt(inv_mse)
-        loss_log = {
-            "loss": loss.item(),
-            "rec_mse": rec_mse.item(),
-            "inv_mse": inv_mse.item(),
-            "bsp_mse": bsp_mse.item(),
-        }
-        if self.lambda_proj > 0:
-            contrastive_loss = PixelContrastLoss(temperature=0.1)
-            proj_loss = contrastive_loss(out_raw["proj"], out_mask["proj"], mask).mean()
-            loss = loss + self.lambda_proj * proj_loss
-            loss_log.update({"loss": loss.item(), "proj_loss": proj_loss.item()})
+        loss_log = {"bsp_mse": bsp_mse.item()}
 
+        # Noise2Same losses
+        if out_raw is not None:
+            try:
+                rec_mse = torch.mean(torch.square(out_raw["image"] - x))
+            except RuntimeError as e:
+                print(out_raw["image"].shape, x.shape)
+                raise e
+
+            inv_mse = (
+                torch.sum(
+                    torch.square(out_raw[self.inv_mse_key] - out_mask[self.inv_mse_key])
+                    * mask
+                )
+                / masked
+            )
+            loss = rec_mse + self.lambda_inv * torch.sqrt(inv_mse)
+            loss_log["rec_mse"] = rec_mse.item()
+            loss_log["inv_mse"] = inv_mse.item()
+
+            if self.lambda_proj > 0:
+                contrastive_loss = PixelContrastLoss(temperature=0.1)
+                proj_loss = contrastive_loss(
+                    out_raw["proj"], out_mask["proj"], mask
+                ).mean()
+                loss = loss + self.lambda_proj * proj_loss
+                loss_log["proj_loss"] = proj_loss.item()
+        else:
+            loss = bsp_mse
+
+        loss_log["loss"] = loss.item()
         return loss, loss_log
 
     def compute_losses(
@@ -313,12 +325,14 @@ class Noise2Same(nn.Module):
 
     def compute_regularization_loss(
         self,
-        out_raw: Dict[str, T],
+        out: Dict[str, T],
         mean: Optional[T] = None,
         std: Optional[T] = None,
     ) -> Tuple[T, Dict[str, float]]:
 
-        x = out_raw[self.regularization_key]
+        x = out[self.regularization_key]
+
+        # todo rewrite in a less ugly way
         if mean is not None and std is not None:
             x = x * std + mean
 
