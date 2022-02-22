@@ -328,6 +328,7 @@ class Noise2Same(nn.Module):
         out: Dict[str, T],
         mean: Optional[T] = None,
         std: Optional[T] = None,
+        max_value: Optional[T] = None,
     ) -> Tuple[T, Dict[str, float]]:
 
         x = out[self.regularization_key]
@@ -335,6 +336,10 @@ class Noise2Same(nn.Module):
         # todo rewrite in a less ugly way
         if mean is not None and std is not None:
             x = x * std + mean
+            if max_value is not None:
+                max_value = max_value * std + mean
+        if max_value is not None:
+            x = x / x.max()
 
         loss = torch.tensor(0).to(x.device)
         loss_log = {}
