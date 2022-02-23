@@ -8,7 +8,7 @@ from torch import Tensor as T
 from torch import nn
 from torch.nn.functional import normalize
 
-from noise2same.ffc import FFC_BN_ACT
+from noise2same.ffc import FFC_BN_ACT, FFC
 
 
 class ProjectHead(nn.Sequential):
@@ -124,7 +124,7 @@ class ResidualUnit(nn.Module):
             self.layers = nn.Sequential(
                 #FFC_BN_ACT(**ffc_params, ratio_gin=0, ratio_gout=0.5),
                 FFC_BN_ACT(**ffc_params, ratio_gin=0.5, ratio_gout=0.5),
-                FFC_BN_ACT(**ffc_params, ratio_gin=0.5, ratio_gout=0),
+                FFC(**ffc_params, ratio_gin=0.5, ratio_gout=0),
             )
         else:
             self.layers = nn.Sequential(
@@ -149,14 +149,25 @@ class ResidualUnit(nn.Module):
             )
 
     def forward(self, x: T) -> T:
-        shortcut = x
-        x = self.bn(x)
-        x = self.act(x)
+        if self.ffc == True:
+            x_l, x_g = x if type(x) is tuple else (x, 0)
+            shortcut = x_l
+            x_l = self.bn(x_l)
+            x_l = self.act(x_l)
+
+            if x_g != 0:
+                x_g = self.bn(x_g)
+                x_g = self.act(x_g)
+            x = (x_l,x_g)
+        else:
+            shortcut = x
+            x = self.bn(x)
+            x = self.act(x)
         if self.in_channels != self.out_channels or self.downsample:
             shortcut = self.conv_shortcut(x)
         #x = (x,x)
-        if self.ffc == True:
-            x = torch.tensor_split(x, 2, dim=1)
+        #if self.ffc == True:
+        #    x = torch.tensor_split(x, 2, dim=1)
         x = self.layers(x)
         if type(x) == tuple:
             x = x[0]
@@ -218,7 +229,11 @@ class EncoderBlock(nn.Module):
         self.kernel_size = kernel_size
         self.block_size = block_size
 
-        conv = nn.Conv2d if n_dim == 2 else nn.Conv3d
+        if ffc == False:
+            conv = nn.Conv2d if n_dim == 2 else nn.Conv3d
+        else:
+            conv = FFC
+        downsample_ffc_kwargs = dict(ratio_gin = 0,ratio_gout = 0.5)
 
         if downsampling == "res":
             downsampling_block = ResidualBlock(
@@ -236,6 +251,7 @@ class EncoderBlock(nn.Module):
                 kernel_size=2,
                 stride=2,
                 bias=True,
+                **downsample_ffc_kwargs
             )
         else:
             raise ValueError("downsampling should be `res`. `conv`, `pool`")
@@ -254,7 +270,8 @@ class EncoderBlock(nn.Module):
         )
 
     def forward(self, x: T) -> T:
-        return self.block(x)
+        x = self.block(x)
+        return x
 
 
 class UNet(nn.Module):

@@ -148,6 +148,7 @@ class FFC(nn.Module):
             bias=False,
             enable_lfu=True,
             n_dim=2,
+            **kwargs
     ):
         super(FFC, self).__init__()
 
