@@ -215,9 +215,11 @@ def add_blur_2d(image, k=17, sigma=5, multi_channel=False):
         return conv(image), psf_kernel
 
 
-def add_microscope_blur_2d(image, dz=0, multi_channel=False):
+def add_microscope_blur_2d(
+    image: np.ndarray, dz: int = 0, multi_channel: bool = False, size: int = 17
+):
     psf = SimpleMicroscopePSF()
-    psf_xyz_array = psf.generate_xyz_psf(dxy=0.406, dz=0.406, xy_size=17, z_size=17)
+    psf_xyz_array = psf.generate_xyz_psf(dxy=0.406, dz=0.406, xy_size=size, z_size=size)
     psf_kernel = psf_xyz_array[dz]
     psf_kernel /= psf_kernel.sum()
 
@@ -234,9 +236,9 @@ def add_microscope_blur_2d(image, dz=0, multi_channel=False):
         return conv(image), psf_kernel
 
 
-def add_microscope_blur_3d(image):
+def add_microscope_blur_3d(image, size: int = 17):
     psf = SimpleMicroscopePSF()
-    psf_xyz_array = psf.generate_xyz_psf(dxy=0.406, dz=0.406, xy_size=17, z_size=17)
+    psf_xyz_array = psf.generate_xyz_psf(dxy=0.406, dz=0.406, xy_size=size, z_size=size)
     psf_kernel = psf_xyz_array
     psf_kernel /= psf_kernel.sum()
     return convolve(image, psf_kernel, mode="same"), psf_kernel

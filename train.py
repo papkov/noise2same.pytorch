@@ -90,14 +90,13 @@ def main(cfg: DictConfig) -> None:
             drop_last=False,
         )
 
-    # Model
-    # TODO less ugly way to parametrize psf
-    psf = None
-    if cfg.name == "ssi":
-        psf = dataset_train.psf
-    elif getattr(cfg, "psf", None) is not None:
+    # Read PSF from dataset if available or by path
+    psf = getattr(dataset_train, "psf", None)
+    if psf is None and getattr(cfg, "psf", None) is not None:
         psf = cwd / cfg.psf.path
+        print(f"Read PSF from {psf}")
 
+    # Model
     mdl = model.Noise2Same(
         n_dim=cfg.data.n_dim,
         in_channels=cfg.data.n_channels,

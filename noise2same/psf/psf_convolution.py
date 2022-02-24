@@ -33,8 +33,12 @@ class PSF(nn.Module):
         self.n_dim = len(kernel_psf.shape)
         self.fft = fft
         if self.fft == "auto":
+            # TODO run own benchmarks
             # Use FFT Conv if kernel has > 100 elements
             self.fft = self.kernel_size ** self.n_dim > 100
+            # self.fft = (self.kernel_size > 21 and self.n_dim == 2) or (
+            #     self.kernel_size > 7 and self.n_dim == 3
+            # )
         if isinstance(self.fft, str):
             raise ValueError(f"Invalid fft value {self.fft}")
 

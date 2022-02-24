@@ -234,6 +234,7 @@ class AbstractNoiseDataset3DLarge(AbstractNoiseDataset3D, ABC):
         ret = self._apply_transforms(image.astype(np.float32), mask)
         # standardization/normalization step removed since we process the full-sized image
         ret["mean"], ret["std"] = (
+            # TODO can rewrite just for self.mean and std?
             torch.tensor(self.mean if self.standardize else 0).view(1, 1, 1, 1),
             torch.tensor(self.std if self.standardize else 1).view(1, 1, 1, 1),
         )

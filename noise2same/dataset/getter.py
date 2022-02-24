@@ -79,6 +79,7 @@ def get_dataset(cfg: DictConfig) -> Tuple[Dataset, Dataset]:
             transforms=training_augmentations_3d(),
             tile_size=cfg.data.tile_size,
             tile_step=cfg.data.tile_step,
+            add_blur_and_noise=cfg.data.add_blur_and_noise,
         )
 
     elif cfg.name.lower() == "ssi":
@@ -138,6 +139,7 @@ def get_test_dataset_and_gt(cfg: DictConfig) -> Tuple[Dataset, np.ndarray]:
             # we can double the size of the tiles for validation
             tile_size=cfg.data.tile_size * 2,  # 64 * 2 = 128
             tile_step=cfg.data.tile_step * 2,  # 48 * 2 = 96
+            add_blur_and_noise=cfg.data.add_blur_and_noise,  # TODO add different noise by random seed?
         )
         # dataset.mean, dataset.std = 0, 1
 
