@@ -57,7 +57,11 @@ class Noise2Same(nn.Module):
         n_dim: int = 2,
         in_channels: int = 1,
         base_channels: int = 96,
+        lambda_bsp: float = 0,
+        lambda_rec: float = 1.0,
         lambda_inv: float = 2.0,
+        lambda_inv_deconv: float = 0.0,
+        masked_inv_deconv: bool = True,
         mask_percentage: float = 0.5,
         masking: str = "gaussian",
         noise_mean: float = 0,
@@ -71,7 +75,6 @@ class Noise2Same(nn.Module):
         residual: bool = False,
         skip_method: str = "concat",
         arch: str = "unet",
-        inv_mse_key: str = "image",
         regularization_key: str = "image",
         only_masked: bool = False,
         **kwargs: Any,
@@ -92,24 +95,25 @@ class Noise2Same(nn.Module):
         super(Noise2Same, self).__init__()
         assert masking in ("gaussian", "donut")
         assert arch in ("unet", "identity")
-        assert inv_mse_key in ("image", "deconv")
         assert regularization_key in ("image", "deconv")
         if psf is None:
             # we don't have a psf, so we can't use deconv
-            inv_mse_key = "image"
             regularization_key = "image"
 
         self.n_dim = n_dim
         self.in_channels = in_channels
+        self.lambda_bsp = lambda_bsp
+        self.lambda_rec = lambda_rec
         self.lambda_inv = lambda_inv
+        self.lambda_inv_deconv = lambda_inv_deconv
         self.lambda_proj = lambda_proj
+        self.masked_inv_deconv = masked_inv_deconv
         self.mask_percentage = mask_percentage
         self.masking = masking
         self.noise_mean = noise_mean
         self.noise_std = noise_std
         self.residual = residual
         self.arch = arch
-        self.inv_mse_key = inv_mse_key
         self.regularization_key = regularization_key
         self.lambda_bound = lambda_bound
         self.lambda_sharp = lambda_sharp
@@ -281,36 +285,48 @@ class Noise2Same(nn.Module):
     ) -> Tuple[T, Dict[str, float]]:
 
         # default Noise2Self blind-spot MSE loss
-        masked = torch.sum(mask)
-        bsp_mse = torch.sum(torch.square(x - out_mask["image"]) * mask) / masked
+        bsp_mse = self.compute_mse(x, out_mask["image"], mask)
         loss_log = {"bsp_mse": bsp_mse.item()}
 
         # Noise2Same losses
+        loss = torch.tensor(0.0, device=x.device)
         if out_raw is not None:
-            try:
-                rec_mse = torch.mean(torch.square(out_raw["image"] - x))
-            except RuntimeError as e:
-                print(out_raw["image"].shape, x.shape)
-                raise e
 
-            inv_mse = (
-                torch.sum(
-                    torch.square(out_raw[self.inv_mse_key] - out_mask[self.inv_mse_key])
-                    * mask
-                )
-                / masked
-            )
-            loss = rec_mse + self.lambda_inv * torch.sqrt(inv_mse)
+            # Blind spot MSE
+            if self.lambda_bsp > 0:
+                loss = loss + self.lambda_bsp * bsp_mse
+
+            # Reconstruction MSE
+            rec_mse = self.compute_mse(out_raw["image"], x)
             loss_log["rec_mse"] = rec_mse.item()
-            loss_log["inv_mse"] = inv_mse.item()
+            if self.lambda_rec > 0:
+                loss = loss + self.lambda_rec * rec_mse
 
-            if self.lambda_proj > 0:
+            # Invariance loss for image
+            if self.lambda_inv > 0:
+                inv_mse = self.compute_mse(
+                    out_raw["image"], out_mask["image"], mask
+                )
+                loss_log["inv_mse"] = inv_mse.item()
+                loss = loss + self.lambda_inv * torch.sqrt(inv_mse)
+
+            # Invariance loss for deconv representation
+            if self.lambda_inv_deconv > 0 and "deconv" in out_raw:
+                inv_deconv_mse = self.compute_mse(
+                    out_raw["deconv"], out_mask["deconv"], mask if self.masked_inv_deconv else None,
+                )
+                loss_log["inv_deconv_mse"] = inv_deconv_mse.item()
+                loss = loss + self.lambda_inv_deconv * torch.sqrt(inv_deconv_mse)
+
+            # Projection loss
+            if self.lambda_proj > 0 and "proj" in out_raw:
                 contrastive_loss = PixelContrastLoss(temperature=0.1)
                 proj_loss = contrastive_loss(
                     out_raw["proj"], out_mask["proj"], mask
                 ).mean()
-                loss = loss + self.lambda_proj * proj_loss
                 loss_log["proj_loss"] = proj_loss.item()
+                loss = loss + self.lambda_proj * proj_loss
+
         else:
             loss = bsp_mse
 
@@ -368,3 +384,10 @@ class Noise2Same(nn.Module):
             num_elements ** 2
         )
         return sharpening_loss.mean()
+
+    @staticmethod
+    def compute_mse(x: T, y: T, mask: Optional[T] = None) -> T:
+        if mask is None:
+            return torch.mean(torch.square(x - y))
+        masked = torch.sum(mask)
+        return torch.sum(torch.square(x - y) * mask) / masked

@@ -18,16 +18,19 @@ network:
   skip_method: concat
 
 model:
+  lambda_rec: 1
+  lambda_bsp: 0
   lambda_inv: 2
+  lambda_inv_deconv: 0
   lambda_proj: 0
   lambda_bound: 0
   lambda_sharp: 0
+  masked_inv_deconv: True
   mask_percentage: 0.5
   masking: gaussian
   noise_mean: 0
   noise_std: 0.2
   residual: False
-  inv_mse_key: image
   regularization_key: image
   only_masked: False
 
