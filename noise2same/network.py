@@ -104,18 +104,30 @@ class ResidualUnit(nn.Module):
 
         if ffc == True:
             bn_in_channels = int(in_channels / 2)
+            shortcut_ffc_kwargs = dict(ratio_gin=0.5, ratio_gout=0)
+            self.conv_shortcut = FFC(
+                in_channels=in_channels,
+                out_channels=out_channels,
+                kernel_size=1,
+                padding=0,
+                stride=stride,
+                bias=False,
+                n_dim=n_dim,
+                **shortcut_ffc_kwargs
+            )
+
         else:
             bn_in_channels = in_channels
+            self.conv_shortcut = conv(
+                in_channels=in_channels,
+                out_channels=out_channels,
+                kernel_size=1,
+                padding=0,
+                stride=stride,
+                bias=False)
 
         self.bn = bn(bn_in_channels, momentum=1 - 0.997, eps=1e-5)
-        self.conv_shortcut = conv(
-            in_channels=in_channels,
-            out_channels=out_channels,
-            kernel_size=1,
-            padding=0,
-            stride=stride,
-            bias=False,
-        )
+
         if self.ffc == True:
             ffc_params = dict(
                 in_channels=in_channels,
@@ -155,10 +167,11 @@ class ResidualUnit(nn.Module):
             )
 
     def forward(self, x: T) -> T:
-        if self.ffc == True:
 
+        if self.ffc == True:
+            shortcut = self.conv_shortcut(x)[0]  # merge branches and take local branch (as global will be 0)
             x_l, x_g = x if type(x) is tuple else (x, 0)
-            shortcut = x_l
+
             x_l = self.bn(x_l)
             x_l = self.act(x_l)
 
@@ -170,8 +183,8 @@ class ResidualUnit(nn.Module):
             shortcut = x
             x = self.bn(x)
             x = self.act(x)
-        if self.in_channels != self.out_channels or self.downsample:
-            shortcut = self.conv_shortcut(x)
+            if self.in_channels != self.out_channels or self.downsample:
+                shortcut = self.conv_shortcut(x)
         # x = (x,x)
         # if self.ffc == True:
         #    x = torch.tensor_split(x, 2, dim=1)
@@ -258,6 +271,7 @@ class EncoderBlock(nn.Module):
                 kernel_size=2,
                 stride=2,
                 bias=True,
+                n_dim=n_dim,
                 **downsample_ffc_kwargs
             )
         else:
@@ -341,6 +355,7 @@ class UNet(nn.Module):
             padding=kernel_size // 2,
             stride=1,
             bias=False,
+            n_dim=n_dim,
             **ffc_kwargs
         )
 
