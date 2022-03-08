@@ -122,7 +122,6 @@ class ResidualUnit(nn.Module):
                 n_dim=n_dim,
             )
             self.layers = nn.Sequential(
-                #FFC_BN_ACT(**ffc_params, ratio_gin=0, ratio_gout=0.5),
                 FFC_BN_ACT(**ffc_params, ratio_gin=0.5, ratio_gout=0.5),
                 FFC_BN_ACT(**ffc_params, ratio_gin=0.5, ratio_gout=0),
             )
@@ -154,7 +153,7 @@ class ResidualUnit(nn.Module):
         x = self.act(x)
         if self.in_channels != self.out_channels or self.downsample:
             shortcut = self.conv_shortcut(x)
-        #x = (x,x)
+        # x = (x,x)
         if self.ffc == True:
             x = torch.tensor_split(x, 2, dim=1)
         x = self.layers(x)

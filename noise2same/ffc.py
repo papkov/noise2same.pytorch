@@ -59,7 +59,7 @@ class FourierUnit(nn.Module):
 
     def forward(self, x):
         batch, c, *s = x.size()
-        dim = (2, 3, 4)[:len(s)]
+        dim = (2, 3, 4)[: len(s)]
 
         # (batch, c, h, w/2+1) complex number
         ffted = torch.fft.rfftn(x.float(), s=s, dim=dim, norm="ortho")
@@ -77,7 +77,7 @@ class FourierUnit(nn.Module):
 
 class SpectralTransform(nn.Module):
     def __init__(
-            self, in_channels, out_channels, stride=1, groups=1, enable_lfu=True, n_dim=2
+        self, in_channels, out_channels, stride=1, groups=1, enable_lfu=True, n_dim=2
     ):
         # bn_layer not used
         super(SpectralTransform, self).__init__()
@@ -135,19 +135,19 @@ class SpectralTransform(nn.Module):
 
 class FFC(nn.Module):
     def __init__(
-            self,
-            in_channels,
-            out_channels,
-            kernel_size,
-            ratio_gin,
-            ratio_gout,
-            stride=1,
-            padding=0,
-            dilation=1,
-            groups=1,
-            bias=False,
-            enable_lfu=True,
-            n_dim=2,
+        self,
+        in_channels,
+        out_channels,
+        kernel_size,
+        ratio_gin,
+        ratio_gout,
+        stride=1,
+        padding=0,
+        dilation=1,
+        groups=1,
+        bias=False,
+        enable_lfu=True,
+        n_dim=2,
     ):
         super(FFC, self).__init__()
 
@@ -202,20 +202,20 @@ class FFC(nn.Module):
 
 class FFC_BN_ACT(nn.Module):
     def __init__(
-            self,
-            in_channels,
-            out_channels,
-            kernel_size,
-            ratio_gin,
-            ratio_gout,
-            stride=1,
-            padding=0,
-            dilation=1,
-            groups=1,
-            bias=False,
-            activation_layer=nn.Identity,
-            enable_lfu=True,
-            n_dim=2,
+        self,
+        in_channels,
+        out_channels,
+        kernel_size,
+        ratio_gin,
+        ratio_gout,
+        stride=1,
+        padding=0,
+        dilation=1,
+        groups=1,
+        bias=False,
+        activation_layer=nn.Identity,
+        enable_lfu=True,
+        n_dim=2,
     ):
         super(FFC_BN_ACT, self).__init__()
 
