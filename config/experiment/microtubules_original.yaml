@@ -28,3 +28,4 @@ psf:
   path: data/microtubules-simulation/psf.tif  # near the data by default; parametrize?
   psf_size: null
   psf_pad_mode: constant  # check if reflect affected anything
+  psf_fft: auto

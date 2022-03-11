@@ -77,6 +77,7 @@ class Noise2Same(nn.Module):
         arch: str = "unet",
         regularization_key: str = "image",
         only_masked: bool = False,
+        psf_fft: Union[str, bool] = "auto",
         **kwargs: Any,
     ):
         """
@@ -156,7 +157,7 @@ class Noise2Same(nn.Module):
                 # TODO check
                 psf = read_psf(psf, psf_size=psf_size)
             print("PSF shape", psf.shape)
-            self.psf = PSFParameter(psf, pad_mode=psf_pad_mode)
+            self.psf = PSFParameter(psf, pad_mode=psf_pad_mode, fft=psf_fft)
             for param in self.psf.parameters():
                 param.requires_grad = False
 

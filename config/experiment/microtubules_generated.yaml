@@ -29,3 +29,4 @@ psf:
   path: null
   psf_size: null
   psf_pad_mode: replicate  # check if reflect affected anything
+  psf_fft: auto
