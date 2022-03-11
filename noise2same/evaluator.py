@@ -7,6 +7,7 @@ from pytorch_toolbelt.inference.tiles import TileMerger
 from torch.cuda.amp import autocast
 from torch.utils.data import DataLoader, Dataset
 from tqdm import tqdm, trange
+import time
 
 from noise2same.dataset.util import PadAndCropResizer
 from noise2same.model import Noise2Same
@@ -64,9 +65,10 @@ class Evaluator(object):
 
         outputs = []
         iterator = tqdm(loader, desc="inference", position=0, leave=True)
+        times = []
         for i, batch in enumerate(iterator):
             batch = {k: v.to(self.device) for k, v in batch.items()}
-
+            start = time.time()
             with autocast(enabled=half):
                 if self.masked:
                     # TODO remove randomness
@@ -84,6 +86,9 @@ class Evaluator(object):
                     {"proj": np.moveaxis(out["proj"].detach().cpu().numpy(), 1, -1)}
                 )
 
+            end = time.time()
+            times.append(end - start)
+
             outputs.append(out_raw)
             iterator.set_postfix(
                 {
@@ -92,9 +97,11 @@ class Evaluator(object):
                     "allocated": torch.cuda.memory_allocated(0) / (1024 ** 2),
                 }
             )
+
             if empty_cache:
                 torch.cuda.empty_cache()
 
+        print(f"Average inference time: {np.mean(times) * 1000:.2f} ms")
         return outputs
 
     @torch.no_grad()
