@@ -217,6 +217,7 @@ class FFC_BN_ACT(nn.Module):
         activation_layer=nn.Identity,
         enable_lfu=True,
         n_dim=2,
+        bn_act_first=False,
     ):
         super(FFC_BN_ACT, self).__init__()
 
@@ -235,6 +236,10 @@ class FFC_BN_ACT(nn.Module):
             enable_lfu,
             n_dim,
         )
+
+        if bn_act_first:
+            ratio_gout = ratio_gin
+
         lnorm = nn.Identity if ratio_gout == 1 else norm_layer
         gnorm = nn.Identity if ratio_gout == 0 else norm_layer
         self.bn_l = lnorm(int(out_channels * (1 - ratio_gout)))
@@ -249,4 +254,14 @@ class FFC_BN_ACT(nn.Module):
         x_l, x_g = self.ffc(x)
         x_l = self.act_l(self.bn_l(x_l))
         x_g = self.act_g(self.bn_g(x_g))
+        return x_l, x_g
+
+
+class BN_ACT_FFC(FFC_BN_ACT):
+    def forward(self, x):
+        x_l, x_g = x if type(x) is tuple else (x, 0)
+        x_l = self.act_l(self.bn_l(x_l))
+        x_g = self.act_g(self.bn_g(x_g))
+        x_l, x_g = self.ffc((x_l, x_g))
+        # in channeli järgi
         return x_l, x_g

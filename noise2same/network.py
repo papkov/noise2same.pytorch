@@ -1,6 +1,7 @@
 # translated from
 # https://github.com/divelab/Noise2Same/blob/main/network.py
 # https://github.com/divelab/Noise2Same/blob/main/resnet_module.py
+from functools import partial
 from typing import Tuple
 
 import torch
@@ -8,7 +9,7 @@ from torch import Tensor as T
 from torch import nn
 from torch.nn.functional import normalize
 
-from noise2same.ffc import FFC, FFC_BN_ACT
+from noise2same.ffc import BN_ACT_FFC, FFC
 
 
 class ProjectHead(nn.Sequential):
@@ -102,30 +103,22 @@ class ResidualUnit(nn.Module):
         self.act = nn.ReLU(inplace=True)
         # todo parametrize as in the original repo (bn momentum is inverse)
 
-        if ffc == True:
-            bn_in_channels = int(in_channels / 2)
-            shortcut_ffc_kwargs = dict(ratio_gin=0.5, ratio_gout=0)
-            self.conv_shortcut = FFC(
-                in_channels=in_channels,
-                out_channels=out_channels,
-                kernel_size=1,
-                padding=0,
-                stride=stride,
-                bias=False,
-                n_dim=n_dim,
-                **shortcut_ffc_kwargs,
+        bn_in_channels = in_channels
+        conv_shortcut = conv
+        if ffc:
+            bn_in_channels = bn_in_channels // 2
+            conv_shortcut = partial(
+                BN_ACT_FFC, n_dim=n_dim, ratio_gin=0.5, ratio_gout=0, bn_act_first=True
             )
 
-        else:
-            bn_in_channels = in_channels
-            self.conv_shortcut = conv(
-                in_channels=in_channels,
-                out_channels=out_channels,
-                kernel_size=1,
-                padding=0,
-                stride=stride,
-                bias=False,
-            )
+        self.conv_shortcut = conv_shortcut(
+            in_channels=in_channels,
+            out_channels=out_channels,
+            kernel_size=1,
+            padding=0,
+            stride=stride,
+            bias=False,
+        )
 
         self.bn = bn(bn_in_channels, momentum=1 - 0.997, eps=1e-5)
 
@@ -139,10 +132,11 @@ class ResidualUnit(nn.Module):
                 kernel_size=3,
                 padding=1,
                 n_dim=n_dim,
+                bn_act_first=True,
             )
             self.layers = nn.Sequential(
-                FFC_BN_ACT(**ffc_params, ratio_gin=0.5, ratio_gout=0.5),
-                FFC(**ffc_params, ratio_gin=0.5, ratio_gout=0),
+                BN_ACT_FFC(**ffc_params, ratio_gin=0.5, ratio_gout=0.5),
+                BN_ACT_FFC(**ffc_params, ratio_gin=0.5, ratio_gout=0),
             )
         else:
             self.layers = nn.Sequential(
@@ -169,17 +163,8 @@ class ResidualUnit(nn.Module):
     def forward(self, x: T) -> T:
 
         if self.ffc == True:
-            shortcut = self.conv_shortcut(x)[
-                0
-            ]  # merge branches and take local branch (as global will be 0)
-            x_l, x_g = x if type(x) is tuple else (x, 0)
 
-            x_l = self.bn(x_l)
-            x_l = self.act(x_l)
-
-            x_g = self.bn(x_g)
-            x_g = self.act(x_g)
-            x = (x_l, x_g)
+            shortcut = self.conv_shortcut(x)[0]
 
         else:
             shortcut = x
@@ -187,9 +172,7 @@ class ResidualUnit(nn.Module):
             x = self.act(x)
             if self.in_channels != self.out_channels or self.downsample:
                 shortcut = self.conv_shortcut(x)
-        # x = (x,x)
-        # if self.ffc == True:
-        #    x = torch.tensor_split(x, 2, dim=1)
+
         x = self.layers(x)
         if type(x) == tuple:
             x = x[0]
