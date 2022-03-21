@@ -24,11 +24,12 @@ class MicrotubulesDataset(AbstractNoiseDataset3DLarge):
 
     def _read_large_image(self):
         self.image = io.imread(str(self.path / self.input_name)).astype(np.float32)
+        # self.image = normalize_percentile(self.image, 0.1, 99.9)
         if self.add_blur_and_noise:
             print(f"Generating blur and noise for {self.input_name}")
-            # self.image = normalize_percentile(self.image, 0.1, 99.9)
-            self.image = normalize(self.image)
             # TODO parametrize
+            self.image = normalize(self.image)  # to add noise correctly
+            self.gt = self.image.copy()
             self.image, self.psf = add_microscope_blur_3d(self.image, size=17)
             self.image = add_poisson_gaussian_noise(
                 self.image,
@@ -37,3 +38,6 @@ class MicrotubulesDataset(AbstractNoiseDataset3DLarge):
                 sap=0,  # 0.01 by default but it is not common to have salt and pepper
                 quant_bits=10,
             )
+        else:
+            # todo parametrize gt name
+            self.gt = io.imread(str(self.path / "ground-truth.tif")).astype(np.float32)

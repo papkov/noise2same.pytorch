@@ -305,16 +305,16 @@ class Noise2Same(nn.Module):
 
             # Invariance loss for image
             if self.lambda_inv > 0:
-                inv_mse = self.compute_mse(
-                    out_raw["image"], out_mask["image"], mask
-                )
+                inv_mse = self.compute_mse(out_raw["image"], out_mask["image"], mask)
                 loss_log["inv_mse"] = inv_mse.item()
                 loss = loss + self.lambda_inv * torch.sqrt(inv_mse)
 
             # Invariance loss for deconv representation
             if self.lambda_inv_deconv > 0 and "deconv" in out_raw:
                 inv_deconv_mse = self.compute_mse(
-                    out_raw["deconv"], out_mask["deconv"], mask if self.masked_inv_deconv else None,
+                    out_raw["deconv"],
+                    out_mask["deconv"],
+                    mask if self.masked_inv_deconv else None,
                 )
                 loss_log["inv_deconv_mse"] = inv_deconv_mse.item()
                 loss = loss + self.lambda_inv_deconv * torch.sqrt(inv_deconv_mse)

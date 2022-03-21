@@ -1,3 +1,4 @@
+import time
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
@@ -7,7 +8,6 @@ from pytorch_toolbelt.inference.tiles import TileMerger
 from torch.cuda.amp import autocast
 from torch.utils.data import DataLoader, Dataset
 from tqdm import tqdm, trange
-import time
 
 from noise2same.dataset.util import PadAndCropResizer
 from noise2same.model import Noise2Same

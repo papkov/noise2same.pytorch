@@ -172,6 +172,7 @@ def normalize_percentile(
     clip: bool = False,
     eps: float = 1e-20,
     dtype: type = np.float32,
+    return_min_max: bool = False,
 ):
     """
     Percentile-based image normalization.
@@ -182,11 +183,14 @@ def normalize_percentile(
     :param clip:
     :param eps:
     :param dtype:
+    :param return_min_max:
     :return:
     """
 
     mi = np.percentile(x, p_min, axis=axis, keepdims=True)
     ma = np.percentile(x, p_max, axis=axis, keepdims=True)
+    if return_min_max:
+        return normalize_mi_ma(x, mi, ma, clip=clip, eps=eps, dtype=dtype), mi, ma
     return normalize_mi_ma(x, mi, ma, clip=clip, eps=eps, dtype=dtype)
 
 

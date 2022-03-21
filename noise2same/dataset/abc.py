@@ -16,7 +16,7 @@ from torch.utils.data import Dataset
 
 from noise2same.dataset import transforms as t3d
 from noise2same.dataset.util import mask_like_image
-from noise2same.util import normalize_percentile
+from noise2same.util import normalize_mi_ma, normalize_percentile
 
 
 @dataclass
@@ -253,13 +253,19 @@ class AbstractNoiseDataset3DLarge(AbstractNoiseDataset3D, ABC):
 
         if len(self.image.shape) < 4:
             self.image = self.image[..., np.newaxis]
+            if hasattr(self, "gt"):
+                self.gt = self.gt[..., np.newaxis]
 
         if self.standardize:
             self.mean = self.image.mean()
             self.std = self.image.std()
             self.image = (self.image - self.mean) / self.std
+            if hasattr(self, "gt"):
+                self.gt = (self.gt - self.mean) / self.std
         else:
-            self.image = normalize_percentile(self.image)
+            self.image, mi, ma = normalize_percentile(self.image, return_min_max=True)
+            if hasattr(self, "gt"):
+                self.gt = normalize_mi_ma(self.gt, mi, ma)
 
         self.tiler = ImageSlicer(
             self.image.shape,

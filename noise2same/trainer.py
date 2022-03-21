@@ -1,6 +1,6 @@
 from collections import Counter
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple, Union
 
 import numpy as np
 import torch
@@ -30,7 +30,7 @@ class Trainer(object):
         check: bool = False,
         wandb_log: bool = True,
         amp: bool = False,
-        info_padding: bool = False,
+        info_padding: Union[bool, str] = False,
     ):
 
         self.model = model
@@ -92,7 +92,13 @@ class Trainer(object):
                             loader.dataset.tiler.margin_end,
                         )
                     ] + [(0, 0)]
-                    full_size_image = np.pad(loader.dataset.image, padding)
+                    full_size_image = getattr(
+                        loader.dataset,
+                        self.info_padding
+                        if isinstance(self.info_padding, str)
+                        else "image",  # 'image' should be a field in the dataset
+                    )
+                    full_size_image = np.pad(full_size_image, padding)
                     full_size_image = torch.from_numpy(
                         np.moveaxis(full_size_image, -1, 0)
                     ).to(self.device)

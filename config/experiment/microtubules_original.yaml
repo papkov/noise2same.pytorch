@@ -6,6 +6,7 @@ data:
   input_name: input.tif
   tile_size: 64
   tile_step: 64  # to prevent overlap
+  add_blur_and_noise: False
 
 network:
   base_channels: 48
