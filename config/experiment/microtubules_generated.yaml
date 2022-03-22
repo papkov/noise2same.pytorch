@@ -1,6 +1,7 @@
 # @package _global_
 name: microtubules
 evaluate: True
+project: noise2same-ssi-mt-gen
 
 data:
   n_dim: 3
@@ -13,6 +14,9 @@ data:
 network:
   base_channels: 48
   skip_method: add
+
+model:
+  lambda_bound: 0.1
 
 training:
   steps_per_epoch: 100
