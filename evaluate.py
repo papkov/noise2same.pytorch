@@ -57,7 +57,7 @@ def main(cfg: DictConfig) -> None:
     )
 
     checkpoint_path = (
-        cfg.checkpoint
+        cwd / cfg.checkpoint
         if hasattr(cfg, "checkpoint")
         else cwd / f"weights/{cfg.name}.pth"
     )

@@ -1,3 +1,4 @@
+import time
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
@@ -7,7 +8,6 @@ from pytorch_toolbelt.inference.tiles import TileMerger
 from torch.cuda.amp import autocast
 from torch.utils.data import DataLoader, Dataset
 from tqdm import tqdm, trange
-import time
 
 from noise2same.dataset.util import PadAndCropResizer
 from noise2same.model import Noise2Same
@@ -77,7 +77,28 @@ class Evaluator(object):
                         batch["image"], batch["mask"], convolve=convolve
                     )
                 else:
+                    # pad for divisibility
+                    # todo wrapper
+                    large_side = max(batch["image"].shape[2:])
+                    padding_tuple = [
+                        # todo check if correct for symmetry
+                        ((large_side - s) // 2, (large_side - s) // 2)
+                        for s in batch["image"].shape[2:]
+                    ]
+                    padding = [i for sub in padding_tuple for i in sub][::-1]
+
+                    batch["image"] = torch.nn.functional.pad(
+                        batch["image"], padding, mode="constant"
+                    )
                     out = self.model.forward(batch["image"], convolve=convolve)
+
+                    crop = [
+                        slice(p[0], s - p[1])
+                        for p, s in zip(padding_tuple, batch["image"].shape[2:])
+                    ]
+                    crop = [slice(None)] * 2 + crop
+
+                    out[key] = out[key][crop]
                 out_raw = out[key] * batch["std"] + batch["mean"]
 
             out_raw = {"image": np.moveaxis(out_raw.detach().cpu().numpy(), 1, -1)}
