@@ -234,11 +234,10 @@ class EncoderBlock(nn.Module):
         self.kernel_size = kernel_size
         self.block_size = block_size
 
-        if ffc == False:
-            conv = nn.Conv2d if n_dim == 2 else nn.Conv3d
+        if ffc:
+            conv = partial(FFC, n_dim=n_dim, ratio_gin=0, ratio_gout=0.5)
         else:
-            conv = FFC
-        downsample_ffc_kwargs = dict(ratio_gin=0, ratio_gout=0.5)
+            conv = nn.Conv2d if n_dim == 2 else nn.Conv3d
 
         if downsampling == "res":
             downsampling_block = ResidualBlock(
@@ -256,8 +255,6 @@ class EncoderBlock(nn.Module):
                 kernel_size=2,
                 stride=2,
                 bias=True,
-                n_dim=n_dim,
-                **downsample_ffc_kwargs,
             )
         else:
             raise ValueError("downsampling should be `res`. `conv`, `pool`")
@@ -326,11 +323,11 @@ class UNet(nn.Module):
         self.skip_method = skip_method
         print(f"Use {self.skip_method} skip method")
 
-        if ffc == False:
-            conv = nn.Conv2d if n_dim == 2 else nn.Conv3d
+        if ffc:
+            conv = partial(FFC, n_dim=n_dim, ratio_gin=0, ratio_gout=0.5)
         else:
-            conv = FFC
-        ffc_kwargs = dict(ratio_gin=0, ratio_gout=0.5)
+            conv = nn.Conv2d if n_dim == 2 else nn.Conv3d
+
         conv_transpose = nn.ConvTranspose2d if n_dim == 2 else nn.ConvTranspose3d
 
         self.conv_first = conv(
@@ -340,8 +337,6 @@ class UNet(nn.Module):
             padding=kernel_size // 2,
             stride=1,
             bias=False,
-            n_dim=n_dim,
-            **ffc_kwargs,
         )
 
         # Encoder
