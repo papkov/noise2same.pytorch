@@ -9,6 +9,8 @@ from torch import Tensor as T
 from torch import nn
 from torch.nn.functional import normalize
 
+from noise2same.ffc import BN_ACT_FFC, FFC
+
 
 class ProjectHead(nn.Sequential):
     """
@@ -84,6 +86,7 @@ class ResidualUnit(nn.Module):
         n_dim: int = 2,
         kernel_size: int = 3,
         downsample: bool = False,
+        ffc: bool = False,
     ):
         super().__init__()
         self.in_channels = in_channels
@@ -91,6 +94,7 @@ class ResidualUnit(nn.Module):
         self.n_dim = n_dim
         self.kernel_size = kernel_size
         self.downsample = downsample
+        self.ffc = ffc
 
         bn = nn.BatchNorm2d if n_dim == 2 else nn.BatchNorm3d
         conv = nn.Conv2d if n_dim == 2 else nn.Conv3d
@@ -98,8 +102,16 @@ class ResidualUnit(nn.Module):
 
         self.act = nn.ReLU(inplace=True)
         # todo parametrize as in the original repo (bn momentum is inverse)
-        self.bn = bn(in_channels, momentum=1 - 0.997, eps=1e-5)
-        self.conv_shortcut = conv(
+
+        bn_in_channels = in_channels
+        conv_shortcut = conv
+        if ffc:
+            bn_in_channels = bn_in_channels // 2
+            conv_shortcut = partial(
+                BN_ACT_FFC, n_dim=n_dim, ratio_gin=0.5, ratio_gout=0, bn_act_first=True
+            )
+
+        self.conv_shortcut = conv_shortcut(
             in_channels=in_channels,
             out_channels=out_channels,
             kernel_size=1,
@@ -108,34 +120,62 @@ class ResidualUnit(nn.Module):
             bias=False,
         )
 
-        self.layers = nn.Sequential(
-            conv(
+        self.bn = bn(bn_in_channels, momentum=1 - 0.997, eps=1e-5)
+
+        if self.ffc == True:
+            ffc_params = dict(
                 in_channels=in_channels,
                 out_channels=out_channels,
-                kernel_size=2 if downsample else kernel_size,
-                padding=0 if downsample else kernel_size // 2,
-                stride=stride,
-                bias=False,
-            ),
-            bn(out_channels),
-            self.act,
-            conv(
-                in_channels=out_channels,
-                out_channels=out_channels,
-                kernel_size=kernel_size,
-                padding=kernel_size // 2,
                 stride=1,
-                bias=False,
-            ),
-        )
+                activation_layer=nn.ReLU,
+                enable_lfu=True,
+                kernel_size=3,
+                padding=1,
+                n_dim=n_dim,
+                bn_act_first=True,
+            )
+            self.layers = nn.Sequential(
+                BN_ACT_FFC(**ffc_params, ratio_gin=0.5, ratio_gout=0.5),
+                BN_ACT_FFC(**ffc_params, ratio_gin=0.5, ratio_gout=0),
+            )
+        else:
+            self.layers = nn.Sequential(
+                conv(
+                    in_channels=in_channels,
+                    out_channels=out_channels,
+                    kernel_size=2 if downsample else kernel_size,
+                    padding=0 if downsample else kernel_size // 2,
+                    stride=stride,
+                    bias=False,
+                ),
+                bn(out_channels),
+                self.act,
+                conv(
+                    in_channels=out_channels,
+                    out_channels=out_channels,
+                    kernel_size=kernel_size,
+                    padding=kernel_size // 2,
+                    stride=1,
+                    bias=False,
+                ),
+            )
 
     def forward(self, x: T) -> T:
-        shortcut = x
-        x = self.bn(x)
-        x = self.act(x)
-        if self.in_channels != self.out_channels or self.downsample:
-            shortcut = self.conv_shortcut(x)
+
+        if self.ffc == True:
+
+            shortcut = self.conv_shortcut(x)[0]
+
+        else:
+            shortcut = x
+            x = self.bn(x)
+            x = self.act(x)
+            if self.in_channels != self.out_channels or self.downsample:
+                shortcut = self.conv_shortcut(x)
+
         x = self.layers(x)
+        if type(x) == tuple:
+            x = x[0]
         return x + shortcut
 
 
@@ -148,6 +188,7 @@ class ResidualBlock(nn.Module):
         n_dim: int = 2,
         kernel_size: int = 3,
         downsample: bool = False,
+        ffc: bool = False,
     ):
         super().__init__()
         self.in_channels = in_channels
@@ -164,6 +205,7 @@ class ResidualBlock(nn.Module):
                     out_channels=out_channels,
                     n_dim=n_dim,
                     kernel_size=kernel_size,
+                    ffc=ffc,
                     downsample=downsample if i == 0 else False,
                 )
                 for i in range(0, block_size)
@@ -183,6 +225,7 @@ class EncoderBlock(nn.Module):
         n_dim: int = 2,
         kernel_size: int = 3,
         downsampling: str = "conv",
+        ffc: bool = False,
     ):
         super().__init__()
         self.in_channels = in_channels
@@ -191,7 +234,11 @@ class EncoderBlock(nn.Module):
         self.kernel_size = kernel_size
         self.block_size = block_size
 
-        conv = nn.Conv2d if n_dim == 2 else nn.Conv3d
+        if ffc == False:
+            conv = nn.Conv2d if n_dim == 2 else nn.Conv3d
+        else:
+            conv = FFC
+        downsample_ffc_kwargs = dict(ratio_gin=0, ratio_gout=0.5)
 
         if downsampling == "res":
             downsampling_block = ResidualBlock(
@@ -209,6 +256,8 @@ class EncoderBlock(nn.Module):
                 kernel_size=2,
                 stride=2,
                 bias=True,
+                n_dim=n_dim,
+                **downsample_ffc_kwargs,
             )
         else:
             raise ValueError("downsampling should be `res`. `conv`, `pool`")
@@ -222,11 +271,13 @@ class EncoderBlock(nn.Module):
                 block_size=block_size,
                 downsample=False,
                 kernel_size=kernel_size,
+                ffc=ffc,
             ),
         )
 
     def forward(self, x: T) -> T:
-        return self.block(x)
+        x = self.block(x)
+        return x
 
 
 class UNet(nn.Module):
@@ -241,6 +292,7 @@ class UNet(nn.Module):
         decoding_block_sizes: Tuple[int, ...] = (1, 1),
         downsampling: Tuple[str, ...] = ("conv", "conv"),
         skip_method: str = "concat",
+        ffc: bool = False,
     ):
         """
 
@@ -274,7 +326,11 @@ class UNet(nn.Module):
         self.skip_method = skip_method
         print(f"Use {self.skip_method} skip method")
 
-        conv = nn.Conv2d if n_dim == 2 else nn.Conv3d
+        if ffc == False:
+            conv = nn.Conv2d if n_dim == 2 else nn.Conv3d
+        else:
+            conv = FFC
+        ffc_kwargs = dict(ratio_gin=0, ratio_gout=0.5)
         conv_transpose = nn.ConvTranspose2d if n_dim == 2 else nn.ConvTranspose3d
 
         self.conv_first = conv(
@@ -284,6 +340,8 @@ class UNet(nn.Module):
             padding=kernel_size // 2,
             stride=1,
             bias=False,
+            n_dim=n_dim,
+            **ffc_kwargs,
         )
 
         # Encoder
@@ -295,6 +353,7 @@ class UNet(nn.Module):
                     n_dim=n_dim,
                     kernel_size=kernel_size,
                     block_size=encoding_block_sizes[0],
+                    ffc=ffc,
                 )
             ]
         )
@@ -316,6 +375,7 @@ class UNet(nn.Module):
                     kernel_size=kernel_size,
                     block_size=encoding_block_sizes[i - 1],
                     downsampling=downsampling[i - 2],
+                    ffc=ffc,
                 )
             )
 
@@ -326,6 +386,7 @@ class UNet(nn.Module):
             n_dim=n_dim,
             kernel_size=kernel_size,
             block_size=1,
+            ffc=ffc,
         )
 
         # Decoder
@@ -368,9 +429,7 @@ class UNet(nn.Module):
             encoder_outputs.append(x)
             x = encoder_block(x)
             # print(f"Encoder {i+1}", x.shape)
-
         x = self.bottom_block(x)
-        # print("Bottom", x.shape)
 
         for i, (upsampling_block, decoder_block, skip) in enumerate(
             zip(self.upsampling_blocks, self.decoder_blocks, encoder_outputs[::-1])

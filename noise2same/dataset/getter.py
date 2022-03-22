@@ -164,7 +164,11 @@ def get_planaria_dataset_and_gt(filename_gt: str):
     datasets = {}
     for c in range(1, 4):
         datasets[f"c{c}"] = planaria.PlanariaDatasetTiff(
-            filename_gt.replace("GT", f"condition_{c}"), standardize=True
+            filename_gt.replace("GT", f"condition_{c}"),
+            standardize=True,
+            # todo parametrize?
+            tile_size=192,
+            tile_step=192 - 64,
         )
         datasets[f"c{c}"].mean, datasets[f"c{c}"].std = 0, 1
 
