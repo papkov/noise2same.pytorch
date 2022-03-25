@@ -25,6 +25,7 @@ def main(cfg: DictConfig) -> None:
         print("Please specify an experiment with `+experiment=name`")
         return
 
+    print(OmegaConf.to_yaml(cfg))
     os.environ["CUDA_VISIBLE_DEVICES"] = f"{cfg.device}"
 
     cwd = Path(get_original_cwd())
@@ -96,7 +97,8 @@ def main(cfg: DictConfig) -> None:
     # Calculate scores
     if cfg.name in ("bsd68",):
         scores = [
-            util.calculate_scores(gtx, pred, data_range=255)
+            # todo check how clip affects the score
+            util.calculate_scores(gtx, pred, data_range=255, clip=True)
             for gtx, pred in zip(ground_truth, predictions["image"])
         ]
     elif cfg.name in ("hanzi",):
