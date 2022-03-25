@@ -162,7 +162,7 @@ class PadAndCropResizer(object):
                 pad = [
                     p
                     for i, pt in enumerate(self.pad)
-                    for p in pt
+                    for p in pt[::-1]  # important for cropping odd padding
                     if i not in exclude
                 ][::-1]
                 try:
@@ -182,7 +182,7 @@ class PadAndCropResizer(object):
 
         return x_pad
 
-    def after(self, x: np.ndarray):
+    def after(self, x: Union[np.ndarray, torch.Tensor]):
         if np.sum(self.pad) == 0:
             return x
 
