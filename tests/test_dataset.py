@@ -52,6 +52,7 @@ class TestResizer(unittest.TestCase):
 
         cropped = resizer.after(resized)
         self.assertEqual(cropped.shape, tensor.shape)
+        self.assertTrue(torch.allclose(cropped, tensor))
 
     def test_resize_square_even(self):
         resizer = PadAndCropResizer(div_n=8, square=True)
@@ -61,6 +62,7 @@ class TestResizer(unittest.TestCase):
 
         cropped = resizer.after(resized)
         self.assertEqual(cropped.shape, tensor.shape)
+        self.assertTrue(torch.allclose(cropped, tensor))
 
     def test_resize_square_odd_numpy(self):
         resizer = PadAndCropResizer(div_n=2, square=True)
@@ -70,6 +72,7 @@ class TestResizer(unittest.TestCase):
 
         cropped = resizer.after(resized)
         self.assertEqual(cropped.shape, tensor.shape)
+        self.assertTrue(np.allclose(cropped, tensor))
 
     def test_resize_square_even_numpy(self):
         resizer = PadAndCropResizer(div_n=8, square=True)
@@ -79,6 +82,7 @@ class TestResizer(unittest.TestCase):
 
         cropped = resizer.after(resized)
         self.assertEqual(cropped.shape, tensor.shape)
+        self.assertTrue(np.allclose(cropped, tensor))
 
 
 if __name__ == "__main__":
