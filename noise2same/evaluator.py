@@ -40,7 +40,9 @@ class Evaluator(object):
         self.model.to(device)
 
         self.resizer = PadAndCropResizer(
-            mode="reflect", div_n=2 ** self.model.net.depth
+            mode="reflect" if model.n_dim == 2 else "replicate",
+            div_n=2 ** self.model.net.depth,
+            square=self.model.net.ffc,
         )
 
     @torch.no_grad()
@@ -67,6 +69,8 @@ class Evaluator(object):
         iterator = tqdm(loader, desc="inference", position=0, leave=True)
         times = []
         for i, batch in enumerate(iterator):
+            batch["image"] = self.resizer.before(batch["image"], exclude=(0, 1))
+
             batch = {k: v.to(self.device) for k, v in batch.items()}
             start = time.time()
             with autocast(enabled=half):
@@ -77,28 +81,11 @@ class Evaluator(object):
                         batch["image"], batch["mask"], convolve=convolve
                     )
                 else:
-                    # pad for divisibility
-                    # todo wrapper
-                    large_side = max(batch["image"].shape[2:])
-                    padding_tuple = [
-                        # todo check if correct for symmetry
-                        ((large_side - s) // 2, (large_side - s) // 2)
-                        for s in batch["image"].shape[2:]
-                    ]
-                    padding = [i for sub in padding_tuple for i in sub][::-1]
-
-                    batch["image"] = torch.nn.functional.pad(
-                        batch["image"], padding, mode="constant"
-                    )
                     out = self.model.forward(batch["image"], convolve=convolve)
 
-                    crop = [
-                        slice(p[0], s - p[1])
-                        for p, s in zip(padding_tuple, batch["image"].shape[2:])
-                    ]
-                    crop = [slice(None)] * 2 + crop
+                for k in out.keys():
+                    out[k] = self.resizer.after(out[k])
 
-                    out[key] = out[key][crop]
                 out_raw = out[key] * batch["std"] + batch["mean"]
 
             out_raw = {"image": np.moveaxis(out_raw.detach().cpu().numpy(), 1, -1)}
@@ -113,7 +100,8 @@ class Evaluator(object):
             outputs.append(out_raw)
             iterator.set_postfix(
                 {
-                    "shape": out_raw["image"].shape,
+                    "inp": tuple(batch["image"].shape),
+                    "out": out_raw["image"].shape,
                     "reserved": torch.cuda.memory_reserved(0) / (1024 ** 2),
                     "allocated": torch.cuda.memory_allocated(0) / (1024 ** 2),
                 }

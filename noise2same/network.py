@@ -321,6 +321,7 @@ class UNet(nn.Module):
         self.decoding_block_sizes = decoding_block_sizes
         self.downsampling = downsampling
         self.skip_method = skip_method
+        self.ffc = ffc
         print(f"Use {self.skip_method} skip method")
 
         if ffc:
