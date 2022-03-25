@@ -64,11 +64,13 @@ def main(cfg: DictConfig) -> None:
     )
 
     # Run evaluation
-    half = getattr(cfg, "amp", False)
+    half = getattr(cfg.training, "amp", False)
     masked = getattr(cfg, "masked", False)
     evaluator = Evaluator(mdl, checkpoint_path=checkpoint_path, masked=masked)
     if cfg.name in ("bsd68", "hanzi", "imagenet"):
-        predictions = evaluator.inference(loader, half=half)
+        predictions = evaluator.inference(
+            loader, half=half
+        )
     elif cfg.name in ("microtubules",):
         predictions = evaluator.inference_single_image_dataset(
             dataset, half=half, batch_size=1
@@ -103,7 +105,9 @@ def main(cfg: DictConfig) -> None:
         ]
     elif cfg.name in ("hanzi",):
         scores = [
-            util.calculate_scores(gtx * 255, pred, data_range=255, scale=True)
+            util.calculate_scores(
+                gtx * 255, pred, data_range=255, scale=True, clip=True
+            )
             for gtx, pred in zip(ground_truth, predictions["image"])
         ]
     elif cfg.name in ("imagenet",):
@@ -114,6 +118,7 @@ def main(cfg: DictConfig) -> None:
                 data_range=255,
                 scale=True,
                 multichannel=True,
+                clip=True,
             )
             for gtx, pred in zip(ground_truth, predictions["image"])
         ]
