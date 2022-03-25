@@ -3,11 +3,13 @@ from typing import Any, List, Optional, Tuple, Union
 
 import albumentations as albu
 import numpy as np
+import torch
 from albumentations import Compose
 from numpy.random.mtrand import normal, uniform
 from scipy.signal import convolve, convolve2d
 from skimage.exposure import rescale_intensity
 from skimage.util import random_noise
+from torch.nn import functional as F
 
 from noise2same.dataset import transforms as t3d
 from noise2same.psf.microscope_psf import SimpleMicroscopePSF
@@ -101,12 +103,17 @@ class PadAndCropResizer(object):
     """
 
     def __init__(
-        self, mode: str = "reflect", div_n: Optional[int] = None, **kwargs: Any
+        self,
+        mode: str = "reflect",
+        div_n: Optional[int] = None,
+        square: bool = False,
+        **kwargs: Any,
     ):
         self.mode = mode
         self.kwargs = kwargs
         self.pad = None
         self.div_n = div_n
+        self.square = square
 
     def _normalize_exclude(self, exclude: Ints, n_dim: int):
         """Return normalized list of excluded axes."""
@@ -120,7 +127,12 @@ class PadAndCropResizer(object):
         )
         return exclude_list
 
-    def before(self, x: np.ndarray, div_n: int = None, exclude: Ints = None):
+    def before(
+        self,
+        x: Union[np.ndarray, torch.Tensor],
+        div_n: int = None,
+        exclude: Ints = None,
+    ):
         def _split(v):
             a = v // 2
             return a, v - a
@@ -130,21 +142,51 @@ class PadAndCropResizer(object):
         assert div_n is not None
 
         exclude = self._normalize_exclude(exclude, x.ndim)
+
+        max_s = max(x.shape)
+        max_s = max_s + (div_n - max_s % div_n) % div_n
+
         self.pad = [
-            _split((div_n - s % div_n) % div_n) if (i not in exclude) else (0, 0)
+            _split((max_s - s) if self.square else (div_n - s % div_n) % div_n)
+            if (i not in exclude)
+            else (0, 0)
             for i, s in enumerate(x.shape)
         ]
-        x_pad = np.pad(x, self.pad, mode=self.mode, **self.kwargs)
-        for i in exclude:
-            del self.pad[i]
+
+        x_pad = x
+        if np.sum(self.pad) != 0:
+            if isinstance(x, np.ndarray):
+                x_pad = np.pad(x, self.pad, mode=self.mode, **self.kwargs)
+            elif isinstance(x, torch.Tensor):
+                # todo more elegant way to exclude for torch tensors (e.g. can exclude batch and channel by default)
+                pad = [
+                    p
+                    for i, pt in enumerate(self.pad)
+                    for p in pt
+                    if i not in exclude
+                ][::-1]
+                try:
+                    x_pad = F.pad(x, pad, mode=self.mode, **self.kwargs)
+                except NotImplementedError as e:
+                    print(f"Padding {pad} failed for shape {x.shape}")
+                    raise e
+            else:
+                raise TypeError("x must be ndarray or torch.Tensor")
+
+        if self.square:
+            for i, s in enumerate(x_pad.shape):
+                if i not in exclude:
+                    assert (
+                        s == max_s
+                    ), f"Shape {x_pad.shape} is not square with s_{i}={s} != max_s={max_s}\nPadding {self.pad} failed"
+
         return x_pad
 
-    def after(self, x: np.ndarray, exclude: Ints = None):
+    def after(self, x: np.ndarray):
+        if np.sum(self.pad) == 0:
+            return x
 
-        pads = self.pad[: len(x.shape)]  # ?
-        crop = [slice(p[0], -p[1] if p[1] > 0 else None) for p in self.pad]
-        for i in self._normalize_exclude(exclude, x.ndim):
-            crop.insert(i, slice(None))
+        crop = [slice(left, -right if right > 0 else None) for left, right in self.pad]
         len(crop) == x.ndim or _raise(ValueError())
         return x[tuple(crop)]
 
