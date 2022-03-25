@@ -82,6 +82,7 @@ def calculate_scores(
     multichannel: bool = False,
     prefix: str = "",
     calculate_mi: bool = False,
+    crop: bool = False,
 ) -> Dict[str, float]:
     """
     Calculates image reconstruction metrics
@@ -94,10 +95,13 @@ def calculate_scores(
     :param multichannel: If True, treat the last dimension of the array as channels for SSIM. Similarity
         calculations are done independently for each channel then averaged.
     :param prefix: str, prefix for metric names
-    :param calculate_mi: bool, calculate mutual information and spectral mutal information
+    :param calculate_mi: bool, calculate mutual information and spectral mutual information
+    :param crop: bool, crop x to the gt size
     :return:
     """
-    x_ = crop_as(x, gt)
+    x_ = x
+    if crop:
+        x_ = crop_as(x, gt)
     assert gt.shape == x_.shape, f"Different shapes {gt.shape}, {x_.shape}"
     if scale:
         x_ = normalize_zero_one(x_) * data_range

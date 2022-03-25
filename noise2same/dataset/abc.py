@@ -27,7 +27,7 @@ class AbstractNoiseDataset(Dataset, ABC):
 
     path: Union[Path, str]
     mask_percentage: float = 0.5
-    pad_divisor: int = 8
+    pad_divisor: int = 8  # todo remove
     channel_last: bool = True
     standardize: bool = True
     standardize_by_channel: bool = False
@@ -176,12 +176,12 @@ class AbstractNoiseDataset2D(AbstractNoiseDataset, ABC):
 
     def _get_post_transforms(self) -> List[BasicTransform]:
         return [
-            albu.PadIfNeeded(
-                min_height=None,
-                min_width=None,
-                pad_height_divisor=self.pad_divisor,
-                pad_width_divisor=self.pad_divisor,
-            ),
+            # albu.PadIfNeeded(
+            #     min_height=None,
+            #     min_width=None,
+            #     pad_height_divisor=self.pad_divisor,
+            #     pad_width_divisor=self.pad_divisor,
+            # ),
             ToTensorV2(transpose_mask=True),
         ]
 

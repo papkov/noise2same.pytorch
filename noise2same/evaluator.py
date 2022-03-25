@@ -231,7 +231,7 @@ class Evaluator(object):
 
         image = self.resizer.before(image, exclude=0)[None, ...]
         out = self.model(image.to(self.device)).detach().cpu()
-        out = self.resizer.after(out[0], exclude=0)
+        out = self.resizer.after(out[0])
         out = out * im_std + im_mean
 
         return out
