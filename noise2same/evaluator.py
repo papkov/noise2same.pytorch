@@ -71,9 +71,10 @@ class Evaluator(object):
         for i, batch in enumerate(iterator):
             batch["image"] = self.resizer.before(batch["image"], exclude=(0, 1))
 
-            batch = {k: v.to(self.device) for k, v in batch.items()}
             start = time.time()
             with autocast(enabled=half):
+                batch = {k: v.to(self.device) for k, v in batch.items()}
+
                 if self.masked:
                     # TODO remove randomness
                     # idea: use the same mask for all images? mask as tta?
@@ -174,10 +175,11 @@ class Evaluator(object):
                 batch["crop"] = batch["crop"][None, ...]
 
             # We don't need move to device for `crop`
-            batch = {
-                k: v.to(self.device) if k != "crop" else v for k, v in batch.items()
-            }
             with autocast(enabled=half):
+                batch = {
+                    k: v.to(self.device) if k != "crop" else v for k, v in batch.items()
+                }
+
                 pred_batch = (
                     self.model.forward(batch["image"], convolve=convolve)[key]
                     * batch["std"]
@@ -207,6 +209,7 @@ class Evaluator(object):
         standardize: bool = True,
         im_mean: Optional[float] = None,
         im_std: Optional[float] = None,
+        half: bool = False,
     ) -> torch.Tensor:
         """
         Run inference for a single image represented as Dataset
@@ -215,6 +218,7 @@ class Evaluator(object):
         :param standardize: bool, if subtract mean and divide by std
         :param im_mean: float, precalculated image mean
         :param im_std: float, precalculated image std
+        :param half: bool, if use half precision
         :return: torch.Tensor
         """
 
@@ -230,7 +234,8 @@ class Evaluator(object):
         image = (image - im_mean) / im_std
 
         image = self.resizer.before(image, exclude=0)[None, ...]
-        out = self.model(image.to(self.device)).detach().cpu()
+        with autocast(enabled=half):
+            out = self.model(image.to(self.device)).detach().cpu()
         out = self.resizer.after(out[0])
         out = out * im_std + im_mean
 
