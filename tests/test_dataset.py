@@ -4,7 +4,7 @@ import numpy as np
 import torch
 from albumentations import PadIfNeeded
 
-from noise2same.dataset.util import mask_like_image, PadAndCropResizer
+from noise2same.dataset.util import PadAndCropResizer, mask_like_image
 from noise2same.util import crop_as
 
 
@@ -43,7 +43,6 @@ class TestDataset(unittest.TestCase):
 
 
 class TestResizer(unittest.TestCase):
-
     def test_resize_square_odd(self):
         resizer = PadAndCropResizer(div_n=2, square=True)
         tensor = torch.rand(1, 3, 63, 67)
