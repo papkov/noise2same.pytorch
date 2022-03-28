@@ -84,6 +84,19 @@ def training_augmentations_2d(crop: int = 64):
     )
 
 
+def validation_augmentations_2d(pad_divisor: int = 32):
+    return Compose(
+        [
+            albu.PadIfNeeded(
+                min_height=None,
+                min_width=None,
+                pad_height_divisor=pad_divisor,
+                pad_width_divisor=pad_divisor,
+            ),
+        ]
+    )
+
+
 def training_augmentations_3d():
     return t3d.Compose(
         [

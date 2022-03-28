@@ -1,4 +1,5 @@
 import os
+import traceback
 from pathlib import Path
 from pprint import pprint
 
@@ -153,6 +154,7 @@ def main(cfg: DictConfig) -> None:
         if not cfg.check:
             wandb.run.summary["error"] = "RuntimeError"
         print(e)
+        print(traceback.format_exc())
 
     if cfg.evaluate:
         test_dataset, ground_truth = get_test_dataset_and_gt(cfg)
