@@ -190,8 +190,10 @@ class FFC(nn.Module):
         )
 
     def forward(self, x):
-        x_l, x_g = x if type(x) is tuple else (x, 0)
-        out_xl, out_xg = 0, 0
+        device = x[0].device if isinstance(x, tuple) else x.device
+        x_l, x_g = x if type(x) is tuple else (x, torch.tensor(0, device=device))
+        out_xl = torch.tensor(0, device=device)
+        out_xg = torch.tensor(0, device=device)
 
         if self.ratio_gout != 1:
             out_xl = self.convl2l(x_l) + self.convg2l(x_g)
@@ -237,6 +239,7 @@ class FFC_BN_ACT(nn.Module):
             n_dim,
         )
 
+        # todo it works for now but it should be changed to be more explicit in initialization
         if bn_act_first:
             ratio_gout = ratio_gin
 

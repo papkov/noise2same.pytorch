@@ -8,6 +8,7 @@ import wandb
 from hydra.utils import get_original_cwd
 from omegaconf import DictConfig, OmegaConf
 from torch.utils.data import DataLoader, RandomSampler, Subset
+from torchinfo import summary
 
 import noise2same.trainer
 from noise2same import model, util
@@ -107,6 +108,11 @@ def main(cfg: DictConfig) -> None:
         skip_method=cfg.network.skip_method,
         **cfg.model,
     )
+    input_size = (cfg.training.batch_size, cfg.data.n_channels) + (
+        cfg.training.crop,
+    ) * cfg.data.n_dim
+    print(f"Model input size: {input_size}")
+    summary(mdl, input_size=input_size)
 
     # Optimization
     if cfg.optim.optimizer == "adam":
