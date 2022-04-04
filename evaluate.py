@@ -68,7 +68,9 @@ def main(cfg: DictConfig) -> None:
     masked = getattr(cfg, "masked", False)
     evaluator = Evaluator(mdl, checkpoint_path=checkpoint_path, masked=masked)
     if cfg.name in ("bsd68", "hanzi", "imagenet"):
-        predictions = evaluator.inference(loader, half=half)
+        predictions = evaluator.inference(
+            loader, half=half, empty_cache=cfg.name == "imagenet"  # slower but otherwise doesn't fit with FFC
+        )
     elif cfg.name in ("microtubules",):
         predictions = evaluator.inference_single_image_dataset(
             dataset, half=half, batch_size=1
