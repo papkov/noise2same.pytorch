@@ -10,7 +10,11 @@ from torch.utils.data import Dataset
 from tqdm.auto import tqdm
 
 from noise2same.dataset import bsd68, hanzi, imagenet, microtubules, planaria, ssi
-from noise2same.dataset.util import training_augmentations_2d, training_augmentations_3d, validation_augmentations_2d
+from noise2same.dataset.util import (
+    training_augmentations_2d,
+    training_augmentations_3d,
+    validation_augmentations_2d,
+)
 from noise2same.util import normalize_percentile
 
 
@@ -27,7 +31,9 @@ def get_dataset(cfg: DictConfig) -> Tuple[Dataset, Dataset]:
         )
         if cfg.training.validate:
             dataset_valid = bsd68.BSD68DatasetPrepared(
-                path=cwd / "data/BSD68/", mode="val", transforms=validation_augmentations_2d()
+                path=cwd / "data/BSD68/",
+                mode="val",
+                transforms=validation_augmentations_2d(),
             )
 
     elif cfg.name.lower() == "hanzi":
