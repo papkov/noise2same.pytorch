@@ -34,6 +34,7 @@ model:
   ffc: False
   regularization_key: image
   only_masked: False
+  teacher_momentum: 0
 
 training:
   steps_per_epoch: 1000

@@ -51,6 +51,7 @@ class Trainer(object):
 
         self.amp = amp
         self.scaler = GradScaler() if amp else None
+        self.step = 0
 
     def optimizer_scheduler_step(self, loss: torch.Tensor):
         """
@@ -69,6 +70,9 @@ class Trainer(object):
         if self.scheduler is not None:
             self.scheduler.step()
 
+        if self.model.teacher is not None:
+            self.model.teacher_momentum_update()
+
     def one_epoch(
         self, loader: DataLoader
     ) -> Tuple[Dict[str, float], Dict[str, np.ndarray]]:
@@ -77,6 +81,7 @@ class Trainer(object):
         total_loss = Counter()
         images = {}
         for i, batch in enumerate(iterator):
+            self.step += 1
             x = batch["image"].to(self.device)
             mask = batch["mask"].to(self.device)
             self.optimizer.zero_grad()

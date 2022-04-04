@@ -13,6 +13,8 @@ from noise2same import network
 from noise2same.contrast import PixelContrastLoss
 from noise2same.psf.psf_convolution import PSFParameter, read_psf
 
+from copy import deepcopy
+
 
 class DonutMask(nn.Module):
     def __init__(self, n_dim: int = 2, in_channels: int = 1):
@@ -78,6 +80,7 @@ class Noise2Same(nn.Module):
         regularization_key: str = "image",
         only_masked: bool = False,
         psf_fft: Union[str, bool] = "auto",
+        teacher_momentum: float = 0,
         **kwargs: Any,
     ):
         """
@@ -119,6 +122,7 @@ class Noise2Same(nn.Module):
         self.lambda_bound = lambda_bound
         self.lambda_sharp = lambda_sharp
         self.only_masked = only_masked
+        self.teacher_momentum = teacher_momentum
 
         # TODO customize with segmentation_models
         if self.arch == "unet":
@@ -161,6 +165,15 @@ class Noise2Same(nn.Module):
             for param in self.psf.parameters():
                 param.requires_grad = False
 
+        # Teacher
+        self.teacher = None
+        if teacher_momentum > 0:
+            # todo do we need a separate head for the teacher?
+            self.teacher = deepcopy(self.net)
+            self.teacher.eval()
+            for param in self.teacher.parameters():
+                param.requires_grad = False
+
     def forward_full(
         self,
         x: T,
@@ -186,7 +199,7 @@ class Noise2Same(nn.Module):
         out_mask = self.forward_masked(x, mask, convolve, crops, full_size_image)
         if self.only_masked:
             return out_mask, None
-        out_raw = self.forward(x, convolve, crops, full_size_image)
+        out_raw = self.forward(x, convolve, crops, full_size_image, teacher=self.teacher is not None)
         return out_mask, out_raw
 
     def forward_masked(
@@ -226,6 +239,7 @@ class Noise2Same(nn.Module):
         convolve: bool = True,
         crops: Optional[T] = None,
         full_size_image: Optional[T] = None,
+        teacher: bool = False,
         *args: Any,
         **kwargs: Any,
     ) -> Dict[str, T]:
@@ -235,17 +249,24 @@ class Noise2Same(nn.Module):
         :param convolve: if True, convolve the output with the PSF
         :param crops: if not None, positions of crops `x` in full size image. NB! we assume that crops do not overlap
         :param full_size_image: if not None, full size image from which `x` was taken by `crops` coordinates
+        :param teacher: if True, use teacher network for the forward pass
         :return: dictionary of outputs:
                     image - final output, always present
                     deconv - output before PSF if PSF is provided and `convolve` is True
                     proj - output features of projection head if `lambda_proj` > 0
         """
         out = {}
-        features = self.net(x)
-        out["image"] = self.head(features)
+        if teacher and self.teacher is not None:
+            with torch.no_grad():
+                features = self.teacher(x)
+                out["image"] = self.head(features)
+        else:
+            features = self.net(x)
+            out["image"] = self.head(features)
 
         if self.residual:
-            out["image"] = self.blur(x) + out["image"]
+            with torch.no_grad():
+                out["image"] = self.blur(x) + out["image"]
 
         if self.psf is not None and convolve:
             out["deconv"] = out["image"]
@@ -273,8 +294,10 @@ class Noise2Same(nn.Module):
             else:
                 # just convolve
                 out["image"] = self.psf(out["image"])
+
         if self.project_head is not None:
             out["proj"] = self.project_head(features)
+
         return out
 
     def compute_losses_from_output(
@@ -392,3 +415,20 @@ class Noise2Same(nn.Module):
             return torch.mean(torch.square(x - y))
         masked = torch.sum(mask)
         return torch.sum(torch.square(x - y) * mask) / masked
+
+    def teacher_momentum_update(self, momentum: Optional[float] = None) -> None:
+        """
+        https://github.com/microsoft/SoftTeacher/blob/d15b1c96013e480f029c56c20cbf522c719e7965/ssod/utils/hooks/mean_teacher.py
+        :param momentum: coefficient for teacher weights
+        :return:
+        """
+        if self.teacher is None:
+            raise ValueError("Teacher model is not set")
+
+        if momentum is None:
+            momentum = self.teacher_momentum
+
+        for (_, student), (_, teacher) in zip(
+                self.net.named_parameters(), self.teacher.named_parameters()
+        ):
+            teacher.data.mul_(momentum).add_(student.data, alpha=1 - momentum)
