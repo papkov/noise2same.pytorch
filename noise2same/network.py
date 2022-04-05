@@ -9,7 +9,7 @@ from torch import Tensor as T
 from torch import nn
 from torch.nn.functional import normalize
 
-from noise2same.ffc import BN_ACT_FFC, FFC
+from noise2same.ffc import BN_ACT_FFC, FFC, FFCInc
 
 
 class ProjectHead(nn.Sequential):
@@ -86,7 +86,7 @@ class ResidualUnit(nn.Module):
         n_dim: int = 2,
         kernel_size: int = 3,
         downsample: bool = False,
-        ffc: bool = False,
+        ratio_ffc: float = 0,
     ):
         super().__init__()
         self.in_channels = in_channels
@@ -94,7 +94,7 @@ class ResidualUnit(nn.Module):
         self.n_dim = n_dim
         self.kernel_size = kernel_size
         self.downsample = downsample
-        self.ffc = ffc
+        self.ffc = ratio_ffc > 0
 
         bn = nn.BatchNorm2d if n_dim == 2 else nn.BatchNorm3d
         conv = nn.Conv2d if n_dim == 2 else nn.Conv3d
@@ -105,10 +105,15 @@ class ResidualUnit(nn.Module):
 
         bn_in_channels = in_channels
         conv_shortcut = conv
-        if ffc:
+        if self.ffc:
             bn_in_channels = bn_in_channels // 2
             conv_shortcut = partial(
-                BN_ACT_FFC, n_dim=n_dim, ratio_gin=0.5, ratio_gout=0, bn_act_first=True
+                BN_ACT_FFC,
+                n_dim=n_dim,
+                ratio_gin=0.5,
+                ratio_gout=0,
+                ratio_ffc=ratio_ffc,
+                bn_act_first=True,
             )
 
         self.conv_shortcut = conv_shortcut(
@@ -122,17 +127,18 @@ class ResidualUnit(nn.Module):
 
         self.bn = bn(bn_in_channels, momentum=1 - 0.997, eps=1e-5)
 
-        if self.ffc == True:
+        if self.ffc:
             ffc_params = dict(
                 in_channels=in_channels,
                 out_channels=out_channels,
                 stride=1,
-                activation_layer=nn.ReLU,
+                activation_layer=nn.ReLU,  # TODO this should be set separately for each layer
                 enable_lfu=True,
                 kernel_size=3,
                 padding=1,
                 n_dim=n_dim,
                 bn_act_first=True,
+                ratio_ffc=ratio_ffc,
             )
             self.layers = nn.Sequential(
                 BN_ACT_FFC(**ffc_params, ratio_gin=0.5, ratio_gout=0.5),
@@ -162,10 +168,8 @@ class ResidualUnit(nn.Module):
 
     def forward(self, x: T) -> T:
 
-        if self.ffc == True:
-
+        if self.ffc:
             shortcut = self.conv_shortcut(x)[0]
-
         else:
             shortcut = x
             x = self.bn(x)
@@ -188,7 +192,7 @@ class ResidualBlock(nn.Module):
         n_dim: int = 2,
         kernel_size: int = 3,
         downsample: bool = False,
-        ffc: bool = False,
+        ratio_ffc: float = 0,
     ):
         super().__init__()
         self.in_channels = in_channels
@@ -205,7 +209,7 @@ class ResidualBlock(nn.Module):
                     out_channels=out_channels,
                     n_dim=n_dim,
                     kernel_size=kernel_size,
-                    ffc=ffc,
+                    ratio_ffc=ratio_ffc,
                     downsample=downsample if i == 0 else False,
                 )
                 for i in range(0, block_size)
@@ -225,7 +229,7 @@ class EncoderBlock(nn.Module):
         n_dim: int = 2,
         kernel_size: int = 3,
         downsampling: str = "conv",
-        ffc: bool = False,
+        ratio_ffc: float = 0,
     ):
         super().__init__()
         self.in_channels = in_channels
@@ -233,9 +237,12 @@ class EncoderBlock(nn.Module):
         self.n_dim = n_dim
         self.kernel_size = kernel_size
         self.block_size = block_size
+        self.ffc = ratio_ffc > 0
 
-        if ffc:
-            conv = partial(FFC, n_dim=n_dim, ratio_gin=0, ratio_gout=0.5)
+        if self.ffc:
+            conv = partial(
+                FFC, n_dim=n_dim, ratio_gin=0, ratio_gout=0.5, ratio_ffc=ratio_ffc
+            )
         else:
             conv = nn.Conv2d if n_dim == 2 else nn.Conv3d
 
@@ -247,6 +254,8 @@ class EncoderBlock(nn.Module):
                 kernel_size=kernel_size,
                 block_size=1,
                 downsample=True,
+                # todo ffc was not parametrized here. for a reason?
+                # ratio_ffc=ratio_ffc,
             )
         elif downsampling == "conv":
             downsampling_block = conv(
@@ -255,6 +264,8 @@ class EncoderBlock(nn.Module):
                 kernel_size=2,
                 stride=2,
                 bias=True,
+                # todo ffc was not parametrized here. for a reason?
+                # ratio_ffc=ratio_ffc,
             )
         else:
             raise ValueError("downsampling should be `res`. `conv`, `pool`")
@@ -268,7 +279,7 @@ class EncoderBlock(nn.Module):
                 block_size=block_size,
                 downsample=False,
                 kernel_size=kernel_size,
-                ffc=ffc,
+                ratio_ffc=ratio_ffc,
             ),
         )
 
@@ -289,7 +300,7 @@ class UNet(nn.Module):
         decoding_block_sizes: Tuple[int, ...] = (1, 1),
         downsampling: Tuple[str, ...] = ("conv", "conv"),
         skip_method: str = "concat",
-        ffc: bool = False,
+        ratio_ffc: float = 0,
     ):
         """
 
@@ -303,6 +314,7 @@ class UNet(nn.Module):
         :param decoding_block_sizes:
         :param downsampling:
         :param skip_method:
+        :param ratio_ffc:
         """
         super().__init__()
 
@@ -321,11 +333,13 @@ class UNet(nn.Module):
         self.decoding_block_sizes = decoding_block_sizes
         self.downsampling = downsampling
         self.skip_method = skip_method
-        self.ffc = ffc
+        self.ffc = ratio_ffc > 0
         print(f"Use {self.skip_method} skip method")
 
-        if ffc:
-            conv = partial(FFC, n_dim=n_dim, ratio_gin=0, ratio_gout=0.5)
+        if self.ffc:
+            conv = partial(
+                FFCInc, n_dim=n_dim, ratio_gin=0, ratio_gout=0.5, ratio_ffc=ratio_ffc
+            )
         else:
             conv = nn.Conv2d if n_dim == 2 else nn.Conv3d
 
@@ -349,7 +363,7 @@ class UNet(nn.Module):
                     n_dim=n_dim,
                     kernel_size=kernel_size,
                     block_size=encoding_block_sizes[0],
-                    ffc=ffc,
+                    ratio_ffc=ratio_ffc,
                 )
             ]
         )
@@ -371,7 +385,7 @@ class UNet(nn.Module):
                     kernel_size=kernel_size,
                     block_size=encoding_block_sizes[i - 1],
                     downsampling=downsampling[i - 2],
-                    ffc=ffc,
+                    ratio_ffc=ratio_ffc,
                 )
             )
 
@@ -382,7 +396,7 @@ class UNet(nn.Module):
             n_dim=n_dim,
             kernel_size=kernel_size,
             block_size=1,
-            ffc=ffc,
+            ratio_ffc=ratio_ffc,
         )
 
         # Decoder

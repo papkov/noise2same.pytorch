@@ -1,9 +1,11 @@
+from functools import partial
+
 import torch
 import torch.nn as nn
 
 
 class FFCSE_block(nn.Module):
-    def __init__(self, channels, ratio_g):
+    def __init__(self, channels: int, ratio_g: float):
         super(FFCSE_block, self).__init__()
         in_cg = int(channels * ratio_g)
         in_cl = channels - in_cg
@@ -38,7 +40,9 @@ class FFCSE_block(nn.Module):
 
 
 class FourierUnit(nn.Module):
-    def __init__(self, in_channels, out_channels, groups=1, n_dim=2):
+    def __init__(
+        self, in_channels: int, out_channels: int, groups: int = 1, n_dim: int = 2
+    ):
         # bn_layer not used
         super(FourierUnit, self).__init__()
         self.groups = groups
@@ -77,7 +81,13 @@ class FourierUnit(nn.Module):
 
 class SpectralTransform(nn.Module):
     def __init__(
-        self, in_channels, out_channels, stride=1, groups=1, enable_lfu=True, n_dim=2
+        self,
+        in_channels: int,
+        out_channels: int,
+        stride: int = 1,
+        groups: int = 1,
+        enable_lfu: bool = True,
+        n_dim: int = 2,
     ):
         # bn_layer not used
         super(SpectralTransform, self).__init__()
@@ -136,23 +146,32 @@ class SpectralTransform(nn.Module):
 class FFC(nn.Module):
     def __init__(
         self,
-        in_channels,
-        out_channels,
-        kernel_size,
-        ratio_gin,
-        ratio_gout,
-        stride=1,
-        padding=0,
-        dilation=1,
-        groups=1,
-        bias=False,
-        enable_lfu=True,
-        n_dim=2,
+        in_channels: int,
+        out_channels: int,
+        kernel_size: int,
+        ratio_gin: float,
+        ratio_gout: float,
+        stride: int = 1,
+        padding: int = 0,
+        dilation: int = 1,
+        groups: int = 1,
+        bias: bool = False,
+        enable_lfu: bool = True,
+        n_dim: int = 2,
         **kwargs
     ):
         super(FFC, self).__init__()
 
         conv = nn.Conv2d if n_dim == 2 else nn.Conv3d
+        conv = partial(
+            conv,
+            kernel_size=kernel_size,
+            stride=stride,
+            padding=padding,
+            dilation=dilation,
+            groups=groups,
+            bias=bias,
+        )
 
         assert stride == 1 or stride == 2, "Stride should be 1 or 2."
         self.stride = stride
@@ -167,17 +186,14 @@ class FFC(nn.Module):
         self.ratio_gin = ratio_gin
         self.ratio_gout = ratio_gout
 
-        module = nn.Identity if in_cl == 0 or out_cl == 0 else conv
-        self.convl2l = module(
-            in_cl, out_cl, kernel_size, stride, padding, dilation, groups, bias
+        self.convl2l = (
+            nn.Identity() if in_cl == 0 or out_cl == 0 else conv(in_cl, out_cl)
         )
-        module = nn.Identity if in_cl == 0 or out_cg == 0 else conv
-        self.convl2g = module(
-            in_cl, out_cg, kernel_size, stride, padding, dilation, groups, bias
+        self.convl2g = (
+            nn.Identity() if in_cl == 0 or out_cg == 0 else conv(in_cl, out_cg)
         )
-        module = nn.Identity if in_cg == 0 or out_cl == 0 else conv
-        self.convg2l = module(
-            in_cg, out_cl, kernel_size, stride, padding, dilation, groups, bias
+        self.convg2l = (
+            nn.Identity() if in_cg == 0 or out_cl == 0 else conv(in_cg, out_cl)
         )
         module = nn.Identity if in_cg == 0 or out_cg == 0 else SpectralTransform
         self.convg2g = module(
@@ -203,33 +219,124 @@ class FFC(nn.Module):
         return out_xl, out_xg
 
 
+class FFCInc(FFC):
+    def __init__(
+        self,
+        in_channels: int,
+        out_channels: int,
+        kernel_size: int,
+        ratio_gin: float,
+        ratio_gout: float,
+        ratio_ffc: float,
+        stride: int = 1,
+        padding: int = 0,
+        dilation: int = 1,
+        groups: int = 1,
+        bias: bool = False,
+        enable_lfu: bool = True,
+        n_dim: int = 2,
+        **kwargs
+    ):
+        ffc_out_channels = int(out_channels * ratio_ffc)
+        out_channels = out_channels - ffc_out_channels
+
+        super(FFCInc, self).__init__(
+            in_channels,
+            ffc_out_channels,
+            kernel_size,
+            ratio_gin,
+            ratio_gout,
+            stride,
+            padding,
+            dilation,
+            groups,
+            bias,
+            enable_lfu,
+            n_dim,
+            **kwargs
+        )
+        in_cg = int(in_channels * ratio_gin)
+        in_cl = in_channels - in_cg
+        out_cg = int(out_channels * ratio_gout)
+        out_cl = out_channels - out_cg
+
+        self.ratio_ffc = ratio_ffc
+        conv = nn.Conv2d if n_dim == 2 else nn.Conv3d
+        conv = partial(
+            conv,
+            kernel_size=kernel_size,
+            stride=stride,
+            padding=padding,
+            dilation=dilation,
+            groups=groups,
+            bias=bias,
+        )
+        self.convl = (
+            nn.Identity()
+            if in_cl == 0 or out_cl == 0 or ratio_ffc == 1
+            else conv(in_cl, out_cl)
+        )
+
+        self.convg = (
+            nn.Identity()
+            if in_cg == 0 or out_cg == 0 or ratio_ffc == 1
+            else conv(in_cg, out_cg)
+        )
+
+        # Redefine cross branches in case we do not have input for bypass convolutions
+        if in_cg == 0 and out_cg != 0:
+            self.convl2g = conv(in_cl, int((ffc_out_channels + out_channels) * ratio_gout))
+
+        if in_cl == 0 and out_cl != 0:
+            self.convg2l = conv(in_cg, int((ffc_out_channels + out_channels) * (1 - ratio_gout)))
+
+    def forward(self, x):
+        out_xl, out_xg = super(FFCInc, self).forward(x)
+        if self.ratio_ffc < 1:
+            device = x[0].device if isinstance(x, tuple) else x.device
+            x_l, x_g = x if type(x) is tuple else (x, torch.tensor(0, device=device))
+
+            out_xl_c = self.convl(x_l)
+            out_xg_c = self.convg(x_g)
+
+            if out_xl.ndim != 0 and out_xl_c.ndim != 0:
+                out_xl = torch.cat([out_xl_c, out_xl], dim=1)
+
+            if out_xg.ndim != 0 and out_xg_c.ndim != 0:
+                out_xg = torch.cat([out_xg_c, out_xg], dim=1)
+
+        return out_xl, out_xg
+
+
 class FFC_BN_ACT(nn.Module):
     def __init__(
         self,
-        in_channels,
-        out_channels,
-        kernel_size,
-        ratio_gin,
-        ratio_gout,
-        stride=1,
-        padding=0,
-        dilation=1,
-        groups=1,
-        bias=False,
-        activation_layer=nn.Identity,
-        enable_lfu=True,
-        n_dim=2,
-        bn_act_first=False,
+        in_channels: int,
+        out_channels: int,
+        kernel_size: int,
+        ratio_gin: float,
+        ratio_gout: float,
+        ratio_ffc: float = 1,
+        stride: int = 1,
+        padding: int = 0,
+        dilation: int = 1,
+        groups: int = 1,
+        bias: bool = False,
+        activation_layer=nn.Identity,  # TODO this is not ReLU by default!
+        enable_lfu: bool = True,
+        n_dim: int = 2,
+        bn_act_first: bool = False,
     ):
         super(FFC_BN_ACT, self).__init__()
 
         norm_layer = nn.BatchNorm2d if n_dim == 2 else nn.BatchNorm3d
-        self.ffc = FFC(
+        self.ffc = FFCInc(
             in_channels,
             out_channels,
             kernel_size,
             ratio_gin,
             ratio_gout,
+            ratio_ffc,
             stride,
             padding,
             dilation,

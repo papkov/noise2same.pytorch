@@ -31,7 +31,7 @@ model:
   noise_mean: 0
   noise_std: 0.2
   residual: False
-  ffc: False
+  ratio_ffc: 0
   regularization_key: image
   only_masked: False
 

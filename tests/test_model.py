@@ -7,9 +7,31 @@ from torch.utils.data import DataLoader, RandomSampler
 
 from noise2same import model, trainer
 from noise2same.dataset.dummy import DummyDataset3DLarge
+from noise2same.dataset.util import mask_like_image
 
 
 class ModelTestCase(unittest.TestCase):
+
+    def test_forward(self, n_dim: int = 2, device: str = "cpu"):
+        mdl = model.Noise2Same(
+            n_dim=n_dim,
+            in_channels=1,
+            base_channels=48,
+            ratio_ffc=0.5,
+        )
+        mdl.to(device)
+        mdl.train()
+
+        shape = (64, ) * n_dim + (1, )
+        x = np.random.rand(*shape).astype(np.float32)
+        mask = mask_like_image(x)
+
+        x = torch.from_numpy(np.moveaxis(x, -1, 0)[None, ...]).to(device)
+        mask = torch.from_numpy(np.moveaxis(mask, -1, 0)[None, ...]).to(device)
+
+        out_mask, out_raw = mdl.forward_full(x, mask)
+        self.assertEqual(out_mask["image"].shape, x.shape)
+
     def test_info_padding_forward_identity(
         self, psf_size: int = 9, n_dim: int = 3, device: str = "cuda"
     ):
