@@ -35,6 +35,7 @@ model:
   regularization_key: image
   only_masked: False
   teacher_momentum: 0
+  unmasked_grad: True
 
 training:
   steps_per_epoch: 1000

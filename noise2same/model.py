@@ -81,6 +81,7 @@ class Noise2Same(nn.Module):
         only_masked: bool = False,
         psf_fft: Union[str, bool] = "auto",
         teacher_momentum: float = 0,
+        unmasked_grad: bool = True,
         **kwargs: Any,
     ):
         """
@@ -123,6 +124,7 @@ class Noise2Same(nn.Module):
         self.lambda_sharp = lambda_sharp
         self.only_masked = only_masked
         self.teacher_momentum = teacher_momentum
+        self.unmasked_grad = unmasked_grad
 
         # TODO customize with segmentation_models
         if self.arch == "unet":
@@ -199,7 +201,8 @@ class Noise2Same(nn.Module):
         out_mask = self.forward_masked(x, mask, convolve, crops, full_size_image)
         if self.only_masked:
             return out_mask, None
-        out_raw = self.forward(x, convolve, crops, full_size_image, teacher=self.teacher is not None)
+        with torch.set_grad_enabled(self.unmasked_grad):
+            out_raw = self.forward(x, convolve, crops, full_size_image, teacher=self.teacher is not None)
         return out_mask, out_raw
 
     def forward_masked(
