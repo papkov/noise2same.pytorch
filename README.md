@@ -35,10 +35,10 @@ Model's outputs and scores (RMSE, PSNR, SSIM for each image) will be saved to `r
 We replicate the main results of Noise2Same (Table 3)
 []()
 
-| Dataset             | Paper                 | Ours  |  Weights |
-|---------------------|-----------------------|-------|----------|
-| BSD68               | 27.95                 | 28.11 | [Drive](https://drive.google.com/file/d/1YTlHpL-C4JaRtfp8YUiXfzppX0Tgs4lC/view?usp=sharing)|
-| HanZi               | 14.38                 | 14.83 |[Drive](https://drive.google.com/file/d/1WHd_BUqlibrDERWwzs4ReSZu2s8Ya1Y2/view?usp=sharing)|
-| ImageNet            | 22.26                 | 22.81 |[Drive](https://drive.google.com/file/d/12Rxp30DmwmYBq6ZtgnPD-SMd9u1FeRER/view?usp=sharing)|
-| Planaria (C1/C2/C3) | 29.48 / 26.93 / 22.41 | 29.14 / 27.11 / 22.80 |[Drive](https://drive.google.com/file/d/17Yz_f8RNOu7nEztSOug_1PLQFKYYj_Mf/view?usp=sharing)|
+| Dataset             | Ours (Noise2Self) | Noise2Same paper      | Ours (Noise2Same)  |  Weights |
+|---------------------|-------------------|-----------------------|-------|----------|
+| BSD68               | 26.73             | 27.95                 | 28.13 |[Drive](https://drive.google.com/file/d/1YTlHpL-C4JaRtfp8YUiXfzppX0Tgs4lC/view?usp=sharing)|
+| HanZi               |                   | 14.38                 | 14.83 |[Drive](https://drive.google.com/file/d/1WHd_BUqlibrDERWwzs4ReSZu2s8Ya1Y2/view?usp=sharing)|
+| ImageNet            |                   | 22.26                 | 22.81 |[Drive](https://drive.google.com/file/d/12Rxp30DmwmYBq6ZtgnPD-SMd9u1FeRER/view?usp=sharing)|
+| Planaria (C1/C2/C3) |                   | 29.48 / 26.93 / 22.41 | 29.14 / 27.11 / 22.80 |[Drive](https://drive.google.com/file/d/17Yz_f8RNOu7nEztSOug_1PLQFKYYj_Mf/view?usp=sharing)|
 

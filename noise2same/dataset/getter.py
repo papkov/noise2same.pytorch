@@ -9,8 +9,12 @@ from skimage import io
 from torch.utils.data import Dataset
 from tqdm.auto import tqdm
 
-from noise2same.dataset import bsd68, hanzi, imagenet, microtubules, planaria
-from noise2same.dataset.util import training_augmentations_2d, training_augmentations_3d
+from noise2same.dataset import bsd68, hanzi, imagenet, microtubules, planaria, ssi
+from noise2same.dataset.util import (
+    training_augmentations_2d,
+    training_augmentations_3d,
+    validation_augmentations_2d,
+)
 from noise2same.util import normalize_percentile
 
 
@@ -27,7 +31,9 @@ def get_dataset(cfg: DictConfig) -> Tuple[Dataset, Dataset]:
         )
         if cfg.training.validate:
             dataset_valid = bsd68.BSD68DatasetPrepared(
-                path=cwd / "data/BSD68/", mode="val"
+                path=cwd / "data/BSD68/",
+                mode="val",
+                transforms=validation_augmentations_2d(),
             )
 
     elif cfg.name.lower() == "hanzi":
@@ -44,6 +50,7 @@ def get_dataset(cfg: DictConfig) -> Tuple[Dataset, Dataset]:
                 mode="validation",
                 version=cfg.data.version,
                 noise_level=cfg.data.noise_level,
+                transforms=validation_augmentations_2d(),
             )
 
     elif cfg.name.lower() == "imagenet":
@@ -55,7 +62,10 @@ def get_dataset(cfg: DictConfig) -> Tuple[Dataset, Dataset]:
         )
         if cfg.training.validate:
             dataset_valid = imagenet.ImagenetDatasetPrepared(
-                path=cwd / "data/ImageNet", mode="val", version=cfg.data.version,
+                path=cwd / "data/ImageNet",
+                mode="val",
+                version=cfg.data.version,
+                transforms=validation_augmentations_2d(),
             )
 
     elif cfg.name.lower() == "planaria":
@@ -66,16 +76,26 @@ def get_dataset(cfg: DictConfig) -> Tuple[Dataset, Dataset]:
         )
         if cfg.training.validate:
             dataset_valid = planaria.PlanariaDatasetPrepared(
-                path=cwd / "data/Denoising_Planaria", mode="val",
+                path=cwd / "data/Denoising_Planaria",
+                mode="val",
             )
 
     elif cfg.name.lower() == "microtubules":
         dataset_train = microtubules.MicrotubulesDataset(
-            path=cfg.data.path,
+            path=cwd / cfg.data.path,
             input_name=cfg.data.input_name,
             transforms=training_augmentations_3d(),
+            tile_size=cfg.data.tile_size,
+            tile_step=cfg.data.tile_step,
+            add_blur_and_noise=cfg.data.add_blur_and_noise,
         )
 
+    elif cfg.name.lower() == "ssi":
+        dataset_train = ssi.SSIDataset(
+            path=cwd / cfg.data.path,
+            input_name=cfg.data.input_name,
+            transforms=training_augmentations_2d(crop=cfg.training.crop),
+        )
     else:
         # todo add other datasets
         raise ValueError
@@ -122,15 +142,24 @@ def get_test_dataset_and_gt(cfg: DictConfig) -> Tuple[Dataset, np.ndarray]:
 
     elif cfg.name.lower() == "microtubules":
         dataset = microtubules.MicrotubulesDataset(
-            path=cfg.data.path,
+            path=cwd / cfg.data.path,
             input_name=cfg.data.input_name,
-            tile_size=cfg.data.crop,
-            tile_step=cfg.data.crop - cfg.data.crop // 4,
+            # we can double the size of the tiles for validation
+            tile_size=cfg.data.tile_size * 2,  # 64 * 2 = 128
+            tile_step=cfg.data.tile_step * 2,  # 48 * 2 = 96
+            add_blur_and_noise=cfg.data.add_blur_and_noise,  # TODO add different noise by random seed?
         )
         # dataset.mean, dataset.std = 0, 1
 
         gt = io.imread(str(cwd / "data/microtubules-simulation/ground-truth.tif"))
         gt = normalize_percentile(gt, 0.1, 99.9)
+
+    elif cfg.name.lower() == "ssi":
+        dataset = ssi.SSIDataset(
+            path=cwd / cfg.data.path,
+            input_name=cfg.data.input_name,
+        )
+        gt = dataset.gt
     else:
         raise ValueError(f"Dataset {cfg.name} not found")
 
@@ -145,8 +174,9 @@ def get_planaria_dataset_and_gt(filename_gt: str):
         datasets[f"c{c}"] = planaria.PlanariaDatasetTiff(
             filename_gt.replace("GT", f"condition_{c}"),
             standardize=True,
-            tile_size=192,
-            tile_step=192 - 64,
+            # todo parametrize?
+            # tile_size=192,
+            # tile_step=192 - 64,
         )
         datasets[f"c{c}"].mean, datasets[f"c{c}"].std = 0, 1
 

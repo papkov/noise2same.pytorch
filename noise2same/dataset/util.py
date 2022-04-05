@@ -3,15 +3,24 @@ from typing import Any, List, Optional, Tuple, Union
 
 import albumentations as albu
 import numpy as np
+import torch
 from albumentations import Compose
+from numpy.random.mtrand import normal, uniform
+from scipy.signal import convolve, convolve2d
+from skimage.exposure import rescale_intensity
+from skimage.util import random_noise
+from torch.nn import functional as F
 
 from noise2same.dataset import transforms as t3d
+from noise2same.psf.microscope_psf import SimpleMicroscopePSF
 
 Ints = Optional[Union[int, List[int], Tuple[int, ...]]]
 
 
 def get_stratified_coords(
-    box_size: int, shape: Tuple[int, ...], resample: bool = False,
+    box_size: int,
+    shape: Tuple[int, ...],
+    resample: bool = False,
 ) -> Tuple[List[int], ...]:
     """
     Create stratified blind spot coordinates
@@ -75,6 +84,19 @@ def training_augmentations_2d(crop: int = 64):
     )
 
 
+def validation_augmentations_2d(pad_divisor: int = 32):
+    return Compose(
+        [
+            albu.PadIfNeeded(
+                min_height=None,
+                min_width=None,
+                pad_height_divisor=pad_divisor,
+                pad_width_divisor=pad_divisor,
+            ),
+        ]
+    )
+
+
 def training_augmentations_3d():
     return t3d.Compose(
         [
@@ -94,12 +116,17 @@ class PadAndCropResizer(object):
     """
 
     def __init__(
-        self, mode: str = "reflect", div_n: Optional[int] = None, **kwargs: Any
+        self,
+        mode: str = "reflect",
+        div_n: Optional[int] = None,
+        square: bool = False,
+        **kwargs: Any,
     ):
         self.mode = mode
         self.kwargs = kwargs
         self.pad = None
         self.div_n = div_n
+        self.square = square
 
     def _normalize_exclude(self, exclude: Ints, n_dim: int):
         """Return normalized list of excluded axes."""
@@ -113,7 +140,12 @@ class PadAndCropResizer(object):
         )
         return exclude_list
 
-    def before(self, x: np.ndarray, div_n: int = None, exclude: Ints = None):
+    def before(
+        self,
+        x: Union[np.ndarray, torch.Tensor],
+        div_n: int = None,
+        exclude: Ints = None,
+    ):
         def _split(v):
             a = v // 2
             return a, v - a
@@ -123,20 +155,145 @@ class PadAndCropResizer(object):
         assert div_n is not None
 
         exclude = self._normalize_exclude(exclude, x.ndim)
+
+        max_s = max(x.shape)
+        max_s = max_s + (div_n - max_s % div_n) % div_n
+
         self.pad = [
-            _split((div_n - s % div_n) % div_n) if (i not in exclude) else (0, 0)
+            _split((max_s - s) if self.square else (div_n - s % div_n) % div_n)
+            if (i not in exclude)
+            else (0, 0)
             for i, s in enumerate(x.shape)
         ]
-        x_pad = np.pad(x, self.pad, mode=self.mode, **self.kwargs)
-        for i in exclude:
-            del self.pad[i]
+
+        x_pad = x
+        if np.sum(self.pad) != 0:
+            if isinstance(x, np.ndarray):
+                x_pad = np.pad(x, self.pad, mode=self.mode, **self.kwargs)
+            elif isinstance(x, torch.Tensor):
+                # todo more elegant way to exclude for torch tensors (e.g. can exclude batch and channel by default)
+                pad = [
+                    p
+                    for i, pt in enumerate(self.pad)
+                    for p in pt[::-1]  # important for cropping odd padding
+                    if i not in exclude
+                ][::-1]
+                try:
+                    x_pad = F.pad(x, pad, mode=self.mode, **self.kwargs)
+                except NotImplementedError as e:
+                    print(f"Padding {pad} failed for shape {x.shape}")
+                    raise e
+            else:
+                raise TypeError("x must be ndarray or torch.Tensor")
+
+        if self.square:
+            for i, s in enumerate(x_pad.shape):
+                if i not in exclude:
+                    assert (
+                        s == max_s
+                    ), f"Shape {x_pad.shape} is not square with s_{i}={s} != max_s={max_s}\nPadding {self.pad} failed"
+
         return x_pad
 
-    def after(self, x: np.ndarray, exclude: Ints = None):
+    def after(self, x: Union[np.ndarray, torch.Tensor]):
+        if np.sum(self.pad) == 0:
+            return x
 
-        pads = self.pad[: len(x.shape)]  # ?
-        crop = [slice(p[0], -p[1] if p[1] > 0 else None) for p in self.pad]
-        for i in self._normalize_exclude(exclude, x.ndim):
-            crop.insert(i, slice(None))
+        crop = [slice(left, -right if right > 0 else None) for left, right in self.pad]
         len(crop) == x.ndim or _raise(ValueError())
         return x[tuple(crop)]
+
+
+# https://github.com/royerlab/ssi-code/blob/master/ssi/utils/io/datasets.py
+
+
+def normalize(image):
+    return rescale_intensity(
+        image.astype(np.float32), in_range="image", out_range=(0, 1)
+    )
+
+
+def add_poisson_gaussian_noise(
+    image,
+    alpha=5,
+    sigma=0.01,
+    sap=0.0,
+    quant_bits=8,
+    dtype=np.float32,
+    clip=True,
+    fix_seed=True,
+):
+    if fix_seed:
+        np.random.seed(0)
+    rnd = normal(size=image.shape)
+    rnd_bool = uniform(size=image.shape) < sap
+
+    noisy = image + np.sqrt(alpha * image + sigma ** 2) * rnd
+    noisy = noisy * (1 - rnd_bool) + rnd_bool * uniform(size=image.shape)
+    noisy = np.around((2 ** quant_bits) * noisy) / 2 ** quant_bits
+    noisy = np.clip(noisy, 0, 1) if clip else noisy
+    noisy = noisy.astype(dtype)
+    return noisy
+
+
+def add_noise(image, intensity=5, variance=0.01, sap=0.0, dtype=np.float32, clip=True):
+    np.random.seed(0)
+    noisy = image
+    if intensity is not None:
+        noisy = np.random.poisson(image * intensity) / intensity
+    noisy = random_noise(noisy, mode="gaussian", var=variance, seed=0, clip=clip)
+    noisy = random_noise(noisy, mode="s&p", amount=sap, seed=0, clip=clip)
+    noisy = noisy.astype(dtype)
+    return noisy
+
+
+def add_blur_2d(image, k=17, sigma=5, multi_channel=False):
+    from numpy import exp, pi, sqrt
+
+    #  generate a (2k+1)x(2k+1) gaussian kernel with mean=0 and sigma = s
+    probs = [
+        exp(-z * z / (2 * sigma * sigma)) / sqrt(2 * pi * sigma * sigma)
+        for z in range(-k, k + 1)
+    ]
+    psf_kernel = np.outer(probs, probs)
+
+    def conv(_image):
+        return convolve2d(_image, psf_kernel, mode="same").astype(np.float32)
+
+    if multi_channel:
+        image = np.moveaxis(image.copy(), -1, 0)
+        return (
+            np.moveaxis(np.stack([conv(channel) for channel in image]), 0, -1),
+            psf_kernel,
+        )
+    else:
+        return conv(image), psf_kernel
+
+
+def add_microscope_blur_2d(
+    image: np.ndarray, dz: int = 0, multi_channel: bool = False, size: int = 17
+):
+    psf = SimpleMicroscopePSF()
+    psf_xyz_array = psf.generate_xyz_psf(dxy=0.406, dz=0.406, xy_size=size, z_size=size)
+    psf_kernel = psf_xyz_array[dz]
+    psf_kernel /= psf_kernel.sum()
+
+    def conv(_image):
+        return convolve2d(_image, psf_kernel, mode="same").astype(np.float32)
+
+    if multi_channel:
+        image = np.moveaxis(image.copy(), -1, 0)
+        return (
+            np.moveaxis(np.stack([conv(channel) for channel in image]), 0, -1),
+            psf_kernel,
+        )
+    else:
+        return conv(image), psf_kernel
+
+
+def add_microscope_blur_3d(image, size: int = 17):
+    psf = SimpleMicroscopePSF()
+    psf_xyz_array = psf.generate_xyz_psf(dxy=0.406, dz=0.406, xy_size=size, z_size=size)
+    psf_kernel = psf_xyz_array
+    psf_kernel /= psf_kernel.sum()
+    return convolve(image, psf_kernel, mode="same"), psf_kernel

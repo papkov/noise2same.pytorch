@@ -3,7 +3,7 @@ import unittest
 import numpy as np
 import torch
 
-from noise2same.psf import PSF, PSFParameter
+from noise2same.psf.psf_convolution import PSF, PSFParameter
 
 
 class PSFTestCase(unittest.TestCase):

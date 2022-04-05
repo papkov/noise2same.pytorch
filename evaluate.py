@@ -25,6 +25,7 @@ def main(cfg: DictConfig) -> None:
         print("Please specify an experiment with `+experiment=name`")
         return
 
+    print(OmegaConf.to_yaml(cfg))
     os.environ["CUDA_VISIBLE_DEVICES"] = f"{cfg.device}"
 
     cwd = Path(get_original_cwd())
@@ -63,11 +64,13 @@ def main(cfg: DictConfig) -> None:
     )
 
     # Run evaluation
-    half = getattr(cfg, "amp", False)
+    half = getattr(cfg.training, "amp", False)
     masked = getattr(cfg, "masked", False)
     evaluator = Evaluator(mdl, checkpoint_path=checkpoint_path, masked=masked)
     if cfg.name in ("bsd68", "hanzi", "imagenet"):
-        predictions = evaluator.inference(loader, half=half)
+        predictions = evaluator.inference(
+            loader, half=half, empty_cache=cfg.name == "imagenet"  # slower but otherwise doesn't fit with FFC
+        )
     elif cfg.name in ("microtubules",):
         predictions = evaluator.inference_single_image_dataset(
             dataset, half=half, batch_size=1
@@ -96,18 +99,26 @@ def main(cfg: DictConfig) -> None:
     # Calculate scores
     if cfg.name in ("bsd68",):
         scores = [
-            util.calculate_scores(gtx, pred, data_range=255)
+            # todo check how clip affects the score
+            util.calculate_scores(gtx, pred, data_range=255, clip=True)
             for gtx, pred in zip(ground_truth, predictions["image"])
         ]
     elif cfg.name in ("hanzi",):
         scores = [
-            util.calculate_scores(gtx * 255, pred, data_range=255, scale=True)
+            util.calculate_scores(
+                gtx * 255, pred, data_range=255, scale=True, clip=True
+            )
             for gtx, pred in zip(ground_truth, predictions["image"])
         ]
     elif cfg.name in ("imagenet",):
         scores = [
             util.calculate_scores(
-                gtx, pred, data_range=255, scale=True, multichannel=True,
+                gtx,
+                pred,
+                data_range=255,
+                scale=True,
+                multichannel=True,
+                clip=True,
             )
             for gtx, pred in zip(ground_truth, predictions["image"])
         ]

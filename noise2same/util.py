@@ -7,12 +7,13 @@ import numpy as np
 import torch
 from matplotlib import pyplot as plt
 from numpy import ndarray
+from numpy.linalg import norm
+from scipy.fft import dct
 from skimage.metrics import (
     mean_squared_error,
     peak_signal_noise_ratio,
     structural_similarity,
 )
-from torch.nn import Module
 
 
 def clean_plot(ax: np.ndarray) -> None:
@@ -77,7 +78,11 @@ def calculate_scores(
     data_range: float = 1.0,
     normalize_pairs: bool = False,
     scale: bool = False,
+    clip: bool = False,
     multichannel: bool = False,
+    prefix: str = "",
+    calculate_mi: bool = False,
+    crop: bool = False,
 ) -> Dict[str, float]:
     """
     Calculates image reconstruction metrics
@@ -86,24 +91,44 @@ def calculate_scores(
     :param data_range: The data range of the input image, 1 by default (0-1 normalized images)
     :param normalize_pairs: bool, normalize and affinely scale pairs gt-x (needed for Planaria dataset)
     :param scale: bool, scale images by min and max (needed for Imagenet dataset)
+    :param clip: bool, clip an image to [0, data_range]
     :param multichannel: If True, treat the last dimension of the array as channels for SSIM. Similarity
         calculations are done independently for each channel then averaged.
+    :param prefix: str, prefix for metric names
+    :param calculate_mi: bool, calculate mutual information and spectral mutual information
+    :param crop: bool, crop x to the gt size
     :return:
     """
-    x_ = crop_as(x, gt)
+    x_ = x
+    if crop:
+        x_ = crop_as(x, gt)
     assert gt.shape == x_.shape, f"Different shapes {gt.shape}, {x_.shape}"
     if scale:
         x_ = normalize_zero_one(x_) * data_range
     if normalize_pairs:
         gt, x_ = normalize_min_mse(gt, x_)
+    if clip:
+        x_ = np.clip(x_, 0, data_range)
+
+    if prefix:
+        prefix += "."
 
     metrics = {
-        "rmse": np.sqrt(mean_squared_error(gt, x_)),
-        "psnr": peak_signal_noise_ratio(gt, x_, data_range=data_range),
-        "ssim": structural_similarity(
+        prefix + "rmse": np.sqrt(mean_squared_error(gt, x_)),
+        prefix + "psnr": peak_signal_noise_ratio(gt, x_, data_range=data_range),
+        prefix
+        + "ssim": structural_similarity(
             gt, x_, data_range=data_range, multichannel=multichannel
         ),
     }
+
+    if calculate_mi:
+        metrics.update(
+            {
+                prefix + "mi": mutual_information(gt, x_),
+                prefix + "smi": spectral_mutual_information(gt, x_),
+            }
+        )
 
     return metrics
 
@@ -170,6 +195,13 @@ def normalize_percentile(
 
 
 normalize_zero_one = partial(normalize_percentile, p_min=0, p_max=100, clip=True)
+
+
+def normalize_zero_one_dict(images: Dict[str, np.ndarray]) -> Dict[str, np.ndarray]:
+    """
+    Normalizes all images in the given dictionary to the range [0, 1].
+    """
+    return {k: normalize_zero_one(v) for k, v in images.items()}
 
 
 def normalize_min_mse(gt: np.ndarray, x: np.ndarray, normalize_gt: bool = True):
@@ -277,3 +309,93 @@ def load_checkpoint_to_module(module, checkpoint_path: str):
             print(
                 f"Attribute {attr} is present in the checkpoint but absent in the class, do not load"
             )
+
+
+def detach_to_np(
+    images: Dict[str, torch.Tensor], mean: torch.Tensor, std: torch.Tensor
+) -> Dict[str, torch.Tensor]:
+    """
+    Detaches and denormalizes all tensors in the given dictionary, then converts to np.array.
+    """
+    return {
+        k: np.moveaxis(
+            (v.detach().cpu() * std + mean).numpy(),
+            1,
+            -1,
+        )
+        for k, v in images.items()
+    }
+
+
+# Metrics from SSI
+def spectral_mutual_information(image_a, image_b, normalised=True):
+    norm_image_a = image_a / norm(image_a.flatten(), 2)
+    norm_image_b = image_b / norm(image_b.flatten(), 2)
+
+    dct_norm_true_image = dct(dct(norm_image_a, axis=0), axis=1)
+    dct_norm_test_image = dct(dct(norm_image_b, axis=0), axis=1)
+
+    return mutual_information(
+        dct_norm_true_image, dct_norm_test_image, normalised=normalised
+    )
+
+
+def mutual_information(image_a, image_b, bins=256, normalised=True):
+    image_a = image_a.flatten()
+    image_b = image_b.flatten()
+
+    c_xy = np.histogram2d(image_a, image_b, bins)[0]
+    mi = mutual_info_from_contingency(c_xy)
+    mi = mi / joint_entropy_from_contingency(c_xy) if normalised else mi
+    return mi
+
+
+def joint_entropy_from_contingency(contingency):
+    # coordinates of non-zero entries in contingency table:
+    nzx, nzy = np.nonzero(contingency)
+
+    # non zero values:
+    nz_val = contingency[nzx, nzy]
+
+    # sum of all values in contingency table:
+    contingency_sum = contingency.sum()
+
+    # normalised contingency, i.e. probability:
+    p = nz_val / contingency_sum
+
+    # log contingency:
+    log_p = np.log2(p)
+
+    # Joint entropy:
+    joint_entropy = -p * log_p
+
+    return joint_entropy.sum()
+
+
+def mutual_info_from_contingency(contingency):
+    # cordinates of non-zero entries in contingency table:
+    nzx, nzy = np.nonzero(contingency)
+
+    # non zero values:
+    nz_val = contingency[nzx, nzy]
+
+    # sum of all values in contingnecy table:
+    contingency_sum = contingency.sum()
+
+    # marginals:
+    pi = np.ravel(contingency.sum(axis=1))
+    pj = np.ravel(contingency.sum(axis=0))
+
+    #
+    log_contingency_nm = np.log2(nz_val)
+    contingency_nm = nz_val / contingency_sum
+    # Don't need to calculate the full outer product, just for non-zeroes
+    outer = pi.take(nzx).astype(np.int64, copy=False) * pj.take(nzy).astype(
+        np.int64, copy=False
+    )
+    log_outer = -np.log2(outer) + np.log2(pi.sum()) + np.log2(pj.sum())
+    mi = (
+        contingency_nm * (log_contingency_nm - np.log2(contingency_sum))
+        + contingency_nm * log_outer
+    )
+    return mi.sum()

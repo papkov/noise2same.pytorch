@@ -11,19 +11,11 @@ from tqdm import tqdm, trange
 
 from noise2same.evaluator import Evaluator
 from noise2same.model import Noise2Same
-from noise2same.util import load_checkpoint_to_module
-
-
-def detach_to_np(
-    images: Dict[str, torch.Tensor], mean: torch.Tensor, std: torch.Tensor
-) -> Dict[str, torch.Tensor]:
-    """
-    Detaches and denormalizes all tensors in the given dictionary, then converts to np.array.
-    """
-    return {
-        k: np.moveaxis((v.detach().cpu() * std + mean).numpy(), 1, -1,)
-        for k, v in images.items()
-    }
+from noise2same.util import (
+    detach_to_np,
+    load_checkpoint_to_module,
+    normalize_zero_one_dict,
+)
 
 
 class Trainer(object):
@@ -38,6 +30,7 @@ class Trainer(object):
         check: bool = False,
         wandb_log: bool = True,
         amp: bool = False,
+        info_padding: bool = False,
     ):
 
         self.model = model
@@ -50,6 +43,7 @@ class Trainer(object):
         if check:
             wandb_log = False
         self.wandb_log = wandb_log
+        self.info_padding = info_padding
 
         self.model.to(device)
         self.checkpoint_path.mkdir(parents=True, exist_ok=False)
@@ -89,10 +83,39 @@ class Trainer(object):
 
             # todo gradient accumulation
             with autocast(enabled=self.amp):
-                out_mask, out_raw = self.model.forward_full(x, mask)
+                if self.info_padding:
+                    # provide full size image to avoid zero padding
+                    padding = [
+                        (b, a)
+                        for b, a in zip(
+                            loader.dataset.tiler.margin_start,
+                            loader.dataset.tiler.margin_end,
+                        )
+                    ] + [(0, 0)]
+                    full_size_image = np.pad(loader.dataset.image, padding)
+                    full_size_image = torch.from_numpy(
+                        np.moveaxis(full_size_image, -1, 0)
+                    ).to(self.device)
+                    out_mask, out_raw = self.model.forward_full(
+                        x, mask, crops=batch["crop"], full_size_image=full_size_image
+                    )
+                else:
+                    out_mask, out_raw = self.model.forward_full(x, mask)
+
                 loss, loss_log = self.model.compute_losses_from_output(
                     x, mask, out_mask, out_raw
                 )
+
+                reg_loss, reg_loss_log = self.model.compute_regularization_loss(
+                    out_mask if out_raw is None else out_raw,
+                    mean=batch["mean"].to(self.device),
+                    std=batch["std"].to(self.device),
+                    max_value=x.max(),
+                )
+
+                if reg_loss_log:
+                    loss += reg_loss
+                    loss_log.update(reg_loss_log)
 
             self.optimizer_scheduler_step(loss)
             total_loss += loss_log
@@ -101,13 +124,23 @@ class Trainer(object):
             if self.check and i > 3:
                 break
 
+            # Log last batch of images
             if i == len(iterator) - 1 or (self.check and i == 3):
                 images = {
                     "input": x,
                     "out_mask": out_mask["image"],
-                    "out_raw": out_raw["image"],
                 }
+
+                if out_raw is not None:
+                    images["out_raw"] = out_raw["image"]
+
+                if "deconv" in out_mask:
+                    images["out_mask_deconv"] = out_mask["deconv"]
+                if out_raw is not None and "deconv" in out_raw:
+                    images["out_raw_deconv"] = out_raw["deconv"]
+
                 images = detach_to_np(images, mean=batch["mean"], std=batch["std"])
+                images = normalize_zero_one_dict(images)
 
         total_loss = {k: v / len(loader) for k, v in total_loss.items()}
         if self.scheduler is not None:
@@ -142,17 +175,18 @@ class Trainer(object):
                     "val_out_raw": out_raw,
                 }
                 images = detach_to_np(images, mean=batch["mean"], std=batch["std"])
+                images = normalize_zero_one_dict(images)
 
         return {"val_rec_mse": total_loss / len(loader)}, images
 
-    def inference(self, **kwargs: Any):
-        return self.evaluator.inference(**kwargs)
+    def inference(self, *args: Any, **kwargs: Any):
+        return self.evaluator.inference(*args, **kwargs)
 
-    def inference_single_image_dataset(self, **kwargs: Any):
-        return self.evaluator.inference_single_image_dataset(**kwargs)
+    def inference_single_image_dataset(self, *args: Any, **kwargs: Any):
+        return self.evaluator.inference_single_image_dataset(*args, **kwargs)
 
-    def inference_single_image_tensor(self, **kwargs: Any):
-        return self.evaluator.inference_single_image_tensor(**kwargs)
+    def inference_single_image_tensor(self, *args: Any, **kwargs: Any):
+        return self.evaluator.inference_single_image_tensor(*args, **kwargs)
 
     def fit(
         self,
@@ -230,5 +264,5 @@ class Trainer(object):
 
     def load_model(self, path: Optional[str] = None):
         if path is None:
-            path = self.checkpoint_path
+            path = self.checkpoint_path / "model.pth"
         load_checkpoint_to_module(self, path)

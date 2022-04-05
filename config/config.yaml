@@ -1,11 +1,12 @@
 hydra:
   run:
-    dir: results/${name}/checkis${check}/${hydra.job.name}/${now:%Y-%m-%d_%H-%M-%S}
+    dir: results/${name}/${hydra.job.name}/${now:%Y-%m-%d_%H-%M-%S}
 
 project: noise2same
-device: 2
+device: 0
 seed: 56
 check: False
+evaluate: False
 
 network:
   base_channels: 96
@@ -17,14 +18,22 @@ network:
   skip_method: concat
 
 model:
+  lambda_rec: 1
+  lambda_bsp: 0
   lambda_inv: 2
+  lambda_inv_deconv: 0
   lambda_proj: 0
+  lambda_bound: 0
+  lambda_sharp: 0
+  masked_inv_deconv: True
   mask_percentage: 0.5
   masking: gaussian
   noise_mean: 0
   noise_std: 0.2
   residual: False
-  ffc: True
+  ffc: False
+  regularization_key: image
+  only_masked: False
 
 training:
   steps_per_epoch: 1000
@@ -35,6 +44,7 @@ training:
   validate: True
   monitor: val_rec_mse
   amp: True
+  info_padding: False
 
 data:
   n_dim: 2

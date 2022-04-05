@@ -27,7 +27,7 @@ class AbstractNoiseDataset(Dataset, ABC):
 
     path: Union[Path, str]
     mask_percentage: float = 0.5
-    pad_divisor: int = 8
+    pad_divisor: int = 8  # todo remove
     channel_last: bool = True
     standardize: bool = True
     standardize_by_channel: bool = False
@@ -59,10 +59,13 @@ class AbstractNoiseDataset(Dataset, ABC):
             raise ValueError("Validation failed")
 
         self.path = Path(self.path)
-        assert self.path.is_dir() or self.path.suffix in (
+        if not self.path.is_dir() and self.path.suffix not in (
             ".tif",
             ".tiff",
-        ), f"Incorrect path, {self.path} not a dir"
+        ):
+            raise ValueError(
+                f"Incorrect path, {self.path} not a dir and {self.path.suffix} is not TIF "
+            )
 
         self.images = self._get_images()
         if not isinstance(self.transforms, list):
@@ -173,12 +176,12 @@ class AbstractNoiseDataset2D(AbstractNoiseDataset, ABC):
 
     def _get_post_transforms(self) -> List[BasicTransform]:
         return [
-            albu.PadIfNeeded(
-                min_height=None,
-                min_width=None,
-                pad_height_divisor=self.pad_divisor,
-                pad_width_divisor=self.pad_divisor,
-            ),
+            # albu.PadIfNeeded(
+            #     min_height=None,
+            #     min_width=None,
+            #     pad_height_divisor=self.pad_divisor,
+            #     pad_width_divisor=self.pad_divisor,
+            # ),
             ToTensorV2(transpose_mask=True),
         ]
 
@@ -231,6 +234,7 @@ class AbstractNoiseDataset3DLarge(AbstractNoiseDataset3D, ABC):
         ret = self._apply_transforms(image.astype(np.float32), mask)
         # standardization/normalization step removed since we process the full-sized image
         ret["mean"], ret["std"] = (
+            # TODO can rewrite just for self.mean and std?
             torch.tensor(self.mean if self.standardize else 0).view(1, 1, 1, 1),
             torch.tensor(self.std if self.standardize else 1).view(1, 1, 1, 1),
         )

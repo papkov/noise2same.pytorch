@@ -1,6 +1,7 @@
 # translated from
 # https://github.com/divelab/Noise2Same/blob/main/network.py
 # https://github.com/divelab/Noise2Same/blob/main/resnet_module.py
+from functools import partial
 from typing import Tuple
 
 import torch
@@ -8,7 +9,7 @@ from torch import Tensor as T
 from torch import nn
 from torch.nn.functional import normalize
 
-from noise2same.ffc import FFC_BN_ACT
+from noise2same.ffc import BN_ACT_FFC, FFC
 
 
 class ProjectHead(nn.Sequential):
@@ -101,8 +102,16 @@ class ResidualUnit(nn.Module):
 
         self.act = nn.ReLU(inplace=True)
         # todo parametrize as in the original repo (bn momentum is inverse)
-        self.bn = bn(in_channels, momentum=1 - 0.997, eps=1e-5)
-        self.conv_shortcut = conv(
+
+        bn_in_channels = in_channels
+        conv_shortcut = conv
+        if ffc:
+            bn_in_channels = bn_in_channels // 2
+            conv_shortcut = partial(
+                BN_ACT_FFC, n_dim=n_dim, ratio_gin=0.5, ratio_gout=0, bn_act_first=True
+            )
+
+        self.conv_shortcut = conv_shortcut(
             in_channels=in_channels,
             out_channels=out_channels,
             kernel_size=1,
@@ -110,6 +119,9 @@ class ResidualUnit(nn.Module):
             stride=stride,
             bias=False,
         )
+
+        self.bn = bn(bn_in_channels, momentum=1 - 0.997, eps=1e-5)
+
         if self.ffc == True:
             ffc_params = dict(
                 in_channels=in_channels,
@@ -120,10 +132,11 @@ class ResidualUnit(nn.Module):
                 kernel_size=3,
                 padding=1,
                 n_dim=n_dim,
+                bn_act_first=True,
             )
             self.layers = nn.Sequential(
-                FFC_BN_ACT(**ffc_params, ratio_gin=0.5, ratio_gout=0.5),
-                FFC_BN_ACT(**ffc_params, ratio_gin=0.5, ratio_gout=0),
+                BN_ACT_FFC(**ffc_params, ratio_gin=0.5, ratio_gout=0.5),
+                BN_ACT_FFC(**ffc_params, ratio_gin=0.5, ratio_gout=0),
             )
         else:
             self.layers = nn.Sequential(
@@ -148,14 +161,18 @@ class ResidualUnit(nn.Module):
             )
 
     def forward(self, x: T) -> T:
-        shortcut = x
-        x = self.bn(x)
-        x = self.act(x)
-        if self.in_channels != self.out_channels or self.downsample:
-            shortcut = self.conv_shortcut(x)
-        # x = (x,x)
+
         if self.ffc == True:
-            x = torch.tensor_split(x, 2, dim=1)
+
+            shortcut = self.conv_shortcut(x)[0]
+
+        else:
+            shortcut = x
+            x = self.bn(x)
+            x = self.act(x)
+            if self.in_channels != self.out_channels or self.downsample:
+                shortcut = self.conv_shortcut(x)
+
         x = self.layers(x)
         if type(x) == tuple:
             x = x[0]
@@ -217,7 +234,10 @@ class EncoderBlock(nn.Module):
         self.kernel_size = kernel_size
         self.block_size = block_size
 
-        conv = nn.Conv2d if n_dim == 2 else nn.Conv3d
+        if ffc:
+            conv = partial(FFC, n_dim=n_dim, ratio_gin=0, ratio_gout=0.5)
+        else:
+            conv = nn.Conv2d if n_dim == 2 else nn.Conv3d
 
         if downsampling == "res":
             downsampling_block = ResidualBlock(
@@ -253,7 +273,8 @@ class EncoderBlock(nn.Module):
         )
 
     def forward(self, x: T) -> T:
-        return self.block(x)
+        x = self.block(x)
+        return x
 
 
 class UNet(nn.Module):
@@ -300,9 +321,14 @@ class UNet(nn.Module):
         self.decoding_block_sizes = decoding_block_sizes
         self.downsampling = downsampling
         self.skip_method = skip_method
+        self.ffc = ffc
         print(f"Use {self.skip_method} skip method")
 
-        conv = nn.Conv2d if n_dim == 2 else nn.Conv3d
+        if ffc:
+            conv = partial(FFC, n_dim=n_dim, ratio_gin=0, ratio_gout=0.5)
+        else:
+            conv = nn.Conv2d if n_dim == 2 else nn.Conv3d
+
         conv_transpose = nn.ConvTranspose2d if n_dim == 2 else nn.ConvTranspose3d
 
         self.conv_first = conv(

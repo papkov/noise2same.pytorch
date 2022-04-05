@@ -1,3 +1,4 @@
+import time
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
@@ -39,54 +40,54 @@ class Evaluator(object):
         self.model.to(device)
 
         self.resizer = PadAndCropResizer(
-            mode="reflect", div_n=2 ** self.model.net.depth
+            mode="reflect" if model.n_dim == 2 else "replicate",
+            div_n=2 ** self.model.net.depth,
+            square=self.model.net.ffc,
         )
 
     @torch.no_grad()
     def inference(
-        self, loader: DataLoader, half: bool = False, empty_cache: bool = False
+        self,
+        loader: DataLoader,
+        half: bool = False,
+        empty_cache: bool = False,
+        convolve: bool = False,
+        key: str = "image",
     ) -> List[Dict[str, np.ndarray]]:
         """
         Run inference for a given dataloader
         :param loader: DataLoader
         :param half: bool, if use half precision
         :param empty_cache: bool, if empty CUDA cache after each iteration
+        :param convolve: bool, if convolve the output with a PSF
+        :param key: str, key to use for the output [image, deconv]
         :return: List[Dict[key, output]]
         """
         self.model.eval()
 
         outputs = []
         iterator = tqdm(loader, desc="inference", position=0, leave=True)
+        times = []
         for i, batch in enumerate(iterator):
-            batch = {k: v.to(self.device) for k, v in batch.items()}
+            batch["image"] = self.resizer.before(batch["image"], exclude=(0, 1))
 
+            start = time.time()
             with autocast(enabled=half):
+                batch = {k: v.to(self.device) for k, v in batch.items()}
 
                 if self.masked:
                     # TODO remove randomness
                     # idea: use the same mask for all images? mask as tta?
-                    out = self.model.forward_masked(batch["image"], batch["mask"])
-                else:
-                    large_side = max(batch["image"].shape[2:])
-                    padding_tuple = [
-                        ((large_side - s) // 2, (large_side - s) // 2)
-                        for s in batch["image"].shape[2:]
-                    ]
-                    padding = [i for sub in padding_tuple for i in sub][::-1]
-
-                    batch["image"] = torch.nn.functional.pad(
-                        batch["image"], padding, mode="constant"
+                    out = self.model.forward_masked(
+                        batch["image"], batch["mask"], convolve=convolve
                     )
-                    out = self.model.forward(batch["image"])
+                else:
+                    out = self.model.forward(batch["image"], convolve=convolve)
 
-                    crop = [
-                        slice(p[0], s - p[1])
-                        for p, s in zip(padding_tuple, batch["image"].shape[2:])
-                    ]
-                    crop = [slice(None)] * 2 + crop
+                for k in out.keys():
+                    out[k] = self.resizer.after(out[k])
 
-                    out["image"] = out["image"][crop]
-                out_raw = out["image"] * batch["std"] + batch["mean"]
+                out_raw = out[key] * batch["std"] + batch["mean"]
 
             out_raw = {"image": np.moveaxis(out_raw.detach().cpu().numpy(), 1, -1)}
             if self.model.lambda_proj > 0:
@@ -94,17 +95,23 @@ class Evaluator(object):
                     {"proj": np.moveaxis(out["proj"].detach().cpu().numpy(), 1, -1)}
                 )
 
+            end = time.time()
+            times.append(end - start)
+
             outputs.append(out_raw)
             iterator.set_postfix(
                 {
-                    "shape": out_raw["image"].shape,
+                    "inp": tuple(batch["image"].shape),
+                    "out": out_raw["image"].shape,
                     "reserved": torch.cuda.memory_reserved(0) / (1024 ** 2),
                     "allocated": torch.cuda.memory_allocated(0) / (1024 ** 2),
                 }
             )
+
             if empty_cache:
                 torch.cuda.empty_cache()
 
+        print(f"Average inference time: {np.mean(times) * 1000:.2f} ms")
         return outputs
 
     @torch.no_grad()
@@ -132,6 +139,7 @@ class Evaluator(object):
         :param half: bool, if use half precision
         :param empty_cache: bool, if empty CUDA cache after
         :param key: str, which output key to accumulate
+        :param convolve: bool, if convolve the output
         :return: numpy array, merged image
         """
         assert hasattr(dataset, "tiler"), "Dataset should have a `tiler` attribute"
@@ -167,10 +175,11 @@ class Evaluator(object):
                 batch["crop"] = batch["crop"][None, ...]
 
             # We don't need move to device for `crop`
-            batch = {
-                k: v.to(self.device) if k != "crop" else v for k, v in batch.items()
-            }
             with autocast(enabled=half):
+                batch = {
+                    k: v.to(self.device) if k != "crop" else v for k, v in batch.items()
+                }
+
                 pred_batch = (
                     self.model.forward(batch["image"], convolve=convolve)[key]
                     * batch["std"]
@@ -200,6 +209,7 @@ class Evaluator(object):
         standardize: bool = True,
         im_mean: Optional[float] = None,
         im_std: Optional[float] = None,
+        half: bool = False,
     ) -> torch.Tensor:
         """
         Run inference for a single image represented as Dataset
@@ -208,6 +218,7 @@ class Evaluator(object):
         :param standardize: bool, if subtract mean and divide by std
         :param im_mean: float, precalculated image mean
         :param im_std: float, precalculated image std
+        :param half: bool, if use half precision
         :return: torch.Tensor
         """
 
@@ -223,8 +234,9 @@ class Evaluator(object):
         image = (image - im_mean) / im_std
 
         image = self.resizer.before(image, exclude=0)[None, ...]
-        out = self.model(image.to(self.device)).detach().cpu()
-        out = self.resizer.after(out[0], exclude=0)
+        with autocast(enabled=half):
+            out = self.model(image.to(self.device)).detach().cpu()
+        out = self.resizer.after(out[0])
         out = out * im_std + im_mean
 
         return out
