@@ -122,7 +122,7 @@ class ResidualUnit(nn.Module):
 
         self.bn = bn(bn_in_channels, momentum=1 - 0.997, eps=1e-5)
 
-        if self.ffc == True:
+        if self.ffc:
             ffc_params = dict(
                 in_channels=in_channels,
                 out_channels=out_channels,
@@ -162,10 +162,8 @@ class ResidualUnit(nn.Module):
 
     def forward(self, x: T) -> T:
 
-        if self.ffc == True:
-
+        if self.ffc:
             shortcut = self.conv_shortcut(x)[0]
-
         else:
             shortcut = x
             x = self.bn(x)
