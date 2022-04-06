@@ -103,11 +103,12 @@ def main(cfg: DictConfig) -> None:
         n_dim=cfg.data.n_dim,
         in_channels=cfg.data.n_channels,
         psf=psf,
+        # todo less ugly way to parametrize psf
         psf_size=cfg.psf.psf_size if "psf" in cfg else None,
         psf_pad_mode=cfg.psf.psf_pad_mode if "psf" in cfg else None,
         psf_fft=cfg.psf.psf_fft if "psf" in cfg else None,
-        skip_method=cfg.network.skip_method,
         **cfg.model,
+        **cfg.network,
     )
     input_size = (cfg.training.batch_size, cfg.data.n_channels) + (
         cfg.training.crop,
