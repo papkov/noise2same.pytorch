@@ -286,6 +286,7 @@ class UNet(nn.Module):
         encoding_block_sizes: Tuple[int, ...] = (1, 1, 0),
         decoding_block_sizes: Tuple[int, ...] = (1, 1),
         downsampling: Tuple[str, ...] = ("conv", "conv"),
+        upsampling: Tuple[str, ...] = ("conv", "conv"),
         skip_method: str = "concat",
         ffc: bool = False,
     ):
@@ -300,7 +301,9 @@ class UNet(nn.Module):
         :param encoding_block_sizes:
         :param decoding_block_sizes:
         :param downsampling:
+        :param upsampling:
         :param skip_method:
+        :param ffc:
         """
         super().__init__()
 
@@ -309,6 +312,7 @@ class UNet(nn.Module):
         assert encoding_block_sizes[-1] == 0
         assert depth == len(decoding_block_sizes) + 1
         assert depth == len(downsampling) + 1
+        assert len(downsampling) == len(upsampling)
         assert skip_method in ["add", "concat", "cat"]
 
         self.in_channels = in_channels
@@ -390,16 +394,43 @@ class UNet(nn.Module):
             in_channels = int(base_channels * (2 ** i))
             out_channels = int(base_channels * (2 ** (i - 1)))
 
-            # todo parametrize to use linear upsampling optionally
-            self.upsampling_blocks.append(
-                conv_transpose(
+            if upsampling[i - 1] == "conv":
+                upsampling_block = conv_transpose(
                     in_channels=in_channels,
                     out_channels=out_channels,
                     kernel_size=2,
                     stride=2,
                     bias=True,
                 )
-            )
+            elif (
+                upsampling[i - 1]
+                in (
+                    "nearest",
+                    "bilinear",
+                    "bicubic",
+                )
+                and n_dim == 2
+                or upsampling[i - 1] in ("nearest", "trilinear")
+                and n_dim == 3
+            ):
+                upsampling_block = nn.Sequential(
+                    nn.Upsample(
+                        mode=upsampling[i - 1], scale_factor=2, align_corners=True
+                    ),
+                    conv(
+                        in_channels=in_channels,
+                        out_channels=out_channels,
+                        kernel_size=1,  # todo not 2 as in conv transpose, investigate
+                        stride=1,
+                        bias=True,
+                    ),
+                )
+            else:
+                raise ValueError(
+                    f"Upsampling method {upsampling[i - 1]} not supported for {n_dim}D"
+                )
+
+            self.upsampling_blocks.append(upsampling_block)
 
             # Here goes skip connection, then decoder block
             self.decoder_blocks.append(
