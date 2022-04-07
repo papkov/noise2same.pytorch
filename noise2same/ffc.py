@@ -1,34 +1,34 @@
+from functools import partial
+from typing import Any, Tuple, Union
+
 import torch
 import torch.nn as nn
+from torch import Tensor as T
 
 
 class FFCSE_block(nn.Module):
-    def __init__(self, channels, ratio_g):
+    def __init__(self, channels: int, ratio_g: float, n_dim: int = 2):
         super(FFCSE_block, self).__init__()
         in_cg = int(channels * ratio_g)
         in_cl = channels - in_cg
         r = 16
 
-        self.avgpool = nn.AdaptiveAvgPool2d((1, 1))
-        self.conv1 = nn.Conv2d(channels, channels // r, kernel_size=1, bias=True)
+        conv = nn.Conv2d if n_dim == 2 else nn.Conv3d
+        conv = partial(conv, kernel_size=1, bias=True)
+        pool = nn.AdaptiveAvgPool2d if n_dim == 2 else nn.AdaptiveAvgPool3d
+
+        self.avgpool = pool((1,) * n_dim)
+        self.conv1 = conv(channels, channels // r)
         self.relu1 = nn.ReLU(inplace=True)
-        self.conv_a2l = (
-            None
-            if in_cl == 0
-            else nn.Conv2d(channels // r, in_cl, kernel_size=1, bias=True)
-        )
-        self.conv_a2g = (
-            None
-            if in_cg == 0
-            else nn.Conv2d(channels // r, in_cg, kernel_size=1, bias=True)
-        )
+        self.conv_a2l = None if in_cl == 0 else conv(channels // r, in_cl)
+        self.conv_a2g = None if in_cg == 0 else conv(channels // r, in_cg)
         self.sigmoid = nn.Sigmoid()
 
-    def forward(self, x):
-        x = x if type(x) is tuple else (x, 0)
+    def forward(self, x: Union[T, Tuple[T, T]]) -> Tuple[T, T]:
+        x = x if isinstance(x, tuple) else (x, 0)
         id_l, id_g = x
 
-        x = id_l if type(id_g) is int else torch.cat([id_l, id_g], dim=1)
+        x = id_l if isinstance(id_g, int) else torch.cat([id_l, id_g], dim=1)
         x = self.avgpool(x)
         x = self.relu1(self.conv1(x))
 
@@ -38,7 +38,9 @@ class FFCSE_block(nn.Module):
 
 
 class FourierUnit(nn.Module):
-    def __init__(self, in_channels, out_channels, groups=1, n_dim=2):
+    def __init__(
+        self, in_channels: int, out_channels: int, groups: int = 1, n_dim: int = 2
+    ):
         # bn_layer not used
         super(FourierUnit, self).__init__()
         self.groups = groups
@@ -57,7 +59,7 @@ class FourierUnit(nn.Module):
         self.bn = bn(out_channels * 2)
         self.relu = torch.nn.ReLU(inplace=True)
 
-    def forward(self, x):
+    def forward(self, x: T) -> T:
         batch, c, *s = x.size()
         dim = (2, 3, 4)[: len(s)]
 
@@ -77,36 +79,38 @@ class FourierUnit(nn.Module):
 
 class SpectralTransform(nn.Module):
     def __init__(
-        self, in_channels, out_channels, stride=1, groups=1, enable_lfu=True, n_dim=2
+        self,
+        in_channels: int,
+        out_channels: int,
+        stride: int = 1,
+        groups: int = 1,
+        enable_lfu: bool = True,
+        n_dim: int = 2,
     ):
         # bn_layer not used
         super(SpectralTransform, self).__init__()
         self.enable_lfu = enable_lfu
 
         conv = nn.Conv2d if n_dim == 2 else nn.Conv3d
+        conv = partial(conv, kernel_size=1, groups=groups, bias=False)
         bn = nn.BatchNorm2d if n_dim == 2 else nn.BatchNorm3d
         pool = nn.AvgPool2d if n_dim == 3 else nn.AvgPool3d
-        if stride == 2:
-            self.downsample = pool(kernel_size=2, stride=2)
-        else:
-            self.downsample = nn.Identity()
+        self.downsample = (
+            pool(kernel_size=2, stride=stride) if stride == 2 else nn.Identity()
+        )
 
         self.stride = stride
         self.conv1 = nn.Sequential(
-            conv(
-                in_channels, out_channels // 2, kernel_size=1, groups=groups, bias=False
-            ),
+            conv(in_channels, out_channels // 2),
             bn(out_channels // 2),
             nn.ReLU(inplace=True),
         )
         self.fu = FourierUnit(out_channels // 2, out_channels // 2, groups, n_dim)
         if self.enable_lfu:
             self.lfu = FourierUnit(out_channels // 2, out_channels // 2, groups, n_dim)
-        self.conv2 = conv(
-            out_channels // 2, out_channels, kernel_size=1, groups=groups, bias=False
-        )
+        self.conv2 = conv(out_channels // 2, out_channels)
 
-    def forward(self, x):
+    def forward(self, x: T) -> T:
 
         x = self.downsample(x)
         x = self.conv1(x)
@@ -136,23 +140,32 @@ class SpectralTransform(nn.Module):
 class FFC(nn.Module):
     def __init__(
         self,
-        in_channels,
-        out_channels,
-        kernel_size,
-        ratio_gin,
-        ratio_gout,
-        stride=1,
-        padding=0,
-        dilation=1,
-        groups=1,
-        bias=False,
-        enable_lfu=True,
-        n_dim=2,
-        **kwargs
+        in_channels: int,
+        out_channels: int,
+        kernel_size: int,
+        ratio_gin: float,
+        ratio_gout: float,
+        stride: int = 1,
+        padding: int = 0,
+        dilation: int = 1,
+        groups: int = 1,
+        bias: bool = False,
+        enable_lfu: bool = True,
+        n_dim: int = 2,
+        **kwargs: Any,
     ):
         super(FFC, self).__init__()
 
         conv = nn.Conv2d if n_dim == 2 else nn.Conv3d
+        conv = partial(
+            conv,
+            kernel_size=kernel_size,
+            stride=stride,
+            padding=padding,
+            dilation=dilation,
+            groups=groups,
+            bias=bias,
+        )
 
         assert stride == 1 or stride == 2, "Stride should be 1 or 2."
         self.stride = stride
@@ -167,17 +180,14 @@ class FFC(nn.Module):
         self.ratio_gin = ratio_gin
         self.ratio_gout = ratio_gout
 
-        module = nn.Identity if in_cl == 0 or out_cl == 0 else conv
-        self.convl2l = module(
-            in_cl, out_cl, kernel_size, stride, padding, dilation, groups, bias
+        self.convl2l = (
+            nn.Identity() if in_cl == 0 or out_cl == 0 else conv(in_cl, out_cl)
         )
-        module = nn.Identity if in_cl == 0 or out_cg == 0 else conv
-        self.convl2g = module(
-            in_cl, out_cg, kernel_size, stride, padding, dilation, groups, bias
+        self.convl2g = (
+            nn.Identity() if in_cl == 0 or out_cg == 0 else conv(in_cl, out_cg)
         )
-        module = nn.Identity if in_cg == 0 or out_cl == 0 else conv
-        self.convg2l = module(
-            in_cg, out_cl, kernel_size, stride, padding, dilation, groups, bias
+        self.convg2l = (
+            nn.Identity() if in_cg == 0 or out_cl == 0 else conv(in_cg, out_cl)
         )
         module = nn.Identity if in_cg == 0 or out_cg == 0 else SpectralTransform
         self.convg2g = module(
@@ -189,7 +199,7 @@ class FFC(nn.Module):
             n_dim=n_dim,
         )
 
-    def forward(self, x):
+    def forward(self, x: Union[T, Tuple[T, T]]) -> Tuple[T, T]:
         device = x[0].device if isinstance(x, tuple) else x.device
         x_l, x_g = x if type(x) is tuple else (x, torch.tensor(0, device=device))
         out_xl = torch.tensor(0, device=device)
@@ -206,20 +216,20 @@ class FFC(nn.Module):
 class FFC_BN_ACT(nn.Module):
     def __init__(
         self,
-        in_channels,
-        out_channels,
-        kernel_size,
-        ratio_gin,
-        ratio_gout,
-        stride=1,
-        padding=0,
-        dilation=1,
-        groups=1,
-        bias=False,
-        activation_layer=nn.Identity,
-        enable_lfu=True,
-        n_dim=2,
-        bn_act_first=False,
+        in_channels: int,
+        out_channels: int,
+        kernel_size: int,
+        ratio_gin: float,
+        ratio_gout: float,
+        stride: int = 1,
+        padding: int = 0,
+        dilation: int = 1,
+        groups: int = 1,
+        bias: bool = False,
+        activation_layer: nn.Module = nn.Identity,
+        enable_lfu: bool = True,
+        n_dim: int = 2,
+        bn_act_first: bool = False,
     ):
         super(FFC_BN_ACT, self).__init__()
 
@@ -253,7 +263,7 @@ class FFC_BN_ACT(nn.Module):
         self.act_l = lact(inplace=True)
         self.act_g = gact(inplace=True)
 
-    def forward(self, x):
+    def forward(self, x: Union[T, Tuple[T, T]]) -> Tuple[T, T]:
         x_l, x_g = self.ffc(x)
         x_l = self.act_l(self.bn_l(x_l))
         x_g = self.act_g(self.bn_g(x_g))
@@ -261,7 +271,7 @@ class FFC_BN_ACT(nn.Module):
 
 
 class BN_ACT_FFC(FFC_BN_ACT):
-    def forward(self, x):
+    def forward(self, x: Union[T, Tuple[T, T]]) -> Tuple[T, T]:
         x_l, x_g = x if type(x) is tuple else (x, 0)
         x_l = self.act_l(self.bn_l(x_l))
         x_g = self.act_g(self.bn_g(x_g))
