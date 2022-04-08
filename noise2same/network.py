@@ -418,12 +418,13 @@ class UNet(nn.Module):
             ):
                 upsampling_block = nn.Sequential(
                     nn.Upsample(
-                        mode=upsampling[i - 1], scale_factor=2, align_corners=True
+                        mode=upsampling[i - 1], scale_factor=2,
                     ),
                     conv(
                         in_channels=in_channels,
                         out_channels=out_channels,
-                        kernel_size=1,  # todo not 2 as in conv transpose, investigate
+                        kernel_size=3,  # todo not 2 as in conv transpose, investigate
+                        padding=1,
                         stride=1,
                         bias=True,
                     ),
