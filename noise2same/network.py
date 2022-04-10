@@ -96,7 +96,6 @@ class ResidualUnit(nn.Module):
         self.downsample = downsample
         self.ffc = ffc
 
-        print("Res unit:", in_channels, out_channels)
         bn = nn.BatchNorm2d if n_dim == 2 else nn.BatchNorm3d
         conv = nn.Conv2d if n_dim == 2 else nn.Conv3d
         stride = 2 if downsample else 1
