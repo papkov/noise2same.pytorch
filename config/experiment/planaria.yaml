@@ -5,5 +5,5 @@ data:
 
 training:
   steps: 50000
-  crop: 64
-  batch_size: 4
+  crop: 128
+  batch_size: 2

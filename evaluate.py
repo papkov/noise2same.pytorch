@@ -116,12 +116,7 @@ def main(cfg: DictConfig) -> None:
     elif cfg.name in ("imagenet",):
         scores = [
             util.calculate_scores(
-                gtx,
-                pred,
-                data_range=255,
-                scale=True,
-                multichannel=True,
-                clip=True,
+                gtx, pred, data_range=255, scale=True, multichannel=True, clip=True,
             )
             for gtx, pred in zip(ground_truth, predictions["image"])
         ]

@@ -96,6 +96,7 @@ class ResidualUnit(nn.Module):
         self.downsample = downsample
         self.ffc = ffc
 
+        print("Res unit:", in_channels, out_channels)
         bn = nn.BatchNorm2d if n_dim == 2 else nn.BatchNorm3d
         conv = nn.Conv2d if n_dim == 2 else nn.Conv3d
         stride = 2 if downsample else 1
@@ -123,9 +124,9 @@ class ResidualUnit(nn.Module):
         self.bn = bn(bn_in_channels, momentum=1 - 0.997, eps=1e-5)
 
         if self.ffc:
-            ffc_params = dict(
-                in_channels=in_channels,
-                out_channels=out_channels,
+
+            bnactffc = partial(
+                BN_ACT_FFC,
                 stride=1,
                 activation_layer=nn.ReLU,
                 enable_lfu=True,
@@ -135,8 +136,18 @@ class ResidualUnit(nn.Module):
                 bn_act_first=True,
             )
             self.layers = nn.Sequential(
-                BN_ACT_FFC(**ffc_params, ratio_gin=0.5, ratio_gout=0.5),
-                BN_ACT_FFC(**ffc_params, ratio_gin=0.5, ratio_gout=0),
+                bnactffc(
+                    ratio_gin=0.5,
+                    ratio_gout=0.5,
+                    in_channels=in_channels,
+                    out_channels=out_channels,
+                ),
+                bnactffc(
+                    ratio_gin=0.5,
+                    ratio_gout=0,
+                    in_channels=out_channels,
+                    out_channels=out_channels,
+                ),
             )
         else:
             self.layers = nn.Sequential(
@@ -343,7 +354,7 @@ class UNet(nn.Module):
         )
 
         # reset from FFC for now -- may need to change for the decoder!
-        conv = nn.Conv2d if n_dim == 2 else nn.Conv3d
+        # conv = nn.Conv2d if n_dim == 2 else nn.Conv3d
 
         # Encoder
         self.encoder_blocks = nn.ModuleList(
@@ -364,10 +375,7 @@ class UNet(nn.Module):
             in_channels = base_channels * (2 ** (i - 2))
             out_channels = base_channels * (2 ** (i - 1))
 
-            # Here
-
             # todo downsampling
-
             self.encoder_blocks.append(
                 EncoderBlock(
                     in_channels=in_channels,
@@ -393,11 +401,16 @@ class UNet(nn.Module):
         # Decoder
         self.decoder_blocks = nn.ModuleList()
         self.upsampling_blocks = nn.ModuleList()
+        self.conv_after_upsample_blocks = nn.ModuleList()
+
         for i in range(self.depth - 1, 0, -1):
+
             in_channels = int(base_channels * (2 ** i))
             out_channels = int(base_channels * (2 ** (i - 1)))
 
             if upsampling[i - 1] == "conv":
+                if ffc:
+                    raise ValueError("FFC not supported with conv upsampling")
                 upsampling_block = conv_transpose(
                     in_channels=in_channels,
                     out_channels=out_channels,
@@ -405,44 +418,52 @@ class UNet(nn.Module):
                     stride=2,
                     bias=True,
                 )
+                conv_after_upsample = nn.Identity()
+
             elif (
-                upsampling[i - 1]
-                in (
-                    "nearest",
-                    "bilinear",
-                    "bicubic",
-                )
+                upsampling[i - 1] in ("nearest", "bilinear", "bicubic",)
                 and n_dim == 2
                 or upsampling[i - 1] in ("nearest", "trilinear")
                 and n_dim == 3
             ):
+                module = nn.Conv2d if n_dim == 2 else nn.Conv3d
                 upsampling_block = nn.Sequential(
-                    nn.Upsample(
-                        mode=upsampling[i - 1], scale_factor=2, align_corners=True
-                    ),
-                    conv(
+                    nn.Upsample(mode=upsampling[i - 1], scale_factor=2),
+                    module(
                         in_channels=in_channels,
                         out_channels=out_channels,
-                        kernel_size=1,  # todo not 2 as in conv transpose, investigate
-                        stride=1,
-                        bias=True,
+                        kernel_size=kernel_size,
+                        padding=kernel_size // 2,
                     ),
                 )
+                # skip happens here
+                conv_after_upsample = conv(
+                    in_channels=in_channels,
+                    out_channels=in_channels,
+                    kernel_size=kernel_size,
+                    stride=1,
+                    padding=kernel_size // 2,
+                    bias=True,
+                )
+
             else:
                 raise ValueError(
                     f"Upsampling method {upsampling[i - 1]} not supported for {n_dim}D"
                 )
 
             self.upsampling_blocks.append(upsampling_block)
+            self.conv_after_upsample_blocks.append(conv_after_upsample)
 
             # Here goes skip connection, then decoder block
             self.decoder_blocks.append(
                 ResidualBlock(
-                    in_channels=out_channels * (2 if self.skip_method != "add" else 1),
+                    in_channels=out_channels
+                    * (2 if self.skip_method != "add" else 1),  # *2
                     out_channels=out_channels,
                     n_dim=n_dim,
                     kernel_size=kernel_size,
                     block_size=decoding_block_sizes[depth - 1 - i],
+                    ffc=ffc,
                 )
             )
 
@@ -459,8 +480,13 @@ class UNet(nn.Module):
             # print(f"Encoder {i+1}", x.shape)
         x = self.bottom_block(x)
 
-        for i, (upsampling_block, decoder_block, skip) in enumerate(
-            zip(self.upsampling_blocks, self.decoder_blocks, encoder_outputs[::-1])
+        for i, (upsampling_block, decoder_block, skip, extra_conv) in enumerate(
+            zip(
+                self.upsampling_blocks,
+                self.decoder_blocks,
+                encoder_outputs[::-1],
+                self.conv_after_upsample_blocks,
+            )
         ):
             x = upsampling_block(x)
             # print(f"Upsampling {i}", x.shape)
@@ -470,6 +496,9 @@ class UNet(nn.Module):
                 x = torch.cat([x, skip], dim=1)
             else:
                 raise ValueError
+
+            x = extra_conv(x)
+
             x = decoder_block(x)
             # print(f"Decoder {i}", x.shape)
 

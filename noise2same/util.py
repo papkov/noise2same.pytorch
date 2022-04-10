@@ -318,11 +318,7 @@ def detach_to_np(
     Detaches and denormalizes all tensors in the given dictionary, then converts to np.array.
     """
     return {
-        k: np.moveaxis(
-            (v.detach().cpu() * std + mean).numpy(),
-            1,
-            -1,
-        )
+        k: np.moveaxis((v.detach().cpu() * std + mean).numpy(), 1, -1,)
         for k, v in images.items()
     }
 

@@ -76,8 +76,7 @@ def get_dataset(cfg: DictConfig) -> Tuple[Dataset, Dataset]:
         )
         if cfg.training.validate:
             dataset_valid = planaria.PlanariaDatasetPrepared(
-                path=cwd / "data/Denoising_Planaria",
-                mode="val",
+                path=cwd / "data/Denoising_Planaria", mode="val",
             )
 
     elif cfg.name.lower() == "microtubules":
@@ -156,8 +155,7 @@ def get_test_dataset_and_gt(cfg: DictConfig) -> Tuple[Dataset, np.ndarray]:
 
     elif cfg.name.lower() == "ssi":
         dataset = ssi.SSIDataset(
-            path=cwd / cfg.data.path,
-            input_name=cfg.data.input_name,
+            path=cwd / cfg.data.path, input_name=cfg.data.input_name,
         )
         gt = dataset.gt
     else:

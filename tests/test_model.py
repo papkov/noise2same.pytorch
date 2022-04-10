@@ -44,8 +44,7 @@ class ModelTestCase(unittest.TestCase):
         padding = [
             (b, a)
             for b, a in zip(
-                loader.dataset.tiler.margin_start,
-                loader.dataset.tiler.margin_end,
+                loader.dataset.tiler.margin_start, loader.dataset.tiler.margin_end,
             )
         ] + [(0, 0)]
         print(padding)
@@ -103,8 +102,7 @@ class ModelTestCase(unittest.TestCase):
         padding = [
             (b, a)
             for b, a in zip(
-                loader.dataset.tiler.margin_start,
-                loader.dataset.tiler.margin_end,
+                loader.dataset.tiler.margin_start, loader.dataset.tiler.margin_end,
             )
         ] + [(0, 0)]
 

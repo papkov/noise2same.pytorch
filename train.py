@@ -114,7 +114,7 @@ def main(cfg: DictConfig) -> None:
         cfg.training.crop,
     ) * cfg.data.n_dim
     print(f"Model input size: {input_size}")
-    summary(mdl, input_size=input_size)
+    # summary(mdl, input_size=input_size)
 
     # Optimization
     if cfg.optim.optimizer == "adam":
@@ -212,9 +212,7 @@ def main(cfg: DictConfig) -> None:
             )
             scores.update(
                 util.calculate_scores(
-                    gt=ground_truth,
-                    x=predictions,
-                    normalize_pairs=True,
+                    gt=ground_truth, x=predictions, normalize_pairs=True,
                 )
             )
 

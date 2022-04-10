@@ -18,9 +18,7 @@ Ints = Optional[Union[int, List[int], Tuple[int, ...]]]
 
 
 def get_stratified_coords(
-    box_size: int,
-    shape: Tuple[int, ...],
-    resample: bool = False,
+    box_size: int, shape: Tuple[int, ...], resample: bool = False,
 ) -> Tuple[List[int], ...]:
     """
     Create stratified blind spot coordinates
