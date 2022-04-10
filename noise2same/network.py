@@ -427,19 +427,18 @@ class UNet(nn.Module):
                 and n_dim == 3
             ):
                 module = nn.Conv2d if n_dim == 2 else nn.Conv3d
+
                 upsampling_block = nn.Sequential(
                     nn.Upsample(mode=upsampling[i - 1], scale_factor=2),
                     module(
                         in_channels=in_channels,
                         out_channels=out_channels,
                         kernel_size=kernel_size,
-                        padding=kernel_size // 2,
-                    ),
-                )
+                        padding=kernel_size // 2))
                 # skip happens here
                 conv_after_upsample = conv(
-                    in_channels=in_channels,
-                    out_channels=in_channels,
+                    in_channels=in_channels if self.skip_method != 'add' else out_channels,
+                    out_channels=in_channels if self.skip_method != 'add' else out_channels,
                     kernel_size=kernel_size,
                     stride=1,
                     padding=kernel_size // 2,
@@ -457,8 +456,7 @@ class UNet(nn.Module):
             # Here goes skip connection, then decoder block
             self.decoder_blocks.append(
                 ResidualBlock(
-                    in_channels=out_channels
-                    * (2 if self.skip_method != "add" else 1),  # *2
+                    in_channels=out_channels * (2 if self.skip_method != "add" else 1),  # *2
                     out_channels=out_channels,
                     n_dim=n_dim,
                     kernel_size=kernel_size,
