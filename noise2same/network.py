@@ -2,7 +2,7 @@
 # https://github.com/divelab/Noise2Same/blob/main/network.py
 # https://github.com/divelab/Noise2Same/blob/main/resnet_module.py
 from functools import partial
-from typing import Tuple
+from typing import Tuple, Any
 
 import torch
 from torch import Tensor as T
@@ -87,6 +87,7 @@ class ResidualUnit(nn.Module):
             kernel_size: int = 3,
             downsample: bool = False,
             ffc: bool = False,
+            **kwargs: Any
     ):
         super().__init__()
         self.in_channels = in_channels
@@ -195,9 +196,10 @@ class ResidualUnitExtraLayer(ResidualUnit):
             n_dim: int = 2,
             kernel_size: int = 3,
             downsample: bool = False,
-            ffc: bool = False,
+            ffc: bool = False
     ):
-        super(ResidualUnitExtraLayer, self).__init__(in_channels=in_channels, out_channels=out_channels, n_dim=n_dim, ffc=ffc)
+        super(ResidualUnitExtraLayer, self).__init__(in_channels=in_channels, out_channels=out_channels, n_dim=n_dim,
+                                                     ffc=ffc)
 
         bn = nn.BatchNorm2d if n_dim == 2 else nn.BatchNorm3d
         conv = nn.Conv2d if n_dim == 2 else nn.Conv3d
@@ -222,8 +224,7 @@ class ResidualUnitExtraLayer(ResidualUnit):
                 kernel_size=3,
                 padding=1,
                 n_dim=n_dim,
-                bn_act_first=True,
-            )
+                bn_act_first=True)
             self.layers = nn.Sequential(
                 bnactffc(
                     ratio_gin=0,
@@ -277,11 +278,13 @@ class ResidualUnitExtraLayer(ResidualUnit):
                     bias=False,
                 ),
             )
+
     def forward(self, x: T) -> T:
 
         shortcut = self.conv_shortcut(x)
         x = self.layers(x)
         return x[0] + shortcut
+
 
 class ResidualUnitDualPass(ResidualUnit):
     def __init__(
@@ -292,25 +295,28 @@ class ResidualUnitDualPass(ResidualUnit):
             kernel_size: int = 3,
             downsample: bool = False,
             ffc: bool = False,
+            last_block: bool = False
     ):
-        super(ResidualUnitDualPass, self).__init__(in_channels=in_channels, out_channels=out_channels, n_dim=n_dim, ffc=ffc)
+        super(ResidualUnitDualPass, self).__init__(in_channels=in_channels, out_channels=out_channels, n_dim=n_dim,
+                                                   ffc=ffc)
 
-        bn = nn.BatchNorm2d if n_dim == 2 else nn.BatchNorm3d
+        self.last_block = last_block
+
         conv = nn.Conv2d if n_dim == 2 else nn.Conv3d
         stride = 2 if downsample else 1
         conv_shortcut = conv
 
         self.conv_shortcut_local = conv_shortcut(
-            in_channels=in_channels,
-            out_channels=out_channels,
+            in_channels=in_channels // 2,
+            out_channels=out_channels // (1 if last_block else 2),
             kernel_size=1,
             padding=0,
             stride=stride,
             bias=False,
         )
         self.conv_shortcut_global = conv_shortcut(
-            in_channels=in_channels,
-            out_channels=out_channels,
+            in_channels=in_channels // 2,
+            out_channels=out_channels // 2,
             kernel_size=1,
             padding=0,
             stride=stride,
@@ -338,46 +344,33 @@ class ResidualUnitDualPass(ResidualUnit):
                 bnactffc(
                     in_channels=out_channels,
                     out_channels=out_channels,
+                    ratio_gout=0 if last_block else 0.5
                 ),
             )
         else:
-            self.layers = nn.Sequential(
-                bn(in_channels),
-                self.act,
-                conv(
-                    in_channels=in_channels,
-                    out_channels=out_channels,
-                    kernel_size=2 if downsample else kernel_size,
-                    padding=0 if downsample else kernel_size // 2,
-                    stride=stride,
-                    bias=False,
-                ),
-                bn(out_channels),
-                self.act,
-                conv(
-                    in_channels=out_channels,
-                    out_channels=out_channels,
-                    kernel_size=kernel_size,
-                    padding=kernel_size // 2,
-                    stride=1,
-                    bias=False,
-                ),
-            )
+            raise ValueError("Dual pass possible only with ffc=True")
+
     def forward(self, x: T) -> T:
 
         if self.ffc:
-            shortcut_local = self.conv_shortcut_local(x[0])
-            shortcut_global = self.conv_shortcut_global(x[1])
+            x_l, x_g = x if type(x) is tuple else (x, 0)
+            shortcut_local = self.conv_shortcut_local(x_l)
+            shortcut_global = self.conv_shortcut_global(x_g)
+
+            x = self.layers(x)
+
+            x_l, x_g = x if type(x) is tuple else (x, 0)
+            x_l = x_l + shortcut_local
+            x_g = x_g + shortcut_global
+            x = (x_l, x_g)
+
+            if self.last_block:
+                x = x_l
         else:
             shortcut = self.conv_shortcut_local(x)
-
-        x = self.layers(x)
-
-        if self.ffc:
-            x[0] = x[0] + shortcut_local
-            x[1] = x[1] + shortcut_global
-        else:
+            x = self.layers(x)
             x = x + shortcut
+
         return x
 
 
@@ -391,7 +384,8 @@ class ResidualBlock(nn.Module):
             kernel_size: int = 3,
             downsample: bool = False,
             ffc: bool = False,
-            unit_type: str = 'default'
+            unit_type: str = 'default',
+            last_block: bool = False
     ):
         super().__init__()
         self.in_channels = in_channels
@@ -407,6 +401,8 @@ class ResidualBlock(nn.Module):
             unit = ResidualUnitExtraLayer
         elif unit_type == 'dual_pass':
             unit = ResidualUnitDualPass
+        else:
+            raise ValueError("unit_type", unit_type, "not supported")
 
         self.block = nn.Sequential(
             *[
@@ -417,6 +413,7 @@ class ResidualBlock(nn.Module):
                     kernel_size=kernel_size,
                     ffc=ffc,
                     downsample=downsample if i == 0 else False,
+                    last_block=last_block
                 )
                 for i in range(0, block_size)
             ]
@@ -444,11 +441,14 @@ class EncoderBlock(nn.Module):
         self.n_dim = n_dim
         self.kernel_size = kernel_size
         self.block_size = block_size
+        self.unit_type = unit_type
 
         conv = nn.Conv2d if n_dim == 2 else nn.Conv3d
+        if unit_type == "default" and ffc:
+            conv = partial(FFC, n_dim=n_dim, ratio_gin=0, ratio_gout=0.5)
 
         if downsampling == "res":
-            downsampling_block = ResidualBlock(
+            self.downsampling_block = ResidualBlock(
                 in_channels=in_channels,
                 out_channels=out_channels,
                 n_dim=n_dim,
@@ -457,32 +457,35 @@ class EncoderBlock(nn.Module):
                 downsample=True,
             )
         elif downsampling == "conv":
-            downsampling_block = conv(
-                in_channels=in_channels,
-                out_channels=out_channels,
-                kernel_size=2,
-                stride=2,
-                bias=True,
-            )
+            downsample = partial(conv, kernel_size=2, stride=2, bias=True)
+            if unit_type == "dual_pass":
+                self.downsampling_block_local = downsample(in_channels=in_channels // 2, out_channels=out_channels // 2)
+                self.downsampling_block_global = downsample(in_channels=in_channels // 2,
+                                                            out_channels=out_channels // 2)
+            else:
+                self.downsampling_block = downsample(in_channels=in_channels, out_channels=out_channels)
         else:
             raise ValueError("downsampling should be `res`. `conv`, `pool`")
 
-        self.block = nn.Sequential(
-            downsampling_block,
-            ResidualBlock(
-                in_channels=out_channels,
-                out_channels=out_channels,
-                n_dim=n_dim,
-                block_size=block_size,
-                downsample=False,
-                kernel_size=kernel_size,
-                ffc=ffc,
-                unit_type=unit_type
-            ),
-        )
+        self.resblock = ResidualBlock(
+            in_channels=out_channels,
+            out_channels=out_channels,
+            n_dim=n_dim,
+            block_size=block_size,
+            downsample=False,
+            kernel_size=kernel_size,
+            ffc=ffc,
+            unit_type=unit_type)
 
     def forward(self, x: T) -> T:
-        x = self.block(x)
+        if self.unit_type == "dual_pass":
+            x_l, x_g = x
+            x_l = self.downsampling_block_local(x_l)
+            x_g = self.downsampling_block_global(x_g)
+            x = (x_l, x_g)
+        else:
+            x = self.downsampling_block(x)
+        x = self.resblock(x)
         return x
 
 
@@ -536,12 +539,13 @@ class UNet(nn.Module):
         self.downsampling = downsampling
         self.skip_method = skip_method
         self.ffc = ffc
+        self.unit_type = unit_type
         print(f"Use {self.skip_method} skip method")
 
-        #if ffc:
-            #conv = partial(FFC, n_dim=n_dim, ratio_gin=0, ratio_gout=0.5)
-
-        conv = nn.Conv2d if n_dim == 2 else nn.Conv3d
+        if ffc and unit_type != "extra_layer":
+            conv = partial(FFC, n_dim=n_dim, ratio_gin=0, ratio_gout=0.5)
+        else:
+            conv = nn.Conv2d if n_dim == 2 else nn.Conv3d
 
         conv_transpose = nn.ConvTranspose2d if n_dim == 2 else nn.ConvTranspose3d
 
@@ -604,8 +608,8 @@ class UNet(nn.Module):
 
         # Decoder
         self.decoder_blocks = nn.ModuleList()
-        self.upsampling_blocks = nn.ModuleList()
-        self.conv_after_upsample_blocks = nn.ModuleList()
+        self.upsampling_blocks_main = nn.ModuleList()
+        self.upsampling_blocks_secondary = nn.ModuleList()
 
         for i in range(self.depth - 1, 0, -1):
 
@@ -613,48 +617,24 @@ class UNet(nn.Module):
             out_channels = int(base_channels * (2 ** (i - 1)))
 
             if upsampling[i - 1] == "conv":
-
-                upsampling_block = conv_transpose(
-                    in_channels=in_channels,
-                    out_channels=out_channels,
-                    kernel_size=2,
-                    stride=2,
-                    bias=True,
-                )
-                conv_after_upsample = nn.Identity()
-
-            elif (
-                    upsampling[i - 1] in ("nearest", "bilinear", "bicubic",)
-                    and n_dim == 2
-                    or upsampling[i - 1] in ("nearest", "trilinear")
-                    and n_dim == 3
-            ):
-                module = nn.Conv2d if n_dim == 2 else nn.Conv3d
-
-                upsampling_block = nn.Sequential(
-                    nn.Upsample(mode=upsampling[i - 1], scale_factor=2),
-                    module(
-                        in_channels=in_channels,
-                        out_channels=out_channels,
-                        kernel_size=kernel_size,
-                        padding=kernel_size // 2))
-                # skip happens here
-                conv_after_upsample = conv(
-                    in_channels=in_channels if self.skip_method != 'add' else out_channels,
-                    out_channels=in_channels if self.skip_method != 'add' else out_channels,
-                    kernel_size=kernel_size,
-                    stride=1,
-                    padding=kernel_size // 2,
-                    bias=True,
-                )
+                upsample = partial(conv_transpose, kernel_size=2,
+                                   stride=2,
+                                   bias=True)
+                if unit_type == "dual_pass":
+                    upsampling_block_main = upsample(in_channels=in_channels // 2,
+                                                     out_channels=out_channels // 2)  # local
+                    upsampling_block_secondary = upsample(in_channels=in_channels // 2,
+                                                          out_channels=out_channels // 2)  # global
+                else:
+                    upsampling_block_main = upsample(in_channels=in_channels, out_channels=out_channels)
+                    upsampling_block_secondary = nn.Identity()
 
             else:
                 raise ValueError(
-                    f"Upsampling method {upsampling[i - 1]} not supported for {n_dim}D"
-                )
+                    f"Upsampling method {upsampling[i - 1]} not supported for {n_dim}D")
 
-            self.upsampling_blocks.append(upsampling_block)
-            self.conv_after_upsample_blocks.append(conv_after_upsample)
+            self.upsampling_blocks_main.append(upsampling_block_main)
+            self.upsampling_blocks_secondary.append(upsampling_block_secondary)
 
             # Here goes skip connection, then decoder block
             self.decoder_blocks.append(
@@ -664,46 +644,50 @@ class UNet(nn.Module):
                     n_dim=n_dim,
                     kernel_size=kernel_size,
                     block_size=decoding_block_sizes[depth - 1 - i],
-                    ffc=ffc,
-                    unit_type=unit_type
-                )
-            )
+                    ffc=ffc if unit_type != "default" else False,
+                    unit_type=unit_type,
+                    last_block=True if i == 1 else False
+                ))
 
     def forward(self, x: T) -> T:
         encoder_outputs = []
         x = self.conv_first(x)
-        # print("First conv", x.shape)
         x = self.encoder_blocks[0](x)
-        # print("Encoder 0", x.shape)
 
         for i, encoder_block in enumerate(self.encoder_blocks[1:]):
             encoder_outputs.append(x)
             x = encoder_block(x)
-            # print(f"Encoder {i+1}", x.shape)
+
         x = self.bottom_block(x)
 
-        for i, (upsampling_block, decoder_block, skip, extra_conv) in enumerate(
+        for i, (upsampling_block_local, upsampling_block_global, decoder_block, skip) in enumerate(
                 zip(
-                    self.upsampling_blocks,
+                    self.upsampling_blocks_main,
+                    self.upsampling_blocks_secondary,
                     self.decoder_blocks,
                     encoder_outputs[::-1],
-                    self.conv_after_upsample_blocks,
                 )
         ):
-            x = upsampling_block(x)
-            # print(f"Upsampling {i}", x.shape)
-            if self.skip_method == "add":
-                x.add_(skip)
-            elif self.skip_method in ("cat", "concat"):
-                x = torch.cat([x, skip], dim=1)
-            else:
-                raise ValueError
 
-            x = extra_conv(x)
+            if self.unit_type == "dual_pass":
+                x_l, x_g = x
+                x_l = upsampling_block_local(x_l)
+                x_g = upsampling_block_global(x_g)
+
+                if self.skip_method == "add":
+                    x_l.add_(skip[0])
+                    x_g.add_(skip[1])
+                elif self.skip_method in ("cat", "concat"):
+                    x_l = torch.cat([x_l, skip[0]], dim=1)
+                    x_g = torch.cat([x_g, skip[1]], dim=1)
+                    x = (x_l, x_g)
+            else:
+                x = upsampling_block_local(x)
+                if self.skip_method == "add":
+                    x.add_(skip)
+                elif self.skip_method in ("cat", "concat"):
+                    x = torch.cat([x, skip], dim=1)
 
             x = decoder_block(x)
-            # print(f"Decoder {i}", x.shape)
 
-        # x = self.conv_last(x)
-        # print("Last conv", x.shape)
         return x
