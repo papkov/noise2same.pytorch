@@ -17,6 +17,8 @@ network:
   downsampling: [ conv, conv ]
   upsampling: [ conv, conv ]
   skip_method: concat
+  unit_type: default
+  global_ratio: 0.5
 
 model:
   lambda_rec: 1
