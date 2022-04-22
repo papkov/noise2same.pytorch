@@ -12,7 +12,8 @@ data:
 model:  # best results for 2D deconvolution
   lambda_inv: 0
   lambda_inv_deconv: 2
-  lambda_bound: 0.1
+  lambda_bound: 0
+  regularization_key: deconv
 
 training:
   num_workers: 4
