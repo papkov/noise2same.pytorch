@@ -9,7 +9,7 @@ from torch import Tensor as T
 from torch import nn
 from torch.nn.functional import normalize
 
-from noise2same.ffc import BN_ACT_FFC, FFC
+from noise2same.ffc import BN_ACT_FFC, FFC, divide_channels
 
 
 class ProjectHead(nn.Sequential):
@@ -309,25 +309,20 @@ class ResidualUnitDualPass(ResidualUnit):
         stride = 2 if downsample else 1
         conv_shortcut = conv
 
-        # print("in channels",in_channels)
-        # print("out channels",out_channels)
-        # print(in_channels // (1/(1-global_ratio)))
-        ffc_in_channels_local = int(in_channels // (1 / (1 - global_ratio)))
-        ffc_out_channels_local = int(out_channels // (1 / (1 - global_ratio)))
-
-        ffc_in_channels_global = in_channels - ffc_in_channels_local
-        ffc_out_channels_global = out_channels - ffc_out_channels_local
+        in_channels_local, out_channels_local, in_channels_global, out_channels_global = divide_channels(in_channels,
+                                                                                                         out_channels,
+                                                                                                         global_ratio)
         self.conv_shortcut_local = conv_shortcut(
-            in_channels=ffc_in_channels_local,
-            out_channels=out_channels if last_block else ffc_out_channels_local,
+            in_channels=in_channels_local,
+            out_channels=out_channels if last_block else out_channels_local,
             kernel_size=1,
             padding=0,
             stride=stride,
             bias=False,
         )
         self.conv_shortcut_global = conv_shortcut(
-            in_channels=ffc_in_channels_global,
-            out_channels=ffc_out_channels_global,
+            in_channels=in_channels_global,
+            out_channels=out_channels_global,
             kernel_size=1,
             padding=0,
             stride=stride,
@@ -473,14 +468,14 @@ class EncoderBlock(nn.Module):
         elif downsampling == "conv":
             downsample = partial(conv, kernel_size=2, stride=2, bias=True)
             if unit_type == "dual_pass":
-                ffc_in_channels_local = int(in_channels // (1 / (1 - global_ratio)))
-                ffc_out_channels_local = int(out_channels // (1 / (1 - global_ratio)))
-                ffc_in_channels_global = in_channels - ffc_in_channels_local
-                ffc_out_channels_global = out_channels - ffc_out_channels_local
-                self.downsampling_block_local = downsample(in_channels=ffc_in_channels_local,
-                                                           out_channels=ffc_out_channels_local)
-                self.downsampling_block_global = downsample(in_channels=ffc_in_channels_global,
-                                                            out_channels=ffc_out_channels_global)
+                in_channels_local, out_channels_local, in_channels_global, out_channels_global = divide_channels(
+                    in_channels,
+                    out_channels,
+                    global_ratio)
+                self.downsampling_block_local = downsample(in_channels=in_channels_local,
+                                                           out_channels=out_channels_local)
+                self.downsampling_block_global = downsample(in_channels=in_channels_global,
+                                                            out_channels=out_channels_global)
             else:
                 self.downsampling_block = downsample(in_channels=in_channels, out_channels=out_channels)
         else:
@@ -646,15 +641,15 @@ class UNet(nn.Module):
                                    bias=True)
                 if unit_type == "dual_pass":
 
-                    ffc_in_channels_local = int(in_channels // (1 / (1 - global_ratio)))
-                    ffc_out_channels_local = int(out_channels // (1 / (1 - global_ratio)))
-                    ffc_in_channels_global = in_channels - ffc_in_channels_local
-                    ffc_out_channels_global = out_channels - ffc_out_channels_local
+                    in_channels_local, out_channels_local, in_channels_global, out_channels_global = divide_channels(
+                        in_channels,
+                        out_channels,
+                        global_ratio)
 
-                    upsampling_block_main = upsample(in_channels=ffc_in_channels_local,
-                                                     out_channels=ffc_out_channels_local)  # local
-                    upsampling_block_secondary = upsample(in_channels=ffc_in_channels_global,
-                                                          out_channels=ffc_out_channels_global)  # global
+                    upsampling_block_main = upsample(in_channels=in_channels_local,
+                                                     out_channels=out_channels_local)  # local
+                    upsampling_block_secondary = upsample(in_channels=in_channels_global,
+                                                          out_channels=out_channels_global)  # global
                 else:
                     upsampling_block_main = upsample(in_channels=in_channels, out_channels=out_channels)
                     upsampling_block_secondary = nn.Identity()
