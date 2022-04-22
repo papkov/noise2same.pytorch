@@ -418,7 +418,8 @@ class UNet(nn.Module):
             ):
                 upsampling_block = nn.Sequential(
                     nn.Upsample(
-                        mode=upsampling[i - 1], scale_factor=2,
+                        mode=upsampling[i - 1],
+                        scale_factor=2,
                     ),
                     conv(
                         in_channels=in_channels,
