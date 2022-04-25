@@ -282,9 +282,15 @@ class BN_ACT_FFC(FFC_BN_ACT):
         # in channeli järgi
         return x_l, x_g
 
+
 def divide_channels(in_channels: int, out_channels: int, global_ratio: float):
-    in_channels_local = int(in_channels // (1 / (1 - global_ratio)))
-    out_channels_local = int(out_channels // (1 / (1 - global_ratio)))
-    in_channels_global = in_channels - in_channels_local
-    out_channels_global = out_channels - out_channels_local
-    return in_channels_local, out_channels_local, in_channels_global, out_channels_global
+    in_channels_global = int(in_channels * global_ratio)
+    in_channels_local = in_channels - in_channels_global
+    out_channels_global = int(out_channels * global_ratio)
+    out_channels_local = out_channels - out_channels_global
+    return (
+        in_channels_local,
+        out_channels_local,
+        in_channels_global,
+        out_channels_global,
+    )

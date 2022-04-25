@@ -54,7 +54,7 @@ def main(cfg: DictConfig) -> None:
         psf_size=cfg.psf.psf_size if "psf" in cfg else None,
         psf_pad_mode=cfg.psf.psf_pad_mode if "psf" in cfg else None,
         **cfg.model,
-        **cfg.network
+        **cfg.network,
     )
 
     checkpoint_path = (
