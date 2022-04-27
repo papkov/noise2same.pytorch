@@ -42,7 +42,7 @@ class Evaluator(object):
         self.resizer = PadAndCropResizer(
             mode="reflect" if model.n_dim == 2 else "replicate",
             div_n=2 ** self.model.net.depth,
-            square=self.model.net.ffc,
+            square=True if (self.model.net.ffc_enc or self.model.net.ffc_dec is True) else False,
         )
 
     @torch.no_grad()
