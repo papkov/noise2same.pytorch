@@ -87,6 +87,7 @@ class ResidualUnit(nn.Module):
         kernel_size: int = 3,
         downsample: bool = False,
         ffc: bool = False,
+        enable_lfu: bool = True,
         global_ratio: float = 0.5,
         **kwargs: Any,
     ):
@@ -115,6 +116,7 @@ class ResidualUnit(nn.Module):
                 ratio_gin=global_ratio,
                 ratio_gout=0,
                 bn_act_first=True,
+                enable_lfu=enable_lfu,
             )
 
         self.conv_shortcut = conv_shortcut(
@@ -134,7 +136,7 @@ class ResidualUnit(nn.Module):
                 BN_ACT_FFC,
                 stride=1,
                 activation_layer=nn.ReLU,
-                enable_lfu=True,
+                enable_lfu=enable_lfu,
                 kernel_size=3,
                 padding=1,
                 n_dim=n_dim,
@@ -193,7 +195,7 @@ class ResidualUnit(nn.Module):
         return x + shortcut
 
 
-class ResidualUnitExtraLayer(ResidualUnit):
+class ResidualUnitExtraLayer(nn.Module):
     def __init__(
         self,
         in_channels: int,
@@ -203,8 +205,9 @@ class ResidualUnitExtraLayer(ResidualUnit):
         downsample: bool = False,
         ffc: bool = False,
         global_ratio: float = 0.5,
+        enable_lfu: bool = True,
     ):
-
+        super().__init__()
         bn = nn.BatchNorm2d if n_dim == 2 else nn.BatchNorm3d
         conv = nn.Conv2d if n_dim == 2 else nn.Conv3d
         stride = 2 if downsample else 1
@@ -224,7 +227,7 @@ class ResidualUnitExtraLayer(ResidualUnit):
                 BN_ACT_FFC,
                 stride=1,
                 activation_layer=nn.ReLU,
-                enable_lfu=True,
+                enable_lfu=enable_lfu,
                 kernel_size=3,
                 padding=1,
                 n_dim=n_dim,
@@ -291,7 +294,7 @@ class ResidualUnitExtraLayer(ResidualUnit):
         return x[0] + shortcut
 
 
-class ResidualUnitDualPass(ResidualUnit):
+class ResidualUnitDualPass(nn.Module):
     def __init__(
         self,
         in_channels: int,
@@ -301,13 +304,13 @@ class ResidualUnitDualPass(ResidualUnit):
         downsample: bool = False,
         ffc: bool = False,
         last_block: bool = False,
+        first_block: bool = False,
         global_ratio: float = 0.5,
+        enable_lfu: bool = True,
     ):
-        super(ResidualUnitDualPass, self).__init__(
-            in_channels=in_channels, out_channels=out_channels, n_dim=n_dim, ffc=ffc
-        )
-
+        super().__init__()
         self.last_block = last_block
+        self.ffc = ffc
 
         conv = nn.Conv2d if n_dim == 2 else nn.Conv3d
         stride = 2 if downsample else 1
@@ -320,21 +323,24 @@ class ResidualUnitDualPass(ResidualUnit):
             out_channels_global,
         ) = divide_channels(in_channels, out_channels, global_ratio)
         self.conv_shortcut_local = conv_shortcut(
-            in_channels=in_channels_local,
+            in_channels=in_channels if first_block else in_channels_local,
             out_channels=out_channels if last_block else out_channels_local,
             kernel_size=1,
             padding=0,
             stride=stride,
             bias=False,
         )
-        self.conv_shortcut_global = conv_shortcut(
-            in_channels=in_channels_global,
-            out_channels=out_channels_global,
-            kernel_size=1,
-            padding=0,
-            stride=stride,
-            bias=False,
-        )
+        if first_block or last_block:
+            self.conv_shortcut_global = nn.Identity()
+        else:
+            self.conv_shortcut_global = conv_shortcut(
+                in_channels=in_channels_global,
+                out_channels=out_channels_global,
+                kernel_size=1,
+                padding=0,
+                stride=stride,
+                bias=False,
+            )
         if self.ffc:
 
             bnactffc = partial(
@@ -343,14 +349,18 @@ class ResidualUnitDualPass(ResidualUnit):
                 ratio_gout=global_ratio,
                 stride=1,
                 activation_layer=nn.ReLU,
-                enable_lfu=True,
+                enable_lfu=enable_lfu,
                 kernel_size=3,
                 padding=1,
                 n_dim=n_dim,
                 bn_act_first=True,
             )
             self.layers = nn.Sequential(
-                bnactffc(in_channels=in_channels, out_channels=out_channels,),
+                bnactffc(
+                    in_channels=in_channels,
+                    out_channels=out_channels,
+                    ratio_gin=0 if first_block else global_ratio,
+                ),
                 bnactffc(
                     in_channels=out_channels,
                     out_channels=out_channels,
@@ -363,7 +373,10 @@ class ResidualUnitDualPass(ResidualUnit):
     def forward(self, x: T) -> T:
 
         if self.ffc:
-            x_l, x_g = x if type(x) is tuple else (x, 0)
+            # device = x[0].device if isinstance(x, tuple) else x.device
+            x_l, x_g = (
+                x if type(x) is tuple else (x, 0)
+            )  # torch.tensor(0, device=device))
             shortcut_local = self.conv_shortcut_local(x_l)
             shortcut_global = self.conv_shortcut_global(x_g)
 
@@ -396,7 +409,9 @@ class ResidualBlock(nn.Module):
         ffc: bool = False,
         unit_type: str = "default",
         last_block: bool = False,
+        first_block: bool = False,
         global_ratio: float = 0.5,
+        enable_lfu: bool = True,
     ):
         super().__init__()
         self.in_channels = in_channels
@@ -425,7 +440,9 @@ class ResidualBlock(nn.Module):
                     ffc=ffc,
                     downsample=downsample if i == 0 else False,
                     last_block=last_block,
+                    first_block=first_block,
                     global_ratio=global_ratio,
+                    enable_lfu=enable_lfu,
                 )
                 for i in range(0, block_size)
             ]
@@ -447,6 +464,7 @@ class EncoderBlock(nn.Module):
         ffc: bool = False,
         unit_type: str = "default",
         global_ratio: float = 0.5,
+        enable_lfu: bool = True,
     ):
         super().__init__()
         self.in_channels = in_channels
@@ -458,7 +476,13 @@ class EncoderBlock(nn.Module):
 
         conv = nn.Conv2d if n_dim == 2 else nn.Conv3d
         if unit_type == "default" and ffc:
-            conv = partial(FFC, n_dim=n_dim, ratio_gin=0, ratio_gout=global_ratio)
+            conv = partial(
+                FFC,
+                n_dim=n_dim,
+                ratio_gin=0,
+                ratio_gout=global_ratio,
+                enable_lfu=enable_lfu,
+            )
 
         if downsampling == "res":
             self.downsampling_block = ResidualBlock(
@@ -471,8 +495,8 @@ class EncoderBlock(nn.Module):
             )
         elif downsampling == "conv":
             downsample = partial(conv, kernel_size=2, stride=2, bias=True)
-            if unit_type == "dual_pass":
-                self.twin_unit = TwinSample(
+            if unit_type == "dual_pass" and ffc == True:
+                self.downsampling_block = TwinSample(
                     downsample, in_channels, out_channels, global_ratio
                 )
             else:
@@ -492,16 +516,12 @@ class EncoderBlock(nn.Module):
             ffc=ffc,
             unit_type=unit_type,
             global_ratio=global_ratio,
+            enable_lfu=enable_lfu,
         )
 
     def forward(self, x: T) -> T:
-        if self.unit_type == "dual_pass":
-            x_l, x_g = x
-            x_l = self.twin_unit.sample_local(x_l)
-            x_g = self.twin_unit.sample_global(x_g)
-            x = (x_l, x_g)
-        else:
-            x = self.downsampling_block(x)
+
+        x = self.downsampling_block(x)
         x = self.resblock(x)
         return x
 
@@ -510,7 +530,6 @@ class TwinSample(nn.Module):
     """For up and downsampling when there is both local and global branch present"""
 
     def __init__(self, unit, in_channels, out_channels, global_ratio):
-
         super().__init__()
         (
             in_channels_local,
@@ -526,6 +545,12 @@ class TwinSample(nn.Module):
             in_channels=in_channels_global, out_channels=out_channels_global
         )  # global
 
+    def forward(self, x: T):
+        x_l, x_g = x
+        x_l = self.sample_local(x_l)
+        x_g = self.sample_global(x_g)
+        return (x_l, x_g)
+
 
 class UNet(nn.Module):
     def __init__(
@@ -540,9 +565,12 @@ class UNet(nn.Module):
         downsampling: Tuple[str, ...] = ("conv", "conv"),
         upsampling: Tuple[str, ...] = ("conv", "conv"),
         skip_method: str = "concat",
-        ffc: bool = False,
         unit_type: str = "default",
         global_ratio: float = 0.5,
+        enable_lfu: bool = True,
+        ffc_enc: bool = True,
+        ffc_dec: bool = True,
+        ffc_bottom: bool = True,
     ):
         """
 
@@ -577,12 +605,21 @@ class UNet(nn.Module):
         self.decoding_block_sizes = decoding_block_sizes
         self.downsampling = downsampling
         self.skip_method = skip_method
-        self.ffc = ffc
+        self.ffc_enc = ffc_enc
+        self.ffc_dec = ffc_dec
+        self.ffc_bottom = ffc_bottom
         self.unit_type = unit_type
+        self.global_ratio = global_ratio
         print(f"Use {self.skip_method} skip method")
 
-        if ffc and unit_type != "extra_layer":  # only used for first conv
-            conv = partial(FFC, n_dim=n_dim, ratio_gin=0, ratio_gout=global_ratio)
+        if ffc_enc and unit_type != "extra_layer":  # only used for first conv
+            conv = partial(
+                FFC,
+                n_dim=n_dim,
+                ratio_gin=0,
+                ratio_gout=global_ratio,
+                enable_lfu=enable_lfu,
+            )
         else:
             conv = nn.Conv2d if n_dim == 2 else nn.Conv3d
 
@@ -609,9 +646,12 @@ class UNet(nn.Module):
                     n_dim=n_dim,
                     kernel_size=kernel_size,
                     block_size=encoding_block_sizes[0],
-                    ffc=ffc,
-                    unit_type=unit_type,
+                    ffc=ffc_enc,
+                    unit_type="default"
+                    if ffc_enc == False and unit_type == "dual_pass"
+                    else unit_type,
                     global_ratio=global_ratio,
+                    enable_lfu=enable_lfu,
                 )
             ]
         )
@@ -630,9 +670,12 @@ class UNet(nn.Module):
                     kernel_size=kernel_size,
                     block_size=encoding_block_sizes[i - 1],
                     downsampling=downsampling[i - 2],
-                    ffc=ffc,
-                    unit_type=unit_type,
+                    ffc=ffc_enc,
+                    unit_type="default"
+                    if ffc_enc == False and unit_type == "dual_pass"
+                    else unit_type,
                     global_ratio=global_ratio,
+                    enable_lfu=enable_lfu,
                 )
             )
 
@@ -643,15 +686,17 @@ class UNet(nn.Module):
             n_dim=n_dim,
             kernel_size=kernel_size,
             block_size=1,
-            ffc=ffc,
+            ffc=True if ffc_enc or ffc_dec is True else False,
             unit_type=unit_type,
             global_ratio=global_ratio,
+            enable_lfu=enable_lfu,
+            last_block=True if (ffc_enc == True and ffc_dec == False) else False,
+            first_block=True if (ffc_enc == False and ffc_dec == True) else False,
         )
 
         # Decoder
         self.decoder_blocks = nn.ModuleList()
-        self.upsampling_blocks_main = nn.ModuleList()
-        self.upsampling_blocks_secondary = nn.ModuleList()
+        self.upsampling_blocks = nn.ModuleList()
 
         for i in range(self.depth - 1, 0, -1):
 
@@ -660,27 +705,22 @@ class UNet(nn.Module):
 
             if upsampling[i - 1] == "conv":
                 upsample = partial(conv_transpose, kernel_size=2, stride=2, bias=True)
-                if unit_type == "dual_pass":
+                if unit_type == "dual_pass" and ffc_dec == True:
 
-                    twin_unit = TwinSample(
+                    upsampling_block = TwinSample(
                         upsample, in_channels, out_channels, global_ratio
                     )
-                    upsampling_block_main = twin_unit.sample_local
-                    upsampling_block_secondary = twin_unit.sample_global
 
                 else:
-                    upsampling_block_main = upsample(
+                    upsampling_block = upsample(
                         in_channels=in_channels, out_channels=out_channels
                     )
-                    upsampling_block_secondary = nn.Identity()
-
             else:
                 raise ValueError(
                     f"Upsampling method {upsampling[i - 1]} not supported for {n_dim}D"
                 )
 
-            self.upsampling_blocks_main.append(upsampling_block_main)
-            self.upsampling_blocks_secondary.append(upsampling_block_secondary)
+            self.upsampling_blocks.append(upsampling_block)
 
             # Here goes skip connection, then decoder block
             self.decoder_blocks.append(
@@ -691,10 +731,13 @@ class UNet(nn.Module):
                     n_dim=n_dim,
                     kernel_size=kernel_size,
                     block_size=decoding_block_sizes[depth - 1 - i],
-                    ffc=ffc if unit_type != "default" else False,
-                    unit_type=unit_type,
+                    ffc=ffc_dec if unit_type != "default" else False,
+                    unit_type="default"
+                    if ffc_dec == False and unit_type == "dual_pass"
+                    else unit_type,
                     last_block=True if i == 1 and unit_type == "dual_pass" else False,
                     global_ratio=global_ratio,
+                    enable_lfu=enable_lfu,
                 )
             )
 
@@ -709,32 +752,39 @@ class UNet(nn.Module):
 
         x = self.bottom_block(x)
 
-        for (
-            i,
-            (upsampling_block_local, upsampling_block_global, decoder_block, skip),
-        ) in enumerate(
-            zip(
-                self.upsampling_blocks_main,
-                self.upsampling_blocks_secondary,
-                self.decoder_blocks,
-                encoder_outputs[::-1],
-            )
+        for (i, (upsampling_block, decoder_block, skip),) in enumerate(
+            zip(self.upsampling_blocks, self.decoder_blocks, encoder_outputs[::-1],)
         ):
-
-            if self.unit_type == "dual_pass":
-                x_l, x_g = x
-                x_l = upsampling_block_local(x_l)
-                x_g = upsampling_block_global(x_g)
-
+            x = upsampling_block(x)
+            if self.unit_type == "dual_pass":  # when the skip is tuple
+                (x_l, x_g) = x if type(x) is tuple else (x, 0)
                 if self.skip_method == "add":
+                    # enc dec paramterization not supported
                     x_l.add_(skip[0])
                     x_g.add_(skip[1])
                 elif self.skip_method in ("cat", "concat"):
-                    x_l = torch.cat([x_l, skip[0]], dim=1)
-                    x_g = torch.cat([x_g, skip[1]], dim=1)
-                    x = (x_l, x_g)
+
+                    if self.ffc_enc == True and self.ffc_dec == False:
+                        combined_skip = torch.cat([skip[0], skip[1]], dim=1)
+                        x = torch.cat([x, combined_skip], dim=1)
+                    elif (
+                        self.ffc_enc == False and self.ffc_dec == True
+                    ):  # probably not worth it
+                        n, c, *s = skip.shape  # s is (d,h,w) or (h,w)
+                        global_channels = int(c * self.global_ratio)
+                        local_channels = c - global_channels
+                        skip_split = torch.split(
+                            skip, [local_channels, global_channels], dim=1
+                        )  # channel dimension
+                        x_l = torch.cat([x_l, skip_split[0]], dim=1)
+                        x_g = torch.cat([x_g, skip_split[1]], dim=1)
+                        x = (x_l, x_g)
+                    else:
+                        x_l = torch.cat([x_l, skip[0]], dim=1)
+                        x_g = torch.cat([x_g, skip[1]], dim=1)
+                        x = (x_l, x_g)
             else:
-                x = upsampling_block_local(x)
+
                 if self.skip_method == "add":
                     x.add_(skip)
                 elif self.skip_method in ("cat", "concat"):

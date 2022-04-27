@@ -274,9 +274,7 @@ class FFC_BN_ACT(nn.Module):
 class BN_ACT_FFC(FFC_BN_ACT):
     def forward(self, x: Union[T, Tuple[T, T]]) -> Tuple[T, T]:
         x_l, x_g = x if type(x) is tuple else (x, 0)
-        x_l = self.act_l(
-            self.bn_l(x_l)
-        )  # RuntimeError: running_mean should contain 192 elements not 96
+        x_l = self.act_l(self.bn_l(x_l))
         x_g = self.act_g(self.bn_g(x_g))
         x_l, x_g = self.ffc((x_l, x_g))
         # in channeli järgi

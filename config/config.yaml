@@ -19,6 +19,9 @@ network:
   skip_method: concat
   unit_type: default
   global_ratio: 0.5
+  enable_lfu: True
+  ffc_enc: False
+  ffc_dec: False
 
 model:
   lambda_rec: 1
@@ -34,7 +37,6 @@ model:
   noise_mean: 0
   noise_std: 0.2
   residual: False
-  ffc: False
   regularization_key: image
   only_masked: False
 
