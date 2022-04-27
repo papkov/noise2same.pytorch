@@ -545,7 +545,8 @@ class TwinSample(nn.Module):
             in_channels=in_channels_global, out_channels=out_channels_global
         )  # global
 
-    def forward(self, x: T):
+    def forward(self, x: Tuple[T,T]):
+        assert isinstance(x, tuple)
         x_l, x_g = x
         x_l = self.sample_local(x_l)
         x_g = self.sample_global(x_g)
