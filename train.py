@@ -114,7 +114,7 @@ def main(cfg: DictConfig) -> None:
         cfg.training.crop,
     ) * cfg.data.n_dim
     print(f"Model input size: {input_size}")
-    # summary(mdl, input_size=input_size)
+    summary(mdl, input_size=input_size)
 
     # Optimization
     if cfg.optim.optimizer == "adam":
