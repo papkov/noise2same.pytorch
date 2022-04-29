@@ -656,7 +656,11 @@ class UNet(nn.Module):
                 )
             ]
         )
-
+        if ffc_enc == True and ffc_dec == False:
+            skip_conv = nn.Conv2d if n_dim == 2 else nn.Conv3d
+        else:
+            skip_conv = nn.Identity
+        self.skip_convs = nn.ModuleList([skip_conv(in_channels=base_channels, out_channels=base_channels, kernel_size=1)])
         out_channels = base_channels
         for i in range(2, self.depth + 1):
             in_channels = base_channels * (2 ** (i - 2))
@@ -679,6 +683,7 @@ class UNet(nn.Module):
                     enable_lfu=enable_lfu,
                 )
             )
+            self.skip_convs.append(skip_conv(in_channels=out_channels, out_channels=out_channels, kernel_size=1))
 
         # Bottom block
         self.bottom_block = ResidualBlock(
@@ -753,8 +758,8 @@ class UNet(nn.Module):
 
         x = self.bottom_block(x)
 
-        for (i, (upsampling_block, decoder_block, skip),) in enumerate(
-            zip(self.upsampling_blocks, self.decoder_blocks, encoder_outputs[::-1],)
+        for (i, (upsampling_block, decoder_block, skip,skip_conv)) in enumerate(
+            zip(self.upsampling_blocks, self.decoder_blocks, encoder_outputs[::-1],self.skip_convs[1::-1])
         ):
             x = upsampling_block(x)
             if self.unit_type == "dual_pass":  # when the skip is tuple
@@ -767,6 +772,7 @@ class UNet(nn.Module):
 
                     if self.ffc_enc == True and self.ffc_dec == False:
                         combined_skip = torch.cat([skip[0], skip[1]], dim=1)
+                        combined_skip = skip_conv(combined_skip)
                         x = torch.cat([x, combined_skip], dim=1)
                     elif (
                         self.ffc_enc == False and self.ffc_dec == True
