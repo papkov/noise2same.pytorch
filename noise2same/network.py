@@ -23,11 +23,11 @@ class ProjectHead(nn.Sequential):
     """
 
     def __init__(
-        self,
-        in_channels: int,
-        out_channels: int = 256,
-        n_dim: int = 2,
-        kernel_size: int = 1,
+            self,
+            in_channels: int,
+            out_channels: int = 256,
+            n_dim: int = 2,
+            kernel_size: int = 1,
     ):
         assert n_dim in (2, 3)
         conv = nn.Conv2d if n_dim == 2 else nn.Conv3d
@@ -51,7 +51,7 @@ class ProjectHead(nn.Sequential):
 
 class RegressionHead(nn.Sequential):
     def __init__(
-        self, in_channels: int, out_channels: int, n_dim: int = 2, kernel_size: int = 1
+            self, in_channels: int, out_channels: int, n_dim: int = 2, kernel_size: int = 1
     ):
         """
         Denoising regression head BN-ReLU-Conv
@@ -80,16 +80,16 @@ class RegressionHead(nn.Sequential):
 
 class ResidualUnit(nn.Module):
     def __init__(
-        self,
-        in_channels: int,
-        out_channels: int,
-        n_dim: int = 2,
-        kernel_size: int = 3,
-        downsample: bool = False,
-        ffc: bool = False,
-        enable_lfu: bool = True,
-        global_ratio: float = 0.5,
-        **kwargs: Any,
+            self,
+            in_channels: int,
+            out_channels: int,
+            n_dim: int = 2,
+            kernel_size: int = 3,
+            downsample: bool = False,
+            ffc: bool = False,
+            enable_lfu: bool = True,
+            global_ratio: float = 0.5,
+            **kwargs: Any,
     ):
         super().__init__()
         self.in_channels = in_channels
@@ -197,15 +197,15 @@ class ResidualUnit(nn.Module):
 
 class ResidualUnitExtraLayer(nn.Module):
     def __init__(
-        self,
-        in_channels: int,
-        out_channels: int,
-        n_dim: int = 2,
-        kernel_size: int = 3,
-        downsample: bool = False,
-        ffc: bool = False,
-        global_ratio: float = 0.5,
-        enable_lfu: bool = True,
+            self,
+            in_channels: int,
+            out_channels: int,
+            n_dim: int = 2,
+            kernel_size: int = 3,
+            downsample: bool = False,
+            ffc: bool = False,
+            global_ratio: float = 0.5,
+            enable_lfu: bool = True,
     ):
         super().__init__()
         bn = nn.BatchNorm2d if n_dim == 2 else nn.BatchNorm3d
@@ -296,17 +296,17 @@ class ResidualUnitExtraLayer(nn.Module):
 
 class ResidualUnitDualPass(nn.Module):
     def __init__(
-        self,
-        in_channels: int,
-        out_channels: int,
-        n_dim: int = 2,
-        kernel_size: int = 3,
-        downsample: bool = False,
-        ffc: bool = False,
-        last_block: bool = False,
-        first_block: bool = False,
-        global_ratio: float = 0.5,
-        enable_lfu: bool = True,
+            self,
+            in_channels: int,
+            out_channels: int,
+            n_dim: int = 2,
+            kernel_size: int = 3,
+            downsample: bool = False,
+            ffc: bool = False,
+            last_block: bool = False,
+            first_block: bool = False,
+            global_ratio: float = 0.5,
+            enable_lfu: bool = True,
     ):
         super().__init__()
         self.last_block = last_block
@@ -399,19 +399,19 @@ class ResidualUnitDualPass(nn.Module):
 
 class ResidualBlock(nn.Module):
     def __init__(
-        self,
-        in_channels: int,
-        out_channels: int,
-        block_size: int = 1,
-        n_dim: int = 2,
-        kernel_size: int = 3,
-        downsample: bool = False,
-        ffc: bool = False,
-        unit_type: str = "default",
-        last_block: bool = False,
-        first_block: bool = False,
-        global_ratio: float = 0.5,
-        enable_lfu: bool = True,
+            self,
+            in_channels: int,
+            out_channels: int,
+            block_size: int = 1,
+            n_dim: int = 2,
+            kernel_size: int = 3,
+            downsample: bool = False,
+            ffc: bool = False,
+            unit_type: str = "default",
+            last_block: bool = False,
+            first_block: bool = False,
+            global_ratio: float = 0.5,
+            enable_lfu: bool = True,
     ):
         super().__init__()
         self.in_channels = in_channels
@@ -454,17 +454,17 @@ class ResidualBlock(nn.Module):
 
 class EncoderBlock(nn.Module):
     def __init__(
-        self,
-        in_channels: int,
-        out_channels: int,
-        block_size: int = 1,
-        n_dim: int = 2,
-        kernel_size: int = 3,
-        downsampling: str = "conv",
-        ffc: bool = False,
-        unit_type: str = "default",
-        global_ratio: float = 0.5,
-        enable_lfu: bool = True,
+            self,
+            in_channels: int,
+            out_channels: int,
+            block_size: int = 1,
+            n_dim: int = 2,
+            kernel_size: int = 3,
+            downsampling: str = "conv",
+            ffc: bool = False,
+            unit_type: str = "default",
+            global_ratio: float = 0.5,
+            enable_lfu: bool = True,
     ):
         super().__init__()
         self.in_channels = in_channels
@@ -545,7 +545,7 @@ class TwinSample(nn.Module):
             in_channels=in_channels_global, out_channels=out_channels_global
         )  # global
 
-    def forward(self, x: Tuple[T,T]):
+    def forward(self, x: Tuple[T, T]):
         assert isinstance(x, tuple)
         x_l, x_g = x
         x_l = self.sample_local(x_l)
@@ -555,23 +555,24 @@ class TwinSample(nn.Module):
 
 class UNet(nn.Module):
     def __init__(
-        self,
-        in_channels: int,
-        base_channels: int = 96,
-        kernel_size: int = 3,
-        n_dim: int = 2,
-        depth: int = 3,
-        encoding_block_sizes: Tuple[int, ...] = (1, 1, 0),
-        decoding_block_sizes: Tuple[int, ...] = (1, 1),
-        downsampling: Tuple[str, ...] = ("conv", "conv"),
-        upsampling: Tuple[str, ...] = ("conv", "conv"),
-        skip_method: str = "concat",
-        unit_type: str = "default",
-        global_ratio: float = 0.5,
-        enable_lfu: bool = True,
-        ffc_enc: bool = True,
-        ffc_dec: bool = True,
-        ffc_bottom: bool = True,
+            self,
+            in_channels: int,
+            base_channels: int = 96,
+            kernel_size: int = 3,
+            n_dim: int = 2,
+            depth: int = 3,
+            encoding_block_sizes: Tuple[int, ...] = (1, 1, 0),
+            decoding_block_sizes: Tuple[int, ...] = (1, 1),
+            downsampling: Tuple[str, ...] = ("conv", "conv"),
+            upsampling: Tuple[str, ...] = ("conv", "conv"),
+            skip_method: str = "concat",
+            unit_type: str = "default",
+            global_ratio: float = 0.5,
+            enable_lfu: bool = True,
+            ffc_enc: bool = True,
+            ffc_dec: bool = True,
+            ffc_bottom: bool = True,
+            use_skip_conv: bool = False
     ):
         """
 
@@ -611,6 +612,7 @@ class UNet(nn.Module):
         self.ffc_bottom = ffc_bottom
         self.unit_type = unit_type
         self.global_ratio = global_ratio
+        self.use_skip_conv = use_skip_conv
         print(f"Use {self.skip_method} skip method")
 
         if ffc_enc and unit_type != "extra_layer":  # only used for first conv
@@ -660,7 +662,8 @@ class UNet(nn.Module):
             skip_conv = nn.Conv2d if n_dim == 2 else nn.Conv3d
         else:
             skip_conv = nn.Identity
-        self.skip_convs = nn.ModuleList([skip_conv(in_channels=base_channels, out_channels=base_channels, kernel_size=1)])
+        self.skip_convs = nn.ModuleList(
+            [skip_conv(in_channels=base_channels, out_channels=base_channels, kernel_size=1)])
         out_channels = base_channels
         for i in range(2, self.depth + 1):
             in_channels = base_channels * (2 ** (i - 2))
@@ -732,7 +735,7 @@ class UNet(nn.Module):
             self.decoder_blocks.append(
                 ResidualBlock(
                     in_channels=out_channels
-                    * (2 if self.skip_method != "add" else 1),  # *2
+                                * (2 if self.skip_method != "add" else 1),  # *2
                     out_channels=out_channels,
                     n_dim=n_dim,
                     kernel_size=kernel_size,
@@ -758,8 +761,9 @@ class UNet(nn.Module):
 
         x = self.bottom_block(x)
 
-        for (i, (upsampling_block, decoder_block, skip,skip_conv)) in enumerate(
-            zip(self.upsampling_blocks, self.decoder_blocks, encoder_outputs[::-1],self.skip_convs[1::-1])
+        for (i, (upsampling_block, decoder_block, skip, skip_conv)) in enumerate(
+                zip(self.upsampling_blocks, self.decoder_blocks, encoder_outputs[::-1], self.skip_convs[1::-1])
+                # skip_convs skips one element because one encoder block is empty
         ):
             x = upsampling_block(x)
             if self.unit_type == "dual_pass":  # when the skip is tuple
@@ -772,10 +776,11 @@ class UNet(nn.Module):
 
                     if self.ffc_enc == True and self.ffc_dec == False:
                         combined_skip = torch.cat([skip[0], skip[1]], dim=1)
-                        combined_skip = skip_conv(combined_skip)
+                        if self.use_skip_conv:
+                            combined_skip = skip_conv(combined_skip)
                         x = torch.cat([x, combined_skip], dim=1)
                     elif (
-                        self.ffc_enc == False and self.ffc_dec == True
+                            self.ffc_enc == False and self.ffc_dec == True
                     ):  # probably not worth it
                         n, c, *s = skip.shape  # s is (d,h,w) or (h,w)
                         global_channels = int(c * self.global_ratio)
@@ -791,6 +796,8 @@ class UNet(nn.Module):
                         x_g = torch.cat([x_g, skip[1]], dim=1)
                         x = (x_l, x_g)
             else:
+                if self.use_skip_conv:
+                    skip = skip_conv(skip)
 
                 if self.skip_method == "add":
                     x.add_(skip)

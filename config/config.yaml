@@ -22,6 +22,7 @@ network:
   enable_lfu: True
   ffc_enc: False
   ffc_dec: False
+  use_skip_conv: False
 
 model:
   lambda_rec: 1
