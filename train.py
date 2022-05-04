@@ -57,17 +57,8 @@ def main(cfg: DictConfig) -> None:
 
     util.fix_seed(cfg.seed)
 
-    # flatten 2-level config
-    d_cfg = {}
-    for group, group_dict in dict(cfg).items():
-        if isinstance(group_dict, DictConfig):
-            for param, value in dict(group_dict).items():
-                d_cfg[f"{group}.{param}"] = value
-        else:
-            d_cfg[group] = group_dict
-
     if not cfg.check:
-        wandb.init(project=cfg.project, config=d_cfg)
+        wandb.init(project=cfg.project, config=util.flatten_cfg(cfg))
 
     # Data
     dataset_train, dataset_valid = get_dataset(cfg)

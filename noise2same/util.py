@@ -8,6 +8,7 @@ import torch
 from matplotlib import pyplot as plt
 from numpy import ndarray
 from numpy.linalg import norm
+from omegaconf import DictConfig
 from scipy.fft import dct
 from skimage.metrics import (
     mean_squared_error,
@@ -40,6 +41,22 @@ def fix_seed(seed: int = 56) -> None:
     torch.cuda.manual_seed(seed)
     torch.backends.cudnn.deterministic = True
     torch.backends.cudnn.benchmark = False
+
+
+def flatten_cfg(cfg: DictConfig) -> Dict:
+    """
+    Flatten nested config dict
+    :param cfg: omagaconf config
+    :return: flattened dict config
+    """
+    d_cfg = {}
+    for group, group_dict in dict(cfg).items():
+        if isinstance(group_dict, DictConfig):
+            for param, value in dict(group_dict).items():
+                d_cfg[f"{group}.{param}"] = value
+        else:
+            d_cfg[group] = group_dict
+    return d_cfg
 
 
 def crop_as(x: np.ndarray, gt: np.ndarray) -> np.ndarray:
