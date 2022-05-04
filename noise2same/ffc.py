@@ -340,6 +340,7 @@ class FFC_BN_ACT(nn.Module):
         # todo it works for now but it should be changed to be more explicit in initialization
         if bn_act_first:
             ratio_gout = ratio_gin
+            out_channels = in_channels
 
         lnorm = nn.Identity if ratio_gout == 1 else norm_layer
         gnorm = nn.Identity if ratio_gout == 0 else norm_layer
@@ -364,5 +365,17 @@ class BN_ACT_FFC(FFC_BN_ACT):
         x_l = self.act_l(self.bn_l(x_l))
         x_g = self.act_g(self.bn_g(x_g))
         x_l, x_g = self.ffc((x_l, x_g))
-        # in channeli järgi
         return x_l, x_g
+
+
+def divide_channels(in_channels: int, out_channels: int, global_ratio: float):
+    in_channels_global = int(in_channels * global_ratio)
+    in_channels_local = in_channels - in_channels_global
+    out_channels_global = int(out_channels * global_ratio)
+    out_channels_local = out_channels - out_channels_global
+    return (
+        in_channels_local,
+        out_channels_local,
+        in_channels_global,
+        out_channels_global,
+    )
