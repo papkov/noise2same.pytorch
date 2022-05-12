@@ -36,6 +36,7 @@ class PlanariaDatasetTiff(AbstractNoiseDataset3DLarge):
     tile_step: int = 192
     crop_border: int = 32
     weight: str = "pyramid"
+    stack_depth: int = 96
 
     def _get_images(self) -> Union[List[str], np.ndarray]:
         self.image = tifffile.imread(self.path)[..., None]
@@ -49,8 +50,8 @@ class PlanariaDatasetTiff(AbstractNoiseDataset3DLarge):
 
         self.tiler = ImageSlicer(
             self.image.shape,
-            tile_size=(96, self.tile_size, self.tile_size),
-            tile_step=(96, self.tile_step, self.tile_step),
+            tile_size=(self.stack_depth, self.tile_size, self.tile_size),
+            tile_step=(self.stack_depth, self.tile_step, self.tile_step),
             weight=self.weight,
             is_channels=True,
             crop_border=(0, self.crop_border, self.crop_border),

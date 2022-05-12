@@ -1,5 +1,5 @@
 from pathlib import Path
-from typing import Tuple
+from typing import Dict, Tuple, Union
 
 import numpy as np
 import tifffile
@@ -9,7 +9,15 @@ from skimage import io
 from torch.utils.data import Dataset
 from tqdm.auto import tqdm
 
-from noise2same.dataset import bsd68, hanzi, imagenet, microtubules, planaria, ssi
+from noise2same.dataset import (
+    bsd68,
+    flywing,
+    hanzi,
+    imagenet,
+    microtubules,
+    planaria,
+    ssi,
+)
 from noise2same.dataset.util import (
     training_augmentations_2d,
     training_augmentations_3d,
@@ -80,6 +88,18 @@ def get_dataset(cfg: DictConfig) -> Tuple[Dataset, Dataset]:
                 mode="val",
             )
 
+    elif cfg.name.lower() == "flywing":
+        dataset_train = flywing.FlyWingDatasetPrepared(
+            path=cwd / "data/Projection_Flywing",
+            mode="train",
+            transforms=training_augmentations_3d(),
+        )
+        if cfg.training.validate:
+            dataset_valid = flywing.FlyWingDatasetPrepared(
+                path=cwd / "data/Projection_Flywing",
+                mode="val",
+            )
+
     elif cfg.name.lower() == "microtubules":
         dataset_train = microtubules.MicrotubulesDataset(
             path=cwd / cfg.data.path,
@@ -97,8 +117,7 @@ def get_dataset(cfg: DictConfig) -> Tuple[Dataset, Dataset]:
             transforms=training_augmentations_2d(crop=cfg.training.crop),
         )
     else:
-        # todo add other datasets
-        raise ValueError
+        raise ValueError(f"Dataset {cfg.name.lower()} not supported")
 
     return dataset_train, dataset_valid
 
@@ -140,6 +159,18 @@ def get_test_dataset_and_gt(cfg: DictConfig) -> Tuple[Dataset, np.ndarray]:
         )
         gt = normalize_percentile(gt, 0.1, 99.9)
 
+    elif cfg.name.lower() == "flywing":
+        # This returns just a single image!
+        # Use get_planaria_dataset_and_gt() instead
+        dataset = flywing.FlyWingDatasetTiff(
+            cwd / "data/Projection_Flywing/test_data/C3_T004.tif",
+            standardize=True,
+        )
+        dataset.mean, dataset.std = 0, 1
+
+        gt = tifffile.imread(cwd / "data/Projection_Flywing/test_data/C2_T004.tif")
+        gt = normalize_percentile(gt, 0.1, 99.9)
+
     elif cfg.name.lower() == "microtubules":
         dataset = microtubules.MicrotubulesDataset(
             path=cwd / cfg.data.path,
@@ -166,7 +197,9 @@ def get_test_dataset_and_gt(cfg: DictConfig) -> Tuple[Dataset, np.ndarray]:
     return dataset, gt
 
 
-def get_planaria_dataset_and_gt(filename_gt: str):
+def get_planaria_dataset_and_gt(
+    filename_gt: str, tile_size: int = 256, tile_step: int = 192
+) -> Tuple[Dict[str, planaria.PlanariaDatasetTiff], np.ndarray]:
     gt = tifffile.imread(filename_gt)
     gt = normalize_percentile(gt, 0.1, 99.9)
     datasets = {}
@@ -174,9 +207,37 @@ def get_planaria_dataset_and_gt(filename_gt: str):
         datasets[f"c{c}"] = planaria.PlanariaDatasetTiff(
             filename_gt.replace("GT", f"condition_{c}"),
             standardize=True,
-            # todo parametrize?
-            # tile_size=192,
-            # tile_step=192 - 64,
+            tile_size=tile_size,
+            tile_step=tile_step,
+        )
+        datasets[f"c{c}"].mean, datasets[f"c{c}"].std = 0, 1
+
+    return datasets, gt
+
+
+def get_flywing_dataset_and_gt(
+    image_id: int,
+    path: Union[Path, str] = "data/Projection_Flywing/test_data",
+    tile_size: int = 256,
+    tile_step: int = 192,
+) -> Tuple[Dict[str, flywing.FlyWingDatasetTiff], np.ndarray]:
+
+    datasets = {}
+    gt = None
+
+    for c in range(4):
+        fn = f"{path}/C{c}_T{image_id:03d}.tif"
+
+        if c == 2:
+            gt = tifffile.imread(fn)
+            gt = normalize_percentile(gt, 0.1, 99.9)
+            continue
+
+        datasets[f"c{c}"] = flywing.FlyWingDatasetTiff(
+            fn,
+            standardize=True,
+            tile_size=tile_size,
+            tile_step=tile_step,
         )
         datasets[f"c{c}"].mean, datasets[f"c{c}"].std = 0, 1
 

@@ -1,0 +1,9 @@
+# @package _global_
+name: flywing
+data:
+  n_dim: 3
+
+training:
+  steps: 50000
+  crop: 64
+  batch_size: 4

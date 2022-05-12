@@ -13,6 +13,7 @@ from tqdm.auto import tqdm, trange
 
 from noise2same import model, util
 from noise2same.dataset.getter import (
+    get_flywing_dataset_and_gt,
     get_planaria_dataset_and_gt,
     get_test_dataset_and_gt,
 )
@@ -32,7 +33,7 @@ def main(cfg: DictConfig) -> None:
     print(f"Evaluate experiment {cfg.name}, work in {os.getcwd()}")
 
     dataset, ground_truth = None, None
-    if cfg.name not in ("planaria",):
+    if cfg.name not in ("planaria", "flywing"):
         # For some datasets we need custom loading
         dataset, ground_truth = get_test_dataset_and_gt(cfg)
 
@@ -92,11 +93,25 @@ def main(cfg: DictConfig) -> None:
                         datasets[f"c{c}"], half=half, batch_size=1
                     )
                 )
+    elif cfg.name in ("flywing",):
+        # c2 is the ground truth
+        predictions = {"c0": [], "c1": [], "c3": [], "y": []}
+        for image_id in trange(1, 27):
+            datasets, gt = get_flywing_dataset_and_gt(
+                image_id, path=cwd / "data/Projection_Flywing/test_data"
+            )
+            predictions["y"].append(gt)
+            for c in (0, 1, 3):
+                predictions[f"c{c}"].append(
+                    evaluator.inference_single_image_dataset(
+                        datasets[f"c{c}"], half=half, batch_size=1
+                    )
+                )
     else:
-        raise ValueError
+        raise ValueError(f"Unknown dataset {cfg.name}")
 
     # Rearrange predictions List[Dict[str, array]] -> Dict[str, List[array]]
-    if cfg.name not in ("planaria", "microtubules"):
+    if cfg.name not in ("planaria", "microtubules", "flywing"):
         predictions = {k: [d[k].squeeze() for d in predictions] for k in predictions[0]}
 
     # Calculate scores
@@ -127,13 +142,15 @@ def main(cfg: DictConfig) -> None:
         ]
     elif cfg.name in ("microtubules",):
         scores = util.calculate_scores(ground_truth, predictions, normalize_pairs=True)
-    elif cfg.name in ("planaria",):
+    elif cfg.name in ("planaria", "flywing"):
         scores = []
-        for c in range(1, 4):
+        for c in predictions.keys():
+            if c == "y":
+                continue
             scores_c = [
                 util.calculate_scores(gt, x, normalize_pairs=True)
                 for gt, x in tqdm(
-                    zip(predictions["y"], predictions[f"c{c}"]),
+                    zip(predictions["y"], predictions[c]),
                     total=len(predictions["y"]),
                 )
             ]
