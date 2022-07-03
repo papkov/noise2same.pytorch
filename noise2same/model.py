@@ -9,7 +9,8 @@ from torch.nn import functional as F
 from torch.nn.functional import conv2d, conv3d
 from torchvision.transforms import GaussianBlur
 
-from noise2same import network
+from noise2same.unet import UNet, ProjectHead, RegressionHead
+from noise2same.swinir import SwinIR
 from noise2same.contrast import PixelContrastLoss
 from noise2same.psf.psf_convolution import PSFParameter, read_psf
 
@@ -95,8 +96,9 @@ class Noise2Same(nn.Module):
         """
         super(Noise2Same, self).__init__()
         assert masking in ("gaussian", "donut")
-        assert arch in ("unet", "identity")
+        assert arch in ("unet", "swinir", "identity")
         assert regularization_key in ("image", "deconv")
+        assert not (arch == 'swinir' and n_dim != 2)
         if psf is None:
             # we don't have a psf, so we can't use deconv
             regularization_key = "image"
@@ -121,22 +123,29 @@ class Noise2Same(nn.Module):
         self.only_masked = only_masked
 
         # TODO customize with segmentation_models
-        if self.arch == "unet":
-            self.net = network.UNet(
-                in_channels=in_channels,
-                n_dim=n_dim,
-                base_channels=base_channels,
-                skip_method=skip_method,
-                **kwargs,
-            )
-            self.head = network.RegressionHead(
+        if self.arch == 'identity':
+            self.net = nn.Identity()
+            self.head = nn.Identity()
+        else:
+            if self.arch == "unet":
+                self.net = UNet(
+                    in_channels=in_channels,
+                    n_dim=n_dim,
+                    base_channels=base_channels,
+                    skip_method=skip_method,
+                    **kwargs,
+                )
+            else:
+                self.net = SwinIR(
+                    in_chans=in_channels,
+                    embed_dim=base_channels,
+                    **kwargs
+                )
+            self.head = RegressionHead(
                 in_channels=base_channels,
                 out_channels=in_channels,
                 n_dim=n_dim,
             )
-        else:
-            self.net = nn.Identity()
-            self.head = nn.Identity()
 
         # todo parametrize
         self.blur = GaussianBlur(5, sigma=0.2) if residual else None
@@ -144,7 +153,7 @@ class Noise2Same(nn.Module):
         # TODO parametrize project head
         self.project_head = None
         if self.lambda_proj > 0:
-            self.project_head = network.ProjectHead(
+            self.project_head = ProjectHead(
                 in_channels=base_channels, n_dim=n_dim, out_channels=256, kernel_size=1
             )
 
