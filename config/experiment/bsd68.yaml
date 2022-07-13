@@ -1,5 +1,5 @@
 # @package _global_
-name: bsd68
+experiment: bsd68
 data:
   n_dim: 2
   n_channels: 1

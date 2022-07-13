@@ -17,26 +17,31 @@ from noise2same.dataset.getter import (
     get_test_dataset_and_gt,
 )
 from noise2same.evaluator import Evaluator
+from utils import parametrize_backbone_and_head
 
 
-@hydra.main(config_path="config", config_name="config.yaml")
+@hydra.main(config_path="config", config_name="config.yaml", version_base="1.1")
 def main(cfg: DictConfig) -> None:
-    if "name" not in cfg.keys():
+    if "backbone_name" not in cfg.keys():
+        print("Please specify a backbone with `+backbone=name`")
+        return
+
+    if "experiment" not in cfg.keys():
         print("Please specify an experiment with `+experiment=name`")
         return
 
     os.environ["CUDA_VISIBLE_DEVICES"] = f"{cfg.device}"
 
     cwd = Path(get_original_cwd())
-    print(f"Evaluate experiment {cfg.name}, work in {os.getcwd()}")
+    print(f"Evaluate backbone {cfg.backbone_name} on experiment {cfg.experiment}, work in {os.getcwd()}")
 
     dataset, ground_truth = None, None
-    if cfg.name not in ("planaria",):
+    if cfg.experiment not in ("planaria",):
         # For some datasets we need custom loading
         dataset, ground_truth = get_test_dataset_and_gt(cfg)
 
     loader = None
-    if cfg.name.lower() in ("bsd68", "imagenet", "hanzi"):
+    if cfg.experiment.lower() in ("bsd68", "imagenet", "hanzi"):
         loader = DataLoader(
             dataset,
             batch_size=1,  # todo customize
@@ -46,33 +51,36 @@ def main(cfg: DictConfig) -> None:
             drop_last=False,
         )
 
+    backbone, head = parametrize_backbone_and_head(cfg)
+
     mdl = model.Noise2Same(
         n_dim=cfg.data.n_dim,
         in_channels=cfg.data.n_channels,
         psf=cfg.psf.path if "psf" in cfg else None,
         psf_size=cfg.psf.psf_size if "psf" in cfg else None,
         psf_pad_mode=cfg.psf.psf_pad_mode if "psf" in cfg else None,
-        skip_method=cfg.network.skip_method,
+        backbone=backbone,
+        head=head,
         **cfg.model,
     )
-
+    print(os.getcwd())
     checkpoint_path = (
         cfg.checkpoint
         if hasattr(cfg, "checkpoint")
-        else cwd / f"weights/{cfg.name}.pth"
+        else cwd / f"weights/{cfg.experiment}.pth"
     )
 
     # Run evaluation
     half = getattr(cfg, "amp", False)
     masked = getattr(cfg, "masked", False)
     evaluator = Evaluator(mdl, checkpoint_path=checkpoint_path, masked=masked)
-    if cfg.name in ("bsd68", "hanzi", "imagenet"):
+    if cfg.experiment in ("bsd68", "hanzi", "imagenet"):
         predictions = evaluator.inference(loader, half=half)
-    elif cfg.name in ("microtubules",):
+    elif cfg.experiment in ("microtubules",):
         predictions = evaluator.inference_single_image_dataset(
             dataset, half=half, batch_size=1
         )
-    elif cfg.name in ("planaria",):
+    elif cfg.experiment in ("planaria",):
         files = sorted(
             glob.glob(str(cwd / "data/Denoising_Planaria/test_data/GT/*.tif"))
         )
@@ -90,21 +98,21 @@ def main(cfg: DictConfig) -> None:
         raise ValueError
 
     # Rearrange predictions List[Dict[str, array]] -> Dict[str, List[array]]
-    if cfg.name not in ("planaria", "microtubules"):
+    if cfg.experiment not in ("planaria", "microtubules"):
         predictions = {k: [d[k].squeeze() for d in predictions] for k in predictions[0]}
 
     # Calculate scores
-    if cfg.name in ("bsd68",):
+    if cfg.experiment in ("bsd68",):
         scores = [
             util.calculate_scores(gtx, pred, data_range=255)
             for gtx, pred in zip(ground_truth, predictions["image"])
         ]
-    elif cfg.name in ("hanzi",):
+    elif cfg.experiment in ("hanzi",):
         scores = [
             util.calculate_scores(gtx * 255, pred, data_range=255, scale=True)
             for gtx, pred in zip(ground_truth, predictions["image"])
         ]
-    elif cfg.name in ("imagenet",):
+    elif cfg.experiment in ("imagenet",):
         scores = [
             util.calculate_scores(
                 gtx,
@@ -115,9 +123,9 @@ def main(cfg: DictConfig) -> None:
             )
             for gtx, pred in zip(ground_truth, predictions["image"])
         ]
-    elif cfg.name in ("microtubules",):
+    elif cfg.experiment in ("microtubules",):
         scores = util.calculate_scores(ground_truth, predictions, normalize_pairs=True)
-    elif cfg.name in ("planaria",):
+    elif cfg.experiment in ("planaria",):
         scores = []
         for c in range(1, 4):
             scores_c = [
@@ -139,7 +147,7 @@ def main(cfg: DictConfig) -> None:
 
     # Show summary
     print("\nEvaluation results:")
-    if cfg.name in ("planaria",):
+    if cfg.experiment in ("planaria",):
         pprint(scores.groupby("c").mean())
     else:
         pprint(scores.mean())

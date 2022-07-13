@@ -230,7 +230,7 @@ class EncoderBlock(nn.Module):
 class UNet(nn.Module):
     def __init__(
         self,
-        in_channels: int,
+        in_channels: int = 1,
         base_channels: int = 96,
         kernel_size: int = 3,
         n_dim: int = 2,

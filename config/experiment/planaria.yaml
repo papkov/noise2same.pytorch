@@ -1,5 +1,5 @@
 # @package _global_
-name: planaria
+experiment: planaria
 data:
   n_dim: 3
 

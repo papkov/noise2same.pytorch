@@ -1,5 +1,5 @@
 # @package _global_
-name: hanzi
+experiment: hanzi
 data:
   version: 0
   noise_level: 3

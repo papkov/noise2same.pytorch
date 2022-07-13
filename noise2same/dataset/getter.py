@@ -19,7 +19,7 @@ def get_dataset(cfg: DictConfig) -> Tuple[Dataset, Dataset]:
     cwd = Path(get_original_cwd())
     dataset_valid = None
 
-    if cfg.name.lower() == "bsd68":
+    if cfg.experiment.lower() == "bsd68":
         dataset_train = bsd68.BSD68DatasetPrepared(
             path=cwd / "data/BSD68/",
             mode="train",
@@ -30,7 +30,7 @@ def get_dataset(cfg: DictConfig) -> Tuple[Dataset, Dataset]:
                 path=cwd / "data/BSD68/", mode="val"
             )
 
-    elif cfg.name.lower() == "hanzi":
+    elif cfg.experiment.lower() == "hanzi":
         dataset_train = hanzi.HanziDatasetPrepared(
             path=cwd / "data/Hanzi/tiles",
             mode="training",
@@ -46,7 +46,7 @@ def get_dataset(cfg: DictConfig) -> Tuple[Dataset, Dataset]:
                 noise_level=cfg.data.noise_level,
             )
 
-    elif cfg.name.lower() == "imagenet":
+    elif cfg.experiment.lower() == "imagenet":
         dataset_train = imagenet.ImagenetDatasetPrepared(
             path=cwd / "data/ImageNet",
             mode="train",
@@ -60,7 +60,7 @@ def get_dataset(cfg: DictConfig) -> Tuple[Dataset, Dataset]:
                 version=cfg.data.version,
             )
 
-    elif cfg.name.lower() == "planaria":
+    elif cfg.experiment.lower() == "planaria":
         dataset_train = planaria.PlanariaDatasetPrepared(
             path=cwd / "data/Denoising_Planaria",
             mode="train",
@@ -72,7 +72,7 @@ def get_dataset(cfg: DictConfig) -> Tuple[Dataset, Dataset]:
                 mode="val",
             )
 
-    elif cfg.name.lower() == "microtubules":
+    elif cfg.experiment.lower() == "microtubules":
         dataset_train = microtubules.MicrotubulesDataset(
             path=cwd / cfg.data.path,
             input_name=cfg.data.input_name,
@@ -82,7 +82,7 @@ def get_dataset(cfg: DictConfig) -> Tuple[Dataset, Dataset]:
             add_blur_and_noise=cfg.data.add_blur_and_noise,
         )
 
-    elif cfg.name.lower() == "ssi":
+    elif cfg.experiment.lower() == "ssi":
         dataset_train = ssi.SSIDataset(
             path=cwd / cfg.data.path,
             input_name=cfg.data.input_name,
@@ -98,25 +98,25 @@ def get_dataset(cfg: DictConfig) -> Tuple[Dataset, Dataset]:
 def get_test_dataset_and_gt(cfg: DictConfig) -> Tuple[Dataset, np.ndarray]:
 
     cwd = Path(get_original_cwd())
-    if cfg.name.lower() == "bsd68":
+    if cfg.experiment.lower() == "bsd68":
         dataset = bsd68.BSD68DatasetPrepared(path=cwd / "data/BSD68/", mode="test")
         gt = np.load(
             str(cwd / "data/BSD68/test/bsd68_groundtruth.npy"), allow_pickle=True
         )
 
-    elif cfg.name.lower() == "hanzi":
+    elif cfg.experiment.lower() == "hanzi":
         dataset = hanzi.HanziDatasetPrepared(
             path=cwd / "data/Hanzi/tiles", mode="testing"
         )
         gt = np.load(str(cwd / "data/Hanzi/tiles/testing.npy"))[:, 0]
 
-    elif cfg.name.lower() == "imagenet":
+    elif cfg.experiment.lower() == "imagenet":
         dataset = imagenet.ImagenetDatasetTest(path=cwd / "data/ImageNet/")
         gt = [
             np.load(p)[0] for p in tqdm(sorted((dataset.path / "test").glob("*.npy")))
         ]
 
-    elif cfg.name.lower() == "planaria":
+    elif cfg.experiment.lower() == "planaria":
         # This returns just a single image!
         # Use get_planaria_dataset_and_gt() instead
         dataset = planaria.PlanariaDatasetTiff(
@@ -132,7 +132,7 @@ def get_test_dataset_and_gt(cfg: DictConfig) -> Tuple[Dataset, np.ndarray]:
         )
         gt = normalize_percentile(gt, 0.1, 99.9)
 
-    elif cfg.name.lower() == "microtubules":
+    elif cfg.experiment.lower() == "microtubules":
         dataset = microtubules.MicrotubulesDataset(
             path=cwd / cfg.data.path,
             input_name=cfg.data.input_name,
@@ -146,14 +146,14 @@ def get_test_dataset_and_gt(cfg: DictConfig) -> Tuple[Dataset, np.ndarray]:
         gt = io.imread(str(cwd / "data/microtubules-simulation/ground-truth.tif"))
         gt = normalize_percentile(gt, 0.1, 99.9)
 
-    elif cfg.name.lower() == "ssi":
+    elif cfg.experiment.lower() == "ssi":
         dataset = ssi.SSIDataset(
             path=cwd / cfg.data.path,
             input_name=cfg.data.input_name,
         )
         gt = dataset.gt
     else:
-        raise ValueError(f"Dataset {cfg.name} not found")
+        raise ValueError(f"Dataset {cfg.experiment} not found")
 
     return dataset, gt
 
