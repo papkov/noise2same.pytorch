@@ -63,7 +63,7 @@ def main(cfg: DictConfig) -> None:
         head=head,
         **cfg.model,
     )
-    print(os.getcwd())
+
     checkpoint_path = (
         cfg.checkpoint
         if hasattr(cfg, "checkpoint")
