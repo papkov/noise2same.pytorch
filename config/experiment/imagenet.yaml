@@ -1,5 +1,5 @@
 # @package _global_
-name: imagenet
+experiment: imagenet
 data:
   n_channels: 3
   version: 0

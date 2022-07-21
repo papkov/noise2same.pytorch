@@ -1,5 +1,5 @@
 # @package _global_
-name: microtubules
+experiment: microtubules
 data:
   n_dim: 3
   path: data/microtubules-simulation

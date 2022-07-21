@@ -1,18 +1,19 @@
 import os
+import traceback
 from pathlib import Path
-from pprint import pprint
 
 import hydra
 import torch
 import wandb
 from hydra.utils import get_original_cwd
 from omegaconf import DictConfig, OmegaConf
-from torch.utils.data import DataLoader, RandomSampler, Subset
+from torch.utils.data import DataLoader, RandomSampler
 
 import noise2same.trainer
 from noise2same import model, util
 from noise2same.dataset.getter import get_dataset, get_test_dataset_and_gt
 from noise2same.optimizers.esadam import ESAdam
+from utils import parametrize_backbone_and_head
 
 
 def exponential_decay(
@@ -38,19 +39,23 @@ def exponential_decay(
     return _lambda
 
 
-@hydra.main(config_path="config", config_name="config")
+@hydra.main(config_path="config", config_name="config", version_base="1.1")
 def main(cfg: DictConfig) -> None:
 
     # trying to fix: unable to open shared memory object </torch_197398_0> in read-write mode
     # torch.multiprocessing.set_sharing_strategy("file_system")
 
-    if "name" not in cfg.keys():
+    if "backbone_name" not in cfg.keys():
+        print("Please specify a backbone with `+backbone=name`")
+        return
+
+    if "experiment" not in cfg.keys():
         print("Please specify an experiment with `+experiment=name`")
         return
 
     print(OmegaConf.to_yaml(cfg))
     os.environ["CUDA_VISIBLE_DEVICES"] = f"{cfg.device}"
-    print(f"Run experiment {cfg.name}, work in {os.getcwd()}")
+    print(f"Run backbone {cfg.backbone_name} on experiment {cfg.experiment}, work in {os.getcwd()}")
     cwd = Path(get_original_cwd())
 
     util.fix_seed(cfg.seed)
@@ -65,7 +70,7 @@ def main(cfg: DictConfig) -> None:
             d_cfg[group] = group_dict
 
     if not cfg.check:
-        wandb.init(project=cfg.project, config=d_cfg)
+        wandb.init(project=cfg.project, config=d_cfg, settings=wandb.Settings(start_method="fork"))
 
     # Data
     dataset_train, dataset_valid = get_dataset(cfg)
@@ -96,6 +101,8 @@ def main(cfg: DictConfig) -> None:
         psf = cwd / cfg.psf.path
         print(f"Read PSF from {psf}")
 
+    backbone, head = parametrize_backbone_and_head(cfg)
+
     # Model
     mdl = model.Noise2Same(
         n_dim=cfg.data.n_dim,
@@ -104,7 +111,8 @@ def main(cfg: DictConfig) -> None:
         psf_size=cfg.psf.psf_size if "psf" in cfg else None,
         psf_pad_mode=cfg.psf.psf_pad_mode if "psf" in cfg else None,
         psf_fft=cfg.psf.psf_fft if "psf" in cfg else None,
-        skip_method=cfg.network.skip_method,
+        backbone=backbone,
+        head=head,
         **cfg.model,
     )
 
@@ -133,7 +141,7 @@ def main(cfg: DictConfig) -> None:
         check=cfg.check,
         monitor=cfg.training.monitor,
         amp=cfg.training.amp,
-        info_padding=cfg.training.info_padding,
+        info_padding=cfg.training.info_padding
     )
 
     n_epochs = cfg.training.steps // cfg.training.steps_per_epoch
@@ -143,16 +151,16 @@ def main(cfg: DictConfig) -> None:
         )
     except KeyboardInterrupt:
         print("Training interrupted")
-    except RuntimeError as e:
+    except RuntimeError:
         if not cfg.check:
             wandb.run.summary["error"] = "RuntimeError"
-        print(e)
+        traceback.print_exc()
 
     if cfg.evaluate:
         test_dataset, ground_truth = get_test_dataset_and_gt(cfg)
         scores = {}
 
-        if cfg.name == "ssi":
+        if cfg.experiment == "ssi":
             loader = DataLoader(
                 test_dataset,
                 batch_size=1,  # todo customize
@@ -173,7 +181,7 @@ def main(cfg: DictConfig) -> None:
                 calculate_mi=True,
             )
 
-        elif cfg.name == "microtubules":
+        elif cfg.experiment == "microtubules":
 
             scores.update(
                 util.calculate_scores(

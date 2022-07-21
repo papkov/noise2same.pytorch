@@ -1,21 +1,12 @@
 hydra:
   run:
-    dir: results/${name}/${hydra.job.name}/${now:%Y-%m-%d_%H-%M-%S}
+    dir: results/${experiment}/${backbone_name}/${hydra.job.name}/${now:%Y-%m-%d_%H-%M-%S}
 
 project: noise2same
 device: 0
 seed: 56
 check: False
 evaluate: False
-
-network:
-  base_channels: 96
-  kernel_size: 3
-  depth: 3
-  encoding_block_sizes: [ 1, 1, 0 ]
-  decoding_block_sizes: [ 1, 1 ]
-  downsampling: [ conv, conv ]
-  skip_method: concat
 
 model:
   lambda_rec: 1

@@ -1,13 +1,11 @@
 # translated from
 # https://github.com/divelab/Noise2Same/blob/main/network.py
 # https://github.com/divelab/Noise2Same/blob/main/resnet_module.py
-from functools import partial
 from typing import Tuple
 
 import torch
 from torch import Tensor as T
 from torch import nn
-from torch.nn.functional import normalize
 
 
 class ProjectHead(nn.Sequential):
@@ -232,7 +230,7 @@ class EncoderBlock(nn.Module):
 class UNet(nn.Module):
     def __init__(
         self,
-        in_channels: int,
+        in_channels: int = 1,
         base_channels: int = 96,
         kernel_size: int = 3,
         n_dim: int = 2,

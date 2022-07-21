@@ -11,6 +11,8 @@ import time
 
 from noise2same.dataset.util import PadAndCropResizer
 from noise2same.model import Noise2Same
+from noise2same.unet import UNet
+from noise2same.swinir import SwinIR
 from noise2same.util import load_checkpoint_to_module
 
 
@@ -39,9 +41,16 @@ class Evaluator(object):
 
         self.model.to(device)
 
-        self.resizer = PadAndCropResizer(
-            mode="reflect", div_n=2 ** self.model.net.depth
-        )
+        if isinstance(self.model.net, UNet):
+            self.resizer = PadAndCropResizer(
+                mode="reflect", div_n=2 ** self.model.net.depth
+            )
+        elif isinstance(self.model.net, SwinIR):
+            self.resizer = PadAndCropResizer(
+                mode="reflect", div_n=self.model.net.window_size
+            )
+        else:
+            self.resizer = PadAndCropResizer(div_n=1)
 
     @torch.no_grad()
     def inference(
