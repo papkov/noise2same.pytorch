@@ -772,7 +772,7 @@ class UNet(nn.Module):
                     block_size=decoding_block_sizes[depth - 1 - i],
                     ffc=ffc_dec if unit_type != "default" else False,
                     unit_type="default"
-                    if ffc_dec == False and unit_type == "dual_pass"
+                    if not ffc_dec and unit_type == "dual_pass"
                     else unit_type,
                     last_block=True if i == 1 and unit_type == "dual_pass" else False,
                     global_ratio=global_ratio,
@@ -804,19 +804,17 @@ class UNet(nn.Module):
             if self.unit_type == "dual_pass":  # when the skip is tuple
                 (x_l, x_g) = x if type(x) is tuple else (x, 0)
                 if self.skip_method == "add":
-                    # enc dec paramterization not supported
+                    # enc dec parametrization not supported
                     x_l.add_(skip[0])
                     x_g.add_(skip[1])
                 elif self.skip_method in ("cat", "concat"):
 
-                    if self.ffc_enc == True and self.ffc_dec == False:
+                    if self.ffc_enc and not self.ffc_dec:
                         combined_skip = torch.cat([skip[0], skip[1]], dim=1)
                         if self.use_skip_conv:
                             combined_skip = skip_conv(combined_skip)
                         x = torch.cat([x, combined_skip], dim=1)
-                    elif (
-                        self.ffc_enc == False and self.ffc_dec == True
-                    ):  # probably not worth it
+                    elif not self.ffc_enc and self.ffc_dec:  # probably not worth it
                         n, c, *s = skip.shape  # s is (d,h,w) or (h,w)
                         global_channels = int(c * self.global_ratio)
                         local_channels = c - global_channels
