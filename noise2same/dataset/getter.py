@@ -93,11 +93,13 @@ def get_dataset(cfg: DictConfig) -> Tuple[Dataset, Dataset]:
             path=cwd / "data/Projection_Flywing",
             mode="train",
             transforms=training_augmentations_3d(),
+            stack_depth=16,
         )
         if cfg.training.validate:
             dataset_valid = flywing.FlyWingDatasetPrepared(
                 path=cwd / "data/Projection_Flywing",
                 mode="val",
+                stack_depth=56,
             )
 
     elif cfg.name.lower() == "microtubules":
