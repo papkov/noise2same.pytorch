@@ -101,11 +101,12 @@ def main(cfg: DictConfig) -> None:
         **cfg.model,
         **cfg.network,
     )
-    input_size = (cfg.training.batch_size, cfg.data.n_channels) + (
-        cfg.training.crop,
-    ) * cfg.data.n_dim
-    print(f"Model input size: {input_size}")
-    summary(mdl, input_size=input_size)
+    batch_shape = next(iter(loader_train))["image"].shape
+    # input_size = (cfg.training.batch_size, cfg.data.n_channels) + (
+    #     cfg.training.crop,
+    # ) * cfg.data.n_dim
+    print(f"Model input size: {batch_shape}")
+    summary(mdl, input_size=batch_shape)
 
     # Optimization
     if cfg.optim.optimizer == "adam":
