@@ -95,7 +95,7 @@ class SpectralTransform(nn.Module):
         conv = partial(conv, kernel_size=1, groups=groups, bias=False)
 
         bn = nn.BatchNorm2d if n_dim == 2 else nn.BatchNorm3d
-        pool = nn.AvgPool2d if n_dim == 3 else nn.AvgPool3d
+        pool = nn.AvgPool2d if n_dim == 2 else nn.AvgPool3d
         self.downsample = (
             pool(kernel_size=2, stride=stride) if stride == 2 else nn.Identity()
         )
