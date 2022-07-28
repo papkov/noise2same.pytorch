@@ -32,32 +32,10 @@ class PlanariaDatasetPrepared(AbstractNoiseDataset3D):
 
 @dataclass
 class PlanariaDatasetTiff(AbstractNoiseDataset3DLarge):
+    path: Union[Path, str] = "data/Denoising_Planaria/test_data/GT"
+    input_name: str = "EXP278_Smed_fixed_RedDot1_sub_5_N7_m0012.tif"
     tile_size: int = 256
     tile_step: int = 192
     crop_border: int = 32
-    weight: str = "pyramid"
     stack_depth: int = 96
 
-    def _get_images(self) -> Union[List[str], np.ndarray]:
-        self.image = tifffile.imread(self.path)[..., None]
-
-        if self.standardize:
-            self.mean = self.image.mean()
-            self.std = self.image.std()
-            self.image = (self.image - self.mean) / self.std
-        else:
-            self.image = normalize_percentile(self.image)
-
-        self.tiler = ImageSlicer(
-            self.image.shape,
-            tile_size=(self.stack_depth, self.tile_size, self.tile_size),
-            tile_step=(self.stack_depth, self.tile_step, self.tile_step),
-            weight=self.weight,
-            is_channels=True,
-            crop_border=(0, self.crop_border, self.crop_border),
-        )
-        return self.tiler.crops
-
-    def _read_image(self, image_or_path: List[int]) -> Tuple[np.ndarray, List[int]]:
-        image, crop = self.tiler.crop_tile(image=self.image, crop=image_or_path)
-        return np.moveaxis(image, -1, 0), crop

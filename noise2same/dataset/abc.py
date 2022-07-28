@@ -16,6 +16,12 @@ from torch.utils.data import Dataset
 
 from noise2same.dataset import transforms as t3d
 from noise2same.dataset.util import mask_like_image
+
+from noise2same.dataset.util import (
+    add_microscope_blur_3d,
+    add_poisson_gaussian_noise,
+    normalize,
+)
 from noise2same.util import normalize_percentile
 
 
@@ -220,9 +226,12 @@ class AbstractNoiseDataset3DLarge(AbstractNoiseDataset3D, ABC):
     input_name: str = None
     tile_size: int = 64
     tile_step: int = 48
+    stack_depth: int = 16
+    crop_border: int = 0
     mean: float = 0
     std: float = 1
     weight: str = "pyramid"
+    add_blur_and_noise: bool = False
 
     def __getitem__(self, i: int) -> Dict[str, Any]:
         """
@@ -247,6 +256,19 @@ class AbstractNoiseDataset3DLarge(AbstractNoiseDataset3D, ABC):
 
     def _read_large_image(self):
         self.image = io.imread(str(self.path / self.input_name)).astype(np.float32)
+        if self.add_blur_and_noise:
+            print(f"Generating blur and noise for {self.input_name}")
+            # self.image = normalize_percentile(self.image, 0.1, 99.9)
+            self.image = normalize(self.image)
+            # TODO parametrize psf size and noise
+            self.image, self.psf = add_microscope_blur_3d(self.image, size=17)
+            self.image = add_poisson_gaussian_noise(
+                self.image,
+                alpha=0.001,
+                sigma=0.01,  # 0.1 by default
+                sap=0,  # 0.01 by default but it is not common to have salt and pepper
+                quant_bits=10,
+            )
 
     def _get_images(self) -> Union[List[str], np.ndarray]:
         self._read_large_image()
@@ -263,10 +285,11 @@ class AbstractNoiseDataset3DLarge(AbstractNoiseDataset3D, ABC):
 
         self.tiler = ImageSlicer(
             self.image.shape,
-            tile_size=self.tile_size,
-            tile_step=self.tile_step,
+            tile_size=(self.stack_depth, self.tile_size, self.tile_size),
+            tile_step=(self.stack_depth, self.tile_step, self.tile_step),
             weight=self.weight,
             is_channels=True,
+            crop_border=(0, self.crop_border, self.crop_border),
         )
 
         return self.tiler.crops
