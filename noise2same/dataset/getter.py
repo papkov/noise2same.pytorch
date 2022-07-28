@@ -93,14 +93,26 @@ def get_dataset(cfg: DictConfig) -> Tuple[Dataset, Dataset]:
             path=cwd / "data/Projection_Flywing",
             mode="train",
             transforms=training_augmentations_3d(),
-            stack_depth=16,
+            stack_depth=cfg.data.stack_depth,
         )
         if cfg.training.validate:
             dataset_valid = flywing.FlyWingDatasetPrepared(
                 path=cwd / "data/Projection_Flywing",
                 mode="val",
-                stack_depth=56,
+                stack_depth=56,  # 50 with padding
             )
+
+    elif cfg.name.lower() == "flywing_generated":
+        dataset_train = flywing.FlyWingDatasetTiff(
+            path=cwd / "data/Projection_Flywing/test_data/",
+            input_name=cfg.data.input_name,
+            transforms=training_augmentations_3d(),
+            tile_size=cfg.data.tile_size,
+            tile_step=cfg.data.tile_step,
+            stack_depth=cfg.data.stack_depth,
+            crop_border=0,
+            add_blur_and_noise=cfg.data.add_blur_and_noise,
+        )
 
     elif cfg.name.lower() == "microtubules":
         dataset_train = microtubules.MicrotubulesDataset(
@@ -163,10 +175,11 @@ def get_test_dataset_and_gt(cfg: DictConfig) -> Tuple[Dataset, np.ndarray]:
 
     elif cfg.name.lower() == "flywing":
         # This returns just a single image!
-        # Use get_planaria_dataset_and_gt() instead
+        # Use get_flywing_dataset_and_gt() instead
         dataset = flywing.FlyWingDatasetTiff(
             cwd / "data/Projection_Flywing/test_data/C3_T004.tif",
             standardize=True,
+            stack_depth=56,
         )
         dataset.mean, dataset.std = 0, 1
 
@@ -222,6 +235,7 @@ def get_flywing_dataset_and_gt(
     path: Union[Path, str] = "data/Projection_Flywing/test_data",
     tile_size: int = 256,
     tile_step: int = 192,
+    stack_depth: int = 56,
 ) -> Tuple[Dict[str, flywing.FlyWingDatasetTiff], np.ndarray]:
 
     datasets = {}
@@ -240,6 +254,7 @@ def get_flywing_dataset_and_gt(
             standardize=True,
             tile_size=tile_size,
             tile_step=tile_step,
+            stack_depth=stack_depth,
         )
         datasets[f"c{c}"].mean, datasets[f"c{c}"].std = 0, 1
 

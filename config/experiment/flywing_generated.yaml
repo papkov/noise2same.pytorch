@@ -1,0 +1,29 @@
+# @package _global_
+name: flywing_generated
+evaluate: False
+project: noise2same-ssi-flywing-gen
+
+data:
+  input_name: C2_T001.tif
+  n_dim: 3
+  tile_size: 64
+  tile_step: 48
+  stack_depth: 56
+  add_blur_and_noise: True
+
+network:
+  base_channels: 48
+  skip_method: add
+
+training:
+  steps: 50000
+  crop: 64
+  batch_size: 4
+  validate: False
+  monitor: rec_mse
+
+psf:
+  path: null
+  psf_size: null
+  psf_pad_mode: replicate  # check if reflect affected anything
+  psf_fft: auto

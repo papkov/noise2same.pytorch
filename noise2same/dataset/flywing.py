@@ -5,11 +5,12 @@ from typing import Union
 import numpy as np
 
 from noise2same.dataset.planaria import PlanariaDatasetPrepared, PlanariaDatasetTiff
+from noise2same.dataset.abc import AbstractNoiseDataset3D, AbstractNoiseDataset3DLarge
 
 
 @dataclass
 class FlyWingDatasetPrepared(PlanariaDatasetPrepared):
-    path: Union[Path, str] = "data/‘Projection_Flywing"
+    path: Union[Path, str] = "data/Projection_Flywing"
     stack_depth: int = 16
 
     def _read_image(self, image_or_path: Union[str, np.ndarray]) -> np.ndarray:
@@ -30,5 +31,10 @@ class FlyWingDatasetPrepared(PlanariaDatasetPrepared):
 
 
 @dataclass
-class FlyWingDatasetTiff(PlanariaDatasetTiff):
-    stack_depth: int = 64
+class FlyWingDatasetTiff(AbstractNoiseDataset3DLarge):
+    path: Union[Path, str] = "data/Projection_Flywing/test_data/"
+    input_name: str = "C2_T001.tif"
+    tile_size: int = 256
+    tile_step: int = 192
+    crop_border: int = 32
+    stack_depth: int = 56
