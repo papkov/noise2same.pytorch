@@ -820,7 +820,7 @@ class SwinIR(nn.Module):
             # for image denoising and JPEG compression artifact reduction
             x_first = self.conv_first(x)
             res = self.conv_after_body(self.forward_features(x_first)) + x_first
-            x = x + self.conv_last(res)
+            x = self.conv_last(res)
 
         # x = x / self.img_range + self.mean
 

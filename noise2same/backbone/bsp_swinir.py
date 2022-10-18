@@ -127,8 +127,8 @@ class WindowAttention(nn.Module):
         attn = attn + relative_position_bias.unsqueeze(0)
 
         if mask is not None:
-            nW = mask.shape[0]
-            attn = attn.view(B_ // nW, nW, self.num_heads, N, N) + mask.unsqueeze(1).unsqueeze(0)
+            nW = mask.shape[1]
+            attn = attn.view(B_ // nW, nW, self.num_heads, N, N) + mask.unsqueeze(2)
             attn = attn.view(-1, self.num_heads, N, N)
             attn = self.softmax(attn)
         else:
@@ -158,7 +158,7 @@ class WindowAttention(nn.Module):
         return flops
 
 
-class SwinTransformerBlock(nn.Module):
+class BSPSwinTransformerBlock(nn.Module):
     r""" Swin Transformer Block.
     Args:
         dim (int): Number of input channels.
@@ -232,7 +232,7 @@ class SwinTransformerBlock(nn.Module):
 
         return attn_mask
 
-    def forward(self, x, x_size):
+    def forward(self, x, x_size, mask=None):
         H, W = x_size
         B, L, C = x.shape
         # assert L == H * W, "input feature has wrong size"
@@ -241,9 +241,13 @@ class SwinTransformerBlock(nn.Module):
         x = self.norm1(x)
         x = x.view(B, H, W, C)
 
+        shifted_mask = mask
+
         # cyclic shift
         if self.shift_size > 0:
             shifted_x = torch.roll(x, shifts=(-self.shift_size, -self.shift_size), dims=(1, 2))
+            if mask is not None:
+                shifted_mask = torch.roll(mask, shifts=(-self.shift_size, -self.shift_size), dims=(1, 2))
         else:
             shifted_x = x
 
@@ -253,9 +257,18 @@ class SwinTransformerBlock(nn.Module):
 
         # W-MSA/SW-MSA (to be compatible for testing on images whose shapes are the multiple of window size
         if self.input_resolution == x_size:
-            attn_windows = self.attn(x_windows, mask=self.attn_mask)  # nW*B, window_size*window_size, C
+            attn_mask = self.attn_mask
         else:
-            attn_windows = self.attn(x_windows, mask=self.calculate_mask(x_size).to(x.device))
+            attn_mask = self.calculate_mask(x_size).to(x.device)
+        if shifted_mask is not None:
+            bsp_mask = window_partition(shifted_mask.view(B, H, W, 1), self.window_size).view(B, -1, self.window_size ** 2)
+            bsp_mask = bsp_mask.unsqueeze(2).repeat(1, 1, self.window_size ** 2, 1)
+            if attn_mask is None:
+                attn_mask = bsp_mask.masked_fill(bsp_mask != 0, float(-100.0)).masked_fill(bsp_mask == 0, float(0.0))
+            else:
+                attn_mask = attn_mask.unsqueeze(0).repeat(B, 1, 1, 1)
+                attn_mask = attn_mask.masked_fill(bsp_mask == 0, float(-100.0))
+        attn_windows = self.attn(x_windows, mask=attn_mask)  # nW*B, window_size*window_size, C
 
         # merge windows
         attn_windows = attn_windows.view(-1, self.window_size, self.window_size, C)
@@ -341,7 +354,7 @@ class PatchMerging(nn.Module):
         return flops
 
 
-class BasicLayer(nn.Module):
+class BSPBasicLayer(nn.Module):
     """ A basic Swin Transformer layer for one stage.
     Args:
         dim (int): Number of input channels.
@@ -372,7 +385,7 @@ class BasicLayer(nn.Module):
 
         # build blocks
         self.blocks = nn.ModuleList([
-            SwinTransformerBlock(dim=dim, input_resolution=input_resolution,
+            BSPSwinTransformerBlock(dim=dim, input_resolution=input_resolution,
                                  num_heads=num_heads, window_size=window_size,
                                  shift_size=0 if (i % 2 == 0) else window_size // 2,
                                  mlp_ratio=mlp_ratio,
@@ -388,12 +401,12 @@ class BasicLayer(nn.Module):
         else:
             self.downsample = None
 
-    def forward(self, x, x_size):
+    def forward(self, x, x_size, **kwargs):
         for blk in self.blocks:
             if self.use_checkpoint:
                 x = checkpoint.checkpoint(blk, x, x_size)
             else:
-                x = blk(x, x_size)
+                x = blk(x, x_size, **kwargs)
         if self.downsample is not None:
             x = self.downsample(x)
         return x
@@ -410,7 +423,7 @@ class BasicLayer(nn.Module):
         return flops
 
 
-class RSTB(nn.Module):
+class BSPRSTB(nn.Module):
     """Residual Swin Transformer Block (RSTB).
     Args:
         dim (int): Number of input channels.
@@ -436,12 +449,12 @@ class RSTB(nn.Module):
                  mlp_ratio=4., qkv_bias=True, qk_scale=None, drop=0., attn_drop=0.,
                  drop_path=0., norm_layer=nn.LayerNorm, downsample=None, use_checkpoint=False,
                  img_size=224, patch_size=4, resi_connection='1conv'):
-        super(RSTB, self).__init__()
+        super(BSPRSTB, self).__init__()
 
         self.dim = dim
         self.input_resolution = input_resolution
 
-        self.residual_group = BasicLayer(dim=dim,
+        self.residual_group = BSPBasicLayer(dim=dim,
                                          input_resolution=input_resolution,
                                          depth=depth,
                                          num_heads=num_heads,
@@ -471,8 +484,8 @@ class RSTB(nn.Module):
             img_size=img_size, patch_size=patch_size, in_chans=0, embed_dim=dim,
             norm_layer=None)
 
-    def forward(self, x, x_size):
-        return self.patch_embed(self.conv(self.patch_unembed(self.residual_group(x, x_size), x_size))) + x
+    def forward(self, x, x_size, **kwargs):
+        return self.patch_embed(self.conv(self.patch_unembed(self.residual_group(x, x_size, **kwargs), x_size))) + x
 
     def flops(self):
         flops = 0
@@ -603,7 +616,7 @@ class UpsampleOneStep(nn.Sequential):
         return flops
 
 
-class SwinIR(nn.Module):
+class BSPSwinIR(nn.Module):
     r""" SwinIR
         A PyTorch impl of : `SwinIR: Image Restoration Using Swin Transformer`, based on Swin Transformer.
     Args:
@@ -637,7 +650,7 @@ class SwinIR(nn.Module):
                  norm_layer=nn.LayerNorm, ape=False, patch_norm=True,
                  use_checkpoint=False, upscale=2, img_range=1., upsampler='', resi_connection='1conv',
                  **kwargs):
-        super(SwinIR, self).__init__()
+        super(BSPSwinIR, self).__init__()
         num_in_ch = in_chans
         num_out_ch = in_chans
         num_feat = 64
@@ -653,7 +666,8 @@ class SwinIR(nn.Module):
 
         #####################################################################################################
         ################################### 1, shallow feature extraction ###################################
-        self.conv_first = nn.Conv2d(num_in_ch, embed_dim, 3, 1, 1)
+        # self.conv_first = nn.Conv2d(num_in_ch, embed_dim, 3, 1, 1)
+        self.conv_first = nn.Conv2d(num_in_ch, embed_dim, 1)
 
         #####################################################################################################
         ################################### 2, deep feature extraction ######################################
@@ -690,7 +704,7 @@ class SwinIR(nn.Module):
         # build Residual Swin Transformer blocks (RSTB)
         self.layers = nn.ModuleList()
         for i_layer in range(self.num_layers):
-            layer = RSTB(dim=embed_dim,
+            layer = BSPRSTB(dim=embed_dim,
                          input_resolution=(patches_resolution[0],
                                            patches_resolution[1]),
                          depth=depths[i_layer],
@@ -774,7 +788,7 @@ class SwinIR(nn.Module):
         x = F.pad(x, (0, mod_pad_w, 0, mod_pad_h), 'reflect')
         return x
 
-    def forward_features(self, x):
+    def forward_features(self, x, **kwargs):
         x_size = (x.shape[2], x.shape[3])
         x = self.patch_embed(x)
         if self.ape:
@@ -782,14 +796,14 @@ class SwinIR(nn.Module):
         x = self.pos_drop(x)
 
         for layer in self.layers:
-            x = layer(x, x_size)
+            x = layer(x, x_size, **kwargs)
 
         x = self.norm(x)  # B L C
         x = self.patch_unembed(x, x_size)
 
         return x
 
-    def forward(self, x):
+    def forward(self, x, **kwargs):
         H, W = x.shape[2:]
         x = self.check_image_size(x)
 
@@ -819,8 +833,8 @@ class SwinIR(nn.Module):
         else:
             # for image denoising and JPEG compression artifact reduction
             x_first = self.conv_first(x)
-            res = self.conv_after_body(self.forward_features(x_first)) + x_first
-            x = x + self.conv_last(res)
+            res = self.conv_after_body(self.forward_features(x_first, **kwargs)) + x_first
+            x = self.conv_last(res)
 
         # x = x / self.img_range + self.mean
 
@@ -843,7 +857,7 @@ if __name__ == '__main__':
     window_size = 8
     height = (1024 // upscale // window_size + 1) * window_size
     width = (720 // upscale // window_size + 1) * window_size
-    model = SwinIR(upscale=2, img_size=(height, width),
+    model = BSPSwinIR(upscale=2, img_size=(height, width),
                    window_size=window_size, img_range=1., depths=[6, 6, 6, 6],
                    embed_dim=60, num_heads=[6, 6, 6, 6], mlp_ratio=2, upsampler='pixelshuffledirect')
     print(model)

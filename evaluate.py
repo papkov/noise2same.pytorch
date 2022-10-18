@@ -3,13 +3,12 @@ import os
 from pathlib import Path
 from pprint import pprint
 
-import hydra
+from argparse import ArgumentParser
 import numpy as np
 import pandas as pd
-from hydra.utils import get_original_cwd
-from omegaconf import DictConfig, OmegaConf
-from torch.utils.data import DataLoader
-from tqdm.auto import tqdm, trange
+from omegaconf import OmegaConf
+from torch.utils.data import DataLoader, Dataset
+from tqdm.auto import tqdm
 
 from noise2same import model, util
 from noise2same.dataset.getter import (
@@ -20,67 +19,44 @@ from noise2same.evaluator import Evaluator
 from utils import parametrize_backbone_and_head
 
 
-@hydra.main(config_path="config", config_name="config.yaml", version_base="1.1")
-def main(cfg: DictConfig) -> None:
-    if "backbone_name" not in cfg.keys():
-        print("Please specify a backbone with `+backbone=name`")
-        return
-
-    if "experiment" not in cfg.keys():
-        print("Please specify an experiment with `+experiment=name`")
-        return
-
-    os.environ["CUDA_VISIBLE_DEVICES"] = f"{cfg.device}"
-
-    cwd = Path(get_original_cwd())
-    print(f"Evaluate backbone {cfg.backbone_name} on experiment {cfg.experiment}, work in {os.getcwd()}")
-
-    dataset, ground_truth = None, None
-    if cfg.experiment not in ("planaria",):
-        # For some datasets we need custom loading
-        dataset, ground_truth = get_test_dataset_and_gt(cfg)
-
+def evaluate(
+    evaluator: Evaluator,
+    dataset: Dataset,
+    ground_truth: np.ndarray,
+    experiment: str,
+    num_workers: int,
+    cwd: Path,
+    half: bool = False,
+):
     loader = None
-    if cfg.experiment.lower() in ("bsd68", "imagenet", "hanzi"):
+    if experiment.lower() in ("bsd68", "imagenet", "hanzi"):
         loader = DataLoader(
             dataset,
             batch_size=1,  # todo customize
-            num_workers=cfg.training.num_workers,
+            num_workers=num_workers,
             shuffle=False,
             pin_memory=True,
             drop_last=False,
         )
-
-    backbone, head = parametrize_backbone_and_head(cfg)
-
-    mdl = model.Noise2Same(
-        n_dim=cfg.data.n_dim,
-        in_channels=cfg.data.n_channels,
-        psf=cfg.psf.path if "psf" in cfg else None,
-        psf_size=cfg.psf.psf_size if "psf" in cfg else None,
-        psf_pad_mode=cfg.psf.psf_pad_mode if "psf" in cfg else None,
-        backbone=backbone,
-        head=head,
-        **cfg.model,
-    )
-
-    checkpoint_path = (
-        cfg.checkpoint
-        if hasattr(cfg, "checkpoint")
-        else cwd / f"weights/{cfg.experiment}.pth"
-    )
-
-    # Run evaluation
-    half = getattr(cfg, "amp", False)
-    masked = getattr(cfg, "masked", False)
-    evaluator = Evaluator(mdl, checkpoint_path=checkpoint_path, masked=masked)
-    if cfg.experiment in ("bsd68", "hanzi", "imagenet"):
-        predictions = evaluator.inference(loader, half=half)
-    elif cfg.experiment in ("microtubules",):
-        predictions = evaluator.inference_single_image_dataset(
+    elif experiment == "ssi":
+        loader = DataLoader(
+            dataset,
+            batch_size=1,  # todo customize
+            num_workers=num_workers,
+            shuffle=False,
+            pin_memory=True,
+            drop_last=False,
+        )
+    if experiment in ("bsd68", "hanzi"):
+        predictions, _ = evaluator.inference(loader, half=half)
+    elif experiment in ("imagenet",):
+        predictions, indices = evaluator.inference(loader, half=half, empty_cache=True)
+        ground_truth = [ground_truth[i] for i in indices]
+    elif experiment in ("microtubules",):
+        predictions, _ = evaluator.inference_single_image_dataset(
             dataset, half=half, batch_size=1
         )
-    elif cfg.experiment in ("planaria",):
+    elif experiment in ("planaria",):
         files = sorted(
             glob.glob(str(cwd / "data/Denoising_Planaria/test_data/GT/*.tif"))
         )
@@ -98,21 +74,21 @@ def main(cfg: DictConfig) -> None:
         raise ValueError
 
     # Rearrange predictions List[Dict[str, array]] -> Dict[str, List[array]]
-    if cfg.experiment not in ("planaria", "microtubules"):
+    if experiment not in ("planaria", "microtubules"):
         predictions = {k: [d[k].squeeze() for d in predictions] for k in predictions[0]}
 
     # Calculate scores
-    if cfg.experiment in ("bsd68",):
+    if experiment in ("bsd68",):
         scores = [
             util.calculate_scores(gtx, pred, data_range=255)
             for gtx, pred in zip(ground_truth, predictions["image"])
         ]
-    elif cfg.experiment in ("hanzi",):
+    elif experiment in ("hanzi",):
         scores = [
             util.calculate_scores(gtx * 255, pred, data_range=255, scale=True)
             for gtx, pred in zip(ground_truth, predictions["image"])
         ]
-    elif cfg.experiment in ("imagenet",):
+    elif experiment in ("imagenet",):
         scores = [
             util.calculate_scores(
                 gtx,
@@ -123,9 +99,9 @@ def main(cfg: DictConfig) -> None:
             )
             for gtx, pred in zip(ground_truth, predictions["image"])
         ]
-    elif cfg.experiment in ("microtubules",):
+    elif experiment in ("microtubules",):
         scores = util.calculate_scores(ground_truth, predictions, normalize_pairs=True)
-    elif cfg.experiment in ("planaria",):
+    elif experiment in ("planaria",):
         scores = []
         for c in range(1, 4):
             scores_c = [
@@ -140,6 +116,7 @@ def main(cfg: DictConfig) -> None:
     else:
         raise ValueError
 
+    result = scores
     # Save results
     scores = pd.DataFrame(scores)
     scores.to_csv("scores.csv")
@@ -147,11 +124,57 @@ def main(cfg: DictConfig) -> None:
 
     # Show summary
     print("\nEvaluation results:")
-    if cfg.experiment in ("planaria",):
+    if experiment in ("planaria",):
         pprint(scores.groupby("c").mean())
     else:
         pprint(scores.mean())
+    return result
+
+
+def main(train_dir: str, checkpoint: str = 'last', other_args: list = None) -> None:
+
+    cfg = OmegaConf.load(f'{train_dir}/.hydra/config.yaml')
+    if other_args is not None:
+        cfg.merge_with_dotlist(other_args)
+
+    os.environ["CUDA_VISIBLE_DEVICES"] = f"{cfg.device}"
+
+    print(f"Evaluate backbone {cfg.backbone_name} on experiment {cfg.experiment}, work in {os.getcwd()}")
+
+    cwd = Path(os.getcwd())
+
+    dataset, ground_truth = None, None
+    if cfg.experiment not in ("planaria",):
+        # For some datasets we need custom loading
+        dataset, ground_truth = get_test_dataset_and_gt(cfg, cwd)
+
+    backbone, head = parametrize_backbone_and_head(cfg)
+
+    mdl = model.Noise2Same(
+        n_dim=cfg.data.n_dim,
+        in_channels=cfg.data.n_channels,
+        psf=cfg.psf.path if "psf" in cfg else None,
+        psf_size=cfg.psf.psf_size if "psf" in cfg else None,
+        psf_pad_mode=cfg.psf.psf_pad_mode if "psf" in cfg else None,
+        backbone=backbone,
+        head=head,
+        **cfg.model,
+    )
+
+    checkpoint_path = train_dir / Path(f"checkpoints/model{'_last' if checkpoint == 'last' else ''}.pth")
+
+    # Run evaluation
+    half = getattr(cfg, "amp", False)
+    masked = getattr(cfg, "masked", False)
+    evaluator = Evaluator(mdl, checkpoint_path=checkpoint_path, masked=masked)
+    evaluate(evaluator, dataset, ground_truth, cfg.experiment, cfg.training.num_workers, cwd, half)
 
 
 if __name__ == "__main__":
-    main()
+    parser = ArgumentParser()
+    parser.add_argument("--train_dir", required=True,
+                        help="Path to hydra train directory")
+    parser.add_argument("--checkpoint", choices=["last", "best"],
+                        default="last", help="The checkpoint to evaluate, 'last' or 'best'")
+    args, unknown_args = parser.parse_known_args()
+    main(args.train_dir, args.checkpoint, unknown_args)

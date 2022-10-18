@@ -9,4 +9,4 @@ training:
   crop: 64
   batch_size: 64
   validate: False
-  monitor: rec_mse
+  monitor: bsp_mse

@@ -3,14 +3,13 @@ from typing import Tuple
 
 import numpy as np
 import tifffile
-from hydra.utils import get_original_cwd
 from omegaconf import DictConfig
 from skimage import io
 from torch.utils.data import Dataset
 from tqdm.auto import tqdm
 
-from noise2same.dataset import bsd68, hanzi, imagenet, microtubules, planaria, ssi
-from noise2same.dataset.util import training_augmentations_2d, training_augmentations_3d
+from . import bsd68, hanzi, imagenet, microtubules, planaria, ssi
+from .util import training_augmentations_2d, training_augmentations_3d
 from noise2same.util import normalize_percentile
 
 
@@ -19,22 +18,26 @@ def compute_pad_divisor(cfg: DictConfig):
         return 2 ** cfg.backbone.depth
     elif cfg.backbone_name == 'swinir':
         return cfg.backbone.patch_size * cfg.backbone.window_size
+    # elif cfg.backbone_name == 'swin_uper':
+    #     return cfg.backbone.patch_size * cfg.backbone.window_size * 2 ** (len(cfg.backbone.depths) - 1)
     else:
         return 1
 
 
-def get_dataset(cfg: DictConfig) -> Tuple[Dataset, Dataset]:
+def get_dataset(cfg: DictConfig, cwd: Path) -> Tuple[Dataset, Dataset]:
 
-    cwd = Path(get_original_cwd())
     dataset_valid = None
 
     pad_divisor = compute_pad_divisor(cfg)
+
+    if cfg.experiment.lower() in ("bsd68", "hanzi", "imagenet", "ssi"):
+        transforms = training_augmentations_2d(crop=cfg.training.crop)
 
     if cfg.experiment.lower() == "bsd68":
         dataset_train = bsd68.BSD68DatasetPrepared(
             path=cwd / "data/BSD68/",
             mode="train",
-            transforms=training_augmentations_2d(crop=cfg.training.crop),
+            transforms=transforms,
             pad_divisor=pad_divisor,
         )
         if cfg.training.validate:
@@ -47,7 +50,7 @@ def get_dataset(cfg: DictConfig) -> Tuple[Dataset, Dataset]:
         dataset_train = hanzi.HanziDatasetPrepared(
             path=cwd / "data/Hanzi/tiles",
             mode="training",
-            transforms=training_augmentations_2d(crop=cfg.training.crop),
+            transforms=transforms,
             version=cfg.data.version,
             noise_level=cfg.data.noise_level,
             pad_divisor=pad_divisor,
@@ -65,7 +68,7 @@ def get_dataset(cfg: DictConfig) -> Tuple[Dataset, Dataset]:
         dataset_train = imagenet.ImagenetDatasetPrepared(
             path=cwd / "data/ImageNet",
             mode="train",
-            transforms=training_augmentations_2d(crop=cfg.training.crop),
+            transforms=transforms,
             version=cfg.data.version,
             pad_divisor=pad_divisor,
         )
@@ -106,7 +109,7 @@ def get_dataset(cfg: DictConfig) -> Tuple[Dataset, Dataset]:
         dataset_train = ssi.SSIDataset(
             path=cwd / cfg.data.path,
             input_name=cfg.data.input_name,
-            transforms=training_augmentations_2d(crop=cfg.training.crop),
+            transforms=transforms,
             pad_divisor=pad_divisor,
         )
     else:
@@ -116,11 +119,10 @@ def get_dataset(cfg: DictConfig) -> Tuple[Dataset, Dataset]:
     return dataset_train, dataset_valid
 
 
-def get_test_dataset_and_gt(cfg: DictConfig) -> Tuple[Dataset, np.ndarray]:
+def get_test_dataset_and_gt(cfg: DictConfig, cwd: Path) -> Tuple[Dataset, np.ndarray]:
 
     pad_divisor = compute_pad_divisor(cfg)
 
-    cwd = Path(get_original_cwd())
     if cfg.experiment.lower() == "bsd68":
         dataset = bsd68.BSD68DatasetPrepared(
             path=cwd / "data/BSD68/",

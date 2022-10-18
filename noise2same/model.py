@@ -1,3 +1,4 @@
+from enum import Enum
 from pathlib import Path
 from typing import Any, Dict, Optional, Tuple, Union
 
@@ -9,10 +10,18 @@ from torch.nn import functional as F, Identity
 from torch.nn.functional import conv2d, conv3d
 from torchvision.transforms import GaussianBlur
 
-from noise2same.unet import UNet, ProjectHead, RegressionHead
-from noise2same.swinir import SwinIR
+from noise2same.backbone.unet import UNet, ProjectHead, RegressionHead
+from noise2same.backbone.swinir import SwinIR
+from noise2same.backbone.bsp_swinir import BSPSwinIR
 from noise2same.contrast import PixelContrastLoss
 from noise2same.psf.psf_convolution import PSFParameter, read_psf
+
+
+class ModelMode(Enum):
+
+    NOISE2TRUE = 0,
+    NOISE2SELF = 1,
+    NOISE2SAME = 2
 
 
 class DonutMask(nn.Module):
@@ -75,7 +84,7 @@ class Noise2Same(nn.Module):
         psf_pad_mode: str = "reflect",
         residual: bool = False,
         regularization_key: str = "image",
-        only_masked: bool = False,
+        mode: str = "noise2same",
         psf_fft: Union[str, bool] = "auto",
         backbone: Union[UNet, SwinIR, Identity] = Identity(),
         head: Union[RegressionHead, Identity] = Identity(),
@@ -117,7 +126,7 @@ class Noise2Same(nn.Module):
         self.regularization_key = regularization_key
         self.lambda_bound = lambda_bound
         self.lambda_sharp = lambda_sharp
-        self.only_masked = only_masked
+        self.mode = ModelMode[mode.upper()]
 
         # TODO customize with segmentation_models
         self.net = backbone
@@ -155,7 +164,7 @@ class Noise2Same(nn.Module):
         full_size_image: Optional[T] = None,
         *args: Any,
         **kwargs: Any,
-    ) -> Tuple[Dict[str, T], Union[Dict[str, T], None]]:
+    ) -> Tuple[Union[Dict[str, T], None], Union[Dict[str, T], None]]:
         """
         Make two forward passes: with mask and without mask
         :param x:
@@ -168,11 +177,16 @@ class Noise2Same(nn.Module):
                     deconv - output before PSF if PSF is provided and `convolve` is True
                     proj - output features of projection head if `lambda_proj` > 0
         """
-        out_mask = self.forward_masked(x, mask, convolve, crops, full_size_image)
-        if self.only_masked:
+        if self.mode == ModelMode.NOISE2SELF or self.mode == ModelMode.NOISE2SAME:
+            out_mask = self.forward_masked(x, mask, convolve, crops, full_size_image)
+        if self.mode == ModelMode.NOISE2TRUE or self.mode == ModelMode.NOISE2SAME:
+            out_raw = self.forward(x, convolve, crops, full_size_image)
+        if self.mode == ModelMode.NOISE2TRUE:
+            return None, out_raw
+        elif self.mode == ModelMode.NOISE2SELF:
             return out_mask, None
-        out_raw = self.forward(x, convolve, crops, full_size_image)
-        return out_mask, out_raw
+        elif self.mode == ModelMode.NOISE2SAME:
+            return out_mask, out_raw
 
     def forward_masked(
         self,
@@ -203,7 +217,10 @@ class Noise2Same(nn.Module):
             else self.mask_kernel(x)
         )
         x = (1 - mask) * x + mask * noise
-        return self.forward(x, convolve, crops, full_size_image)
+        if isinstance(self.net, BSPSwinIR):
+            return self.forward(x, convolve, crops, full_size_image, mask=mask)
+        else:
+            return self.forward(x, convolve, crops, full_size_image)
 
     def forward(
         self,
@@ -226,7 +243,7 @@ class Noise2Same(nn.Module):
                     proj - output features of projection head if `lambda_proj` > 0
         """
         out = {}
-        features = self.net(x)
+        features = self.net(x, **kwargs)
         out["image"] = self.head(features)
 
         if self.residual:
@@ -266,17 +283,22 @@ class Noise2Same(nn.Module):
         self,
         x: T,
         mask: T,
-        out_mask: Dict[str, T],
+        out_mask: Optional[Dict[str, T]] = None,
         out_raw: Optional[Dict[str, T]] = None,
+        ground_truth: Optional[T] = None,
     ) -> Tuple[T, Dict[str, float]]:
 
-        # default Noise2Self blind-spot MSE loss
-        bsp_mse = self.compute_mse(x, out_mask["image"], mask)
-        loss_log = {"bsp_mse": bsp_mse.item()}
+        loss_log = dict()
 
-        # Noise2Same losses
-        loss = torch.tensor(0.0, device=x.device)
-        if out_raw is not None:
+        if self.mode in (ModelMode.NOISE2SELF, ModelMode.NOISE2SAME):
+            # default Noise2Self blind-spot MSE loss
+            bsp_mse = self.compute_mse(x, out_mask["image"], mask)
+
+        if self.mode == ModelMode.NOISE2SAME:
+            loss_log["bsp_mse"] = bsp_mse.item()
+
+            # Noise2Same losses
+            loss = torch.tensor(0.0, device=x.device)
 
             # Blind spot MSE
             if self.lambda_bsp > 0:
@@ -313,8 +335,10 @@ class Noise2Same(nn.Module):
                 loss_log["proj_loss"] = proj_loss.item()
                 loss = loss + self.lambda_proj * proj_loss
 
-        else:
+        elif self.mode == ModelMode.NOISE2SELF:
             loss = bsp_mse
+        elif self.mode == ModelMode.NOISE2TRUE:
+            loss = self.compute_mse(out_raw["image"], ground_truth)
 
         loss_log["loss"] = loss.item()
         return loss, loss_log

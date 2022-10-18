@@ -1,7 +1,8 @@
 from torch.nn import Identity
 from omegaconf import DictConfig
-from noise2same.swinir import SwinIR
-from noise2same.unet import UNet, RegressionHead
+
+from noise2same.backbone import SwinUPer, SwinIR, UNet, RegressionHead, ConvSwinUPer, SUNet
+from noise2same.backbone.bsp_swinir import BSPSwinIR
 from noise2same.dataset.getter import compute_pad_divisor
 
 
@@ -25,7 +26,6 @@ def parametrize_backbone_and_head(cfg: DictConfig):
             n_dim=cfg.data.n_dim
         )
     else:
-        head = Identity()
         if cfg.backbone_name == 'swinir':
             assert cfg.data.n_dim == 2
             backbone = SwinIR(
@@ -33,6 +33,40 @@ def parametrize_backbone_and_head(cfg: DictConfig):
                 img_size=recalculate_img_size(cfg),
                 **cfg.backbone
             )
+            head = Identity()
+        elif cfg.backbone_name == 'bsp_swinir':
+            assert cfg.data.n_dim == 2
+            backbone = BSPSwinIR(
+                in_chans=cfg.data.n_channels,
+                img_size=recalculate_img_size(cfg),
+                **cfg.backbone
+            )
+            head = Identity()
+        elif cfg.backbone_name == 'swin_uper':
+            assert cfg.data.n_dim == 2
+            backbone = SwinUPer(
+                in_chans=cfg.data.n_channels,
+                img_size=recalculate_img_size(cfg),
+                **cfg.backbone
+            )
+            head = Identity()
+        elif cfg.backbone_name == 'conv_swin_uper':
+            assert cfg.data.n_dim == 2
+            backbone = ConvSwinUPer(
+                in_chans=cfg.data.n_channels,
+                img_size=recalculate_img_size(cfg),
+                **cfg.backbone
+            )
+            head = Identity()
+        elif cfg.backbone_name == 'sunet':
+            assert cfg.data.n_dim == 2
+            backbone = SUNet(
+                in_chans=cfg.data.n_channels,
+                out_chans=cfg.data.n_channels,
+                img_size=recalculate_img_size(cfg),
+                **cfg.backbone
+            )
+            head = Identity()
         else:
             backbone = Identity()
     return backbone, head

@@ -6,7 +6,7 @@ project: noise2same
 device: 0
 seed: 56
 check: False
-evaluate: False
+evaluate: True
 
 model:
   lambda_rec: 1
@@ -23,7 +23,7 @@ model:
   noise_std: 0.2
   residual: False
   regularization_key: image
-  only_masked: False
+  mode: "noise2same"
 
 training:
   steps_per_epoch: 1000
@@ -32,7 +32,7 @@ training:
   num_workers: 8
   crop: 64
   validate: True
-  monitor: val_rec_mse
+  monitor: bsp_mse
   amp: True
   info_padding: False
 

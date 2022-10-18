@@ -78,6 +78,7 @@ class Trainer(object):
         images = {}
         for i, batch in enumerate(iterator):
             x = batch["image"].to(self.device)
+            ground_truth = None if "ground_truth" not in batch else batch["ground_truth"].to(self.device)
             mask = batch["mask"].to(self.device)
             self.optimizer.zero_grad()
 
@@ -103,7 +104,7 @@ class Trainer(object):
                     out_mask, out_raw = self.model.forward_full(x, mask)
 
                 loss, loss_log = self.model.compute_losses_from_output(
-                    x, mask, out_mask, out_raw
+                    x, mask, out_mask, out_raw, ground_truth
                 )
 
                 reg_loss, reg_loss_log = self.model.compute_regularization_loss(
@@ -116,7 +117,6 @@ class Trainer(object):
                 if reg_loss_log:
                     loss += reg_loss
                     loss_log.update(reg_loss_log)
-
             self.optimizer_scheduler_step(loss)
             total_loss += loss_log
             iterator.set_postfix({k: v / (i + 1) for k, v in total_loss.items()})
@@ -127,14 +127,16 @@ class Trainer(object):
             # Log last batch of images
             if i == len(iterator) - 1 or (self.check and i == 3):
                 images = {
-                    "input": x,
-                    "out_mask": out_mask["image"],
+                    "input": x
                 }
+
+                if out_mask is not None:
+                    images["out_mask"] = out_mask["image"]
 
                 if out_raw is not None:
                     images["out_raw"] = out_raw["image"]
 
-                if "deconv" in out_mask:
+                if out_mask is not None and "deconv" in out_mask:
                     images["out_mask_deconv"] = out_mask["deconv"]
                 if out_raw is not None and "deconv" in out_raw:
                     images["out_raw_deconv"] = out_raw["deconv"]
@@ -195,7 +197,7 @@ class Trainer(object):
         loader_valid: Optional[DataLoader] = None,
     ) -> List[Dict[str, float]]:
 
-        iterator = trange(n_epochs)
+        iterator = trange(n_epochs, position=0, leave=True)
         history = []
         best_loss = np.inf
 

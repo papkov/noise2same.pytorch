@@ -1,7 +1,7 @@
 import os
 from dataclasses import dataclass
 from pathlib import Path
-from typing import List, Union
+from typing import List, Union, Dict
 
 import numpy as np
 from imageio import imread
@@ -20,7 +20,7 @@ class SSIDataset(AbstractNoiseDataset2D):
     standardize_by_channel: bool = True
     input_name: str = "drosophila"
 
-    def _get_images(self) -> Union[List[str], np.ndarray]:
+    def _get_images(self) -> Dict[str, Union[List[str], np.ndarray]]:
         try:
             files = [f for f in self.path.iterdir() if f.is_file()]
         except FileNotFoundError as e:
@@ -41,7 +41,9 @@ class SSIDataset(AbstractNoiseDataset2D):
         self.psf = psf_kernel
         self.gt = image_clipped
 
-        return noisy_blurred_image[None, ...]
+        return {
+            "noisy_input": noisy_blurred_image[None, ...]
+        }
 
     def _read_image(self, image_or_path: Union[str, np.ndarray]) -> np.ndarray:
         return image_or_path

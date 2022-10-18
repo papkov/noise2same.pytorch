@@ -1,7 +1,6 @@
 import os
 import traceback
 from pathlib import Path
-
 import hydra
 import torch
 import wandb
@@ -9,6 +8,7 @@ from hydra.utils import get_original_cwd
 from omegaconf import DictConfig, OmegaConf
 from torch.utils.data import DataLoader, RandomSampler
 
+import evaluate
 import noise2same.trainer
 from noise2same import model, util
 from noise2same.dataset.getter import get_dataset, get_test_dataset_and_gt
@@ -20,7 +20,7 @@ def exponential_decay(
     decay_rate: float = 0.5, decay_steps: int = 5e3, staircase: bool = True
 ):
     """
-    Lambda for torch.optim.lr_scheduler.LambdaLR mimicking tf.train.exponential_decay:
+    Lambda for torch.optimizers.lr_scheduler.LambdaLR mimicking tf.train.exponential_decay:
     decayed_learning_rate = learning_rate *
                             decay_rate ^ (global_step / decay_steps)
 
@@ -73,14 +73,14 @@ def main(cfg: DictConfig) -> None:
         wandb.init(project=cfg.project, config=d_cfg, settings=wandb.Settings(start_method="fork"))
 
     # Data
-    dataset_train, dataset_valid = get_dataset(cfg)
+    dataset_train, dataset_valid = get_dataset(cfg, cwd)
     num_samples = cfg.training.batch_size * cfg.training.steps_per_epoch
     loader_train = DataLoader(
         dataset_train,
         batch_size=cfg.training.batch_size,
         num_workers=cfg.training.num_workers,
         sampler=RandomSampler(dataset_train, replacement=True, num_samples=num_samples),
-        pin_memory=True,
+        pin_memory=False,
         drop_last=True,
     )
 
@@ -91,7 +91,7 @@ def main(cfg: DictConfig) -> None:
             batch_size=4,
             num_workers=cfg.training.num_workers,
             shuffle=False,
-            pin_memory=True,
+            pin_memory=False,
             drop_last=False,
         )
 
@@ -157,67 +157,11 @@ def main(cfg: DictConfig) -> None:
         traceback.print_exc()
 
     if cfg.evaluate:
-        test_dataset, ground_truth = get_test_dataset_and_gt(cfg)
-        scores = {}
+        test_dataset, ground_truth = get_test_dataset_and_gt(cfg, cwd)
 
-        if cfg.experiment == "ssi":
-            loader = DataLoader(
-                test_dataset,
-                batch_size=1,  # todo customize
-                num_workers=cfg.training.num_workers,
-                shuffle=False,
-                pin_memory=True,
-                drop_last=False,
-            )
-
-            # Predictions and scores for last model
-            predictions = trainer.inference(loader, half=cfg.training.amp)
-
-            scores = util.calculate_scores(
-                ground_truth,
-                predictions[0]["image"].squeeze(),
-                data_range=1,
-                clip=True,
-                calculate_mi=True,
-            )
-
-        elif cfg.experiment == "microtubules":
-
-            scores.update(
-                util.calculate_scores(
-                    gt=ground_truth,
-                    x=test_dataset.image.squeeze(),
-                    normalize_pairs=True,
-                    prefix="noisy",
-                )
-            )
-
-            # Denoise
-            predictions = trainer.inference_single_image_dataset(
-                test_dataset, half=cfg.training.amp, batch_size=1, convolve=True
-            )
-            scores.update(
-                util.calculate_scores(
-                    gt=ground_truth,
-                    x=predictions,
-                    normalize_pairs=True,
-                    prefix="denoise",
-                )
-            )
-
-            # Denoise
-            predictions = trainer.inference_single_image_dataset(
-                test_dataset, half=cfg.training.amp, batch_size=1, convolve=False
-            )
-            scores.update(
-                util.calculate_scores(
-                    gt=ground_truth,
-                    x=predictions,
-                    normalize_pairs=True,
-                )
-            )
-
-        print(f"Scores: {scores}")
+        scores = evaluate.evaluate(trainer.evaluator, test_dataset, ground_truth,
+                                   cfg.experiment, cfg.training.num_workers, cwd,
+                                   half=cfg.training.amp)
 
         if not cfg.check:
             wandb.run.summary.update(scores)
