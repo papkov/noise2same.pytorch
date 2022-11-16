@@ -3,64 +3,23 @@
 # Originally Written by Ze Liu, Modified by Jingyun Liang.
 # -----------------------------------------------------------------------------------
 
-import math
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.utils.checkpoint as checkpoint
 from timm.models.layers import DropPath, to_2tuple, trunc_normal_
+from .swinir import (
+    Mlp,
+    window_partition,
+    window_reverse,
+    PatchEmbed,
+    PatchUnEmbed,
+    Upsample,
+    UpsampleOneStep
+)
 
 
-class Mlp(nn.Module):
-    def __init__(self, in_features, hidden_features=None, out_features=None, act_layer=nn.GELU, drop=0.):
-        super().__init__()
-        out_features = out_features or in_features
-        hidden_features = hidden_features or in_features
-        self.fc1 = nn.Linear(in_features, hidden_features)
-        self.act = act_layer()
-        self.fc2 = nn.Linear(hidden_features, out_features)
-        self.drop = nn.Dropout(drop)
-
-    def forward(self, x):
-        x = self.fc1(x)
-        x = self.act(x)
-        x = self.drop(x)
-        x = self.fc2(x)
-        x = self.drop(x)
-        return x
-
-
-def window_partition(x, window_size):
-    """
-    Args:
-        x: (B, H, W, C)
-        window_size (int): window size
-    Returns:
-        windows: (num_windows*B, window_size, window_size, C)
-    """
-    B, H, W, C = x.shape
-    x = x.view(B, H // window_size, window_size, W // window_size, window_size, C)
-    windows = x.permute(0, 1, 3, 2, 4, 5).contiguous().view(-1, window_size, window_size, C)
-    return windows
-
-
-def window_reverse(windows, window_size, H, W):
-    """
-    Args:
-        windows: (num_windows*B, window_size, window_size, C)
-        window_size (int): Window size
-        H (int): Height of image
-        W (int): Width of image
-    Returns:
-        x: (B, H, W, C)
-    """
-    B = int(windows.shape[0] / (H * W / window_size / window_size))
-    x = windows.view(B, H // window_size, W // window_size, window_size, window_size, -1)
-    x = x.permute(0, 1, 3, 2, 4, 5).contiguous().view(B, H, W, -1)
-    return x
-
-
-class WindowAttention(nn.Module):
+class BSpWindowAttention(nn.Module):
     r""" Window based multi-head self attention (W-MSA) module with relative position bias.
     It supports both of shifted and non-shifted window.
     Args:
@@ -158,7 +117,7 @@ class WindowAttention(nn.Module):
         return flops
 
 
-class BSPSwinTransformerBlock(nn.Module):
+class BSpSwinTransformerBlock(nn.Module):
     r""" Swin Transformer Block.
     Args:
         dim (int): Number of input channels.
@@ -193,7 +152,7 @@ class BSPSwinTransformerBlock(nn.Module):
         assert 0 <= self.shift_size < self.window_size, "shift_size must in 0-window_size"
 
         self.norm1 = norm_layer(dim)
-        self.attn = WindowAttention(
+        self.attn = BSpWindowAttention(
             dim, window_size=to_2tuple(self.window_size), num_heads=num_heads,
             qkv_bias=qkv_bias, qk_scale=qk_scale, attn_drop=attn_drop, proj_drop=drop)
 
@@ -242,32 +201,41 @@ class BSPSwinTransformerBlock(nn.Module):
         x = x.view(B, H, W, C)
 
         shifted_mask = mask
+        shifted_x = x
 
         # cyclic shift
         if self.shift_size > 0:
             shifted_x = torch.roll(x, shifts=(-self.shift_size, -self.shift_size), dims=(1, 2))
             if mask is not None:
                 shifted_mask = torch.roll(mask, shifts=(-self.shift_size, -self.shift_size), dims=(1, 2))
-        else:
-            shifted_x = x
+
 
         # partition windows
-        x_windows = window_partition(shifted_x, self.window_size)  # nW*B, window_size, window_size, C
-        x_windows = x_windows.view(-1, self.window_size * self.window_size, C)  # nW*B, window_size*window_size, C
+        x_windows = window_partition(shifted_x, self.window_size)  # (nW*B, window_size, window_size, C)
+        x_windows = x_windows.view(-1, self.window_size * self.window_size, C)  # (nW*B, window_size*window_size, C)
 
         # W-MSA/SW-MSA (to be compatible for testing on images whose shapes are the multiple of window size
         if self.input_resolution == x_size:
             attn_mask = self.attn_mask
         else:
             attn_mask = self.calculate_mask(x_size).to(x.device)
+
+        # replicating the mask for the whole batch
+        if attn_mask is not None:
+            attn_mask = attn_mask.unsqueeze(0).repeat(B, 1, 1, 1)  # (B, nW, window_size, window_size)
+
+        # adding input mask to existing blind-spot mask
         if shifted_mask is not None:
-            bsp_mask = window_partition(shifted_mask.view(B, H, W, 1), self.window_size).view(B, -1, self.window_size ** 2)
+            # (B * nW, window_size, window_size, 1)
+            bsp_mask = window_partition(shifted_mask.view(B, H, W, 1), self.window_size)
+            # (B, nW, window_size ** 2)
+            bsp_mask = bsp_mask.view(B, -1, self.window_size ** 2)
+            # (B, nW, window_size ** 2, window_size ** 2)
             bsp_mask = bsp_mask.unsqueeze(2).repeat(1, 1, self.window_size ** 2, 1)
             if attn_mask is None:
                 attn_mask = bsp_mask.masked_fill(bsp_mask != 0, float(-100.0)).masked_fill(bsp_mask == 0, float(0.0))
             else:
-                attn_mask = attn_mask.unsqueeze(0).repeat(B, 1, 1, 1)
-                attn_mask = attn_mask.masked_fill(bsp_mask == 0, float(-100.0))
+                attn_mask = attn_mask.masked_fill(bsp_mask != 0, float(-100.0))
         attn_windows = self.attn(x_windows, mask=attn_mask)  # nW*B, window_size*window_size, C
 
         # merge windows
@@ -306,55 +274,7 @@ class BSPSwinTransformerBlock(nn.Module):
         return flops
 
 
-class PatchMerging(nn.Module):
-    r""" Patch Merging Layer.
-    Args:
-        input_resolution (tuple[int]): Resolution of input feature.
-        dim (int): Number of input channels.
-        norm_layer (nn.Module, optional): Normalization layer.  Default: nn.LayerNorm
-    """
-
-    def __init__(self, input_resolution, dim, norm_layer=nn.LayerNorm):
-        super().__init__()
-        self.input_resolution = input_resolution
-        self.dim = dim
-        self.reduction = nn.Linear(4 * dim, 2 * dim, bias=False)
-        self.norm = norm_layer(4 * dim)
-
-    def forward(self, x):
-        """
-        x: B, H*W, C
-        """
-        H, W = self.input_resolution
-        B, L, C = x.shape
-        assert L == H * W, "input feature has wrong size"
-        assert H % 2 == 0 and W % 2 == 0, f"x size ({H}*{W}) are not even."
-
-        x = x.view(B, H, W, C)
-
-        x0 = x[:, 0::2, 0::2, :]  # B H/2 W/2 C
-        x1 = x[:, 1::2, 0::2, :]  # B H/2 W/2 C
-        x2 = x[:, 0::2, 1::2, :]  # B H/2 W/2 C
-        x3 = x[:, 1::2, 1::2, :]  # B H/2 W/2 C
-        x = torch.cat([x0, x1, x2, x3], -1)  # B H/2 W/2 4*C
-        x = x.view(B, -1, 4 * C)  # B H/2*W/2 4*C
-
-        x = self.norm(x)
-        x = self.reduction(x)
-
-        return x
-
-    def extra_repr(self) -> str:
-        return f"input_resolution={self.input_resolution}, dim={self.dim}"
-
-    def flops(self):
-        H, W = self.input_resolution
-        flops = H * W * self.dim
-        flops += (H // 2) * (W // 2) * 4 * self.dim * 2 * self.dim
-        return flops
-
-
-class BSPBasicLayer(nn.Module):
+class BSpBasicLayer(nn.Module):
     """ A basic Swin Transformer layer for one stage.
     Args:
         dim (int): Number of input channels.
@@ -385,7 +305,7 @@ class BSPBasicLayer(nn.Module):
 
         # build blocks
         self.blocks = nn.ModuleList([
-            BSPSwinTransformerBlock(dim=dim, input_resolution=input_resolution,
+            BSpSwinTransformerBlock(dim=dim, input_resolution=input_resolution,
                                  num_heads=num_heads, window_size=window_size,
                                  shift_size=0 if (i % 2 == 0) else window_size // 2,
                                  mlp_ratio=mlp_ratio,
@@ -423,7 +343,7 @@ class BSPBasicLayer(nn.Module):
         return flops
 
 
-class BSPRSTB(nn.Module):
+class BSpRSTB(nn.Module):
     """Residual Swin Transformer Block (RSTB).
     Args:
         dim (int): Number of input channels.
@@ -449,12 +369,12 @@ class BSPRSTB(nn.Module):
                  mlp_ratio=4., qkv_bias=True, qk_scale=None, drop=0., attn_drop=0.,
                  drop_path=0., norm_layer=nn.LayerNorm, downsample=None, use_checkpoint=False,
                  img_size=224, patch_size=4, resi_connection='1conv'):
-        super(BSPRSTB, self).__init__()
+        super(BSpRSTB, self).__init__()
 
         self.dim = dim
         self.input_resolution = input_resolution
 
-        self.residual_group = BSPBasicLayer(dim=dim,
+        self.residual_group = BSpBasicLayer(dim=dim,
                                          input_resolution=input_resolution,
                                          depth=depth,
                                          num_heads=num_heads,
@@ -498,125 +418,7 @@ class BSPRSTB(nn.Module):
         return flops
 
 
-class PatchEmbed(nn.Module):
-    r""" Image to Patch Embedding
-    Args:
-        img_size (int): Image size.  Default: 224.
-        patch_size (int): Patch token size. Default: 4.
-        in_chans (int): Number of input image channels. Default: 3.
-        embed_dim (int): Number of linear projection output channels. Default: 96.
-        norm_layer (nn.Module, optional): Normalization layer. Default: None
-    """
-
-    def __init__(self, img_size=224, patch_size=4, in_chans=3, embed_dim=96, norm_layer=None):
-        super().__init__()
-        img_size = to_2tuple(img_size)
-        patch_size = to_2tuple(patch_size)
-        patches_resolution = [img_size[0] // patch_size[0], img_size[1] // patch_size[1]]
-        self.img_size = img_size
-        self.patch_size = patch_size
-        self.patches_resolution = patches_resolution
-        self.num_patches = patches_resolution[0] * patches_resolution[1]
-
-        self.in_chans = in_chans
-        self.embed_dim = embed_dim
-
-        if norm_layer is not None:
-            self.norm = norm_layer(embed_dim)
-        else:
-            self.norm = None
-
-    def forward(self, x):
-        x = x.flatten(2).transpose(1, 2)  # B Ph*Pw C
-        if self.norm is not None:
-            x = self.norm(x)
-        return x
-
-    def flops(self):
-        flops = 0
-        H, W = self.img_size
-        if self.norm is not None:
-            flops += H * W * self.embed_dim
-        return flops
-
-
-class PatchUnEmbed(nn.Module):
-    r""" Image to Patch Unembedding
-    Args:
-        img_size (int): Image size.  Default: 224.
-        patch_size (int): Patch token size. Default: 4.
-        in_chans (int): Number of input image channels. Default: 3.
-        embed_dim (int): Number of linear projection output channels. Default: 96.
-        norm_layer (nn.Module, optional): Normalization layer. Default: None
-    """
-
-    def __init__(self, img_size=224, patch_size=4, in_chans=3, embed_dim=96, norm_layer=None):
-        super().__init__()
-        img_size = to_2tuple(img_size)
-        patch_size = to_2tuple(patch_size)
-        patches_resolution = [img_size[0] // patch_size[0], img_size[1] // patch_size[1]]
-        self.img_size = img_size
-        self.patch_size = patch_size
-        self.patches_resolution = patches_resolution
-        self.num_patches = patches_resolution[0] * patches_resolution[1]
-
-        self.in_chans = in_chans
-        self.embed_dim = embed_dim
-
-    def forward(self, x, x_size):
-        B, HW, C = x.shape
-        x = x.transpose(1, 2).view(B, self.embed_dim, x_size[0], x_size[1])  # B Ph*Pw C
-        return x
-
-    def flops(self):
-        flops = 0
-        return flops
-
-
-class Upsample(nn.Sequential):
-    """Upsample module.
-    Args:
-        scale (int): Scale factor. Supported scales: 2^n and 3.
-        num_feat (int): Channel number of intermediate features.
-    """
-
-    def __init__(self, scale, num_feat):
-        m = []
-        if (scale & (scale - 1)) == 0:  # scale = 2^n
-            for _ in range(int(math.log(scale, 2))):
-                m.append(nn.Conv2d(num_feat, 4 * num_feat, 3, 1, 1))
-                m.append(nn.PixelShuffle(2))
-        elif scale == 3:
-            m.append(nn.Conv2d(num_feat, 9 * num_feat, 3, 1, 1))
-            m.append(nn.PixelShuffle(3))
-        else:
-            raise ValueError(f'scale {scale} is not supported. ' 'Supported scales: 2^n and 3.')
-        super(Upsample, self).__init__(*m)
-
-
-class UpsampleOneStep(nn.Sequential):
-    """UpsampleOneStep module (the difference with Upsample is that it always only has 1conv + 1pixelshuffle)
-       Used in lightweight SR to save parameters.
-    Args:
-        scale (int): Scale factor. Supported scales: 2^n and 3.
-        num_feat (int): Channel number of intermediate features.
-    """
-
-    def __init__(self, scale, num_feat, num_out_ch, input_resolution=None):
-        self.num_feat = num_feat
-        self.input_resolution = input_resolution
-        m = []
-        m.append(nn.Conv2d(num_feat, (scale ** 2) * num_out_ch, 3, 1, 1))
-        m.append(nn.PixelShuffle(scale))
-        super(UpsampleOneStep, self).__init__(*m)
-
-    def flops(self):
-        H, W = self.input_resolution
-        flops = H * W * self.num_feat * 3 * 9
-        return flops
-
-
-class BSPSwinIR(nn.Module):
+class BSpSwinIR(nn.Module):
     r""" SwinIR
         A PyTorch impl of : `SwinIR: Image Restoration Using Swin Transformer`, based on Swin Transformer.
     Args:
@@ -650,7 +452,7 @@ class BSPSwinIR(nn.Module):
                  norm_layer=nn.LayerNorm, ape=False, patch_norm=True,
                  use_checkpoint=False, upscale=2, img_range=1., upsampler='', resi_connection='1conv',
                  **kwargs):
-        super(BSPSwinIR, self).__init__()
+        super(BSpSwinIR, self).__init__()
         num_in_ch = in_chans
         num_out_ch = in_chans
         num_feat = 64
@@ -704,7 +506,7 @@ class BSPSwinIR(nn.Module):
         # build Residual Swin Transformer blocks (RSTB)
         self.layers = nn.ModuleList()
         for i_layer in range(self.num_layers):
-            layer = BSPRSTB(dim=embed_dim,
+            layer = BSpRSTB(dim=embed_dim,
                          input_resolution=(patches_resolution[0],
                                            patches_resolution[1]),
                          depth=depths[i_layer],
@@ -850,19 +652,3 @@ class BSPSwinIR(nn.Module):
         flops += H * W * 3 * self.embed_dim * self.embed_dim
         flops += self.upsample.flops()
         return flops
-
-
-if __name__ == '__main__':
-    upscale = 4
-    window_size = 8
-    height = (1024 // upscale // window_size + 1) * window_size
-    width = (720 // upscale // window_size + 1) * window_size
-    model = BSPSwinIR(upscale=2, img_size=(height, width),
-                   window_size=window_size, img_range=1., depths=[6, 6, 6, 6],
-                   embed_dim=60, num_heads=[6, 6, 6, 6], mlp_ratio=2, upsampler='pixelshuffledirect')
-    print(model)
-    print(height, width, model.flops() / 1e9)
-
-    x = torch.randn((1, 3, height, width))
-    x = model(x)
-    print(x.shape)
