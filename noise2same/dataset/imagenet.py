@@ -23,7 +23,7 @@ class ImagenetDatasetPrepared(AbstractNoiseDataset2D):
         data = np.load(self.path / f"{self.mode}.npy")
         return {
             "noisy_input": data[:, self.version + 1],
-            "ground_truth": data[:, self.version + 1]
+            "ground_truth": data[:, 0]
         }
 
     def _read_image(self, image_or_path: Union[str, np.ndarray]) -> np.ndarray:
