@@ -24,7 +24,7 @@ class ModelTestCase(unittest.TestCase):
             base_channels=4,
             psf=psf,
             psf_pad_mode="constant",
-            arch="identity",
+            backbone=torch.nn.Identity(),
         )
         mdl.to(device)
         mdl.train()
@@ -58,7 +58,7 @@ class ModelTestCase(unittest.TestCase):
             device
         )
 
-        out_mask, out_raw = mdl.forward_full(
+        out_mask, out_raw = mdl.forward(
             x, mask, crops=batch["crop"], full_size_image=full_size_image
         )
         loss, loss_log = mdl.compute_losses_from_output(x, mask, out_mask, out_raw)
@@ -116,7 +116,7 @@ class ModelTestCase(unittest.TestCase):
             device
         )
 
-        out_mask, out_raw = mdl.forward_full(
+        out_mask, out_raw = mdl.forward(
             x, mask, crops=batch["crop"], full_size_image=full_size_image
         )
         loss, loss_log = mdl.compute_losses_from_output(x, mask, out_mask, out_raw)
