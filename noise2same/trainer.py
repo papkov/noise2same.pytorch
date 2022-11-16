@@ -34,6 +34,7 @@ class Trainer(object):
     ):
 
         self.model = model
+        self.inner_model = model if not isinstance(model, torch.nn.DataParallel) else model.module
         self.optimizer = optimizer
         self.scheduler = scheduler
         self.device = device
@@ -47,7 +48,7 @@ class Trainer(object):
 
         self.model.to(device)
         self.checkpoint_path.mkdir(parents=True, exist_ok=False)
-        self.evaluator = Evaluator(model=model, device=device)
+        self.evaluator = Evaluator(model=self.inner_model, device=device)
 
         self.amp = amp
         self.scaler = GradScaler() if amp else None
@@ -97,17 +98,17 @@ class Trainer(object):
                     full_size_image = torch.from_numpy(
                         np.moveaxis(full_size_image, -1, 0)
                     ).to(self.device)
-                    out_mask, out_raw = self.model.forward_full(
-                        x, mask, crops=batch["crop"], full_size_image=full_size_image
+                    out_mask, out_raw = self.model.forward(
+                        x, mask=mask, crops=batch["crop"], full_size_image=full_size_image
                     )
                 else:
-                    out_mask, out_raw = self.model.forward_full(x, mask)
+                    out_mask, out_raw = self.model.forward(x, mask=mask)
 
-                loss, loss_log = self.model.compute_losses_from_output(
+                loss, loss_log = self.inner_model.compute_losses_from_output(
                     x, mask, out_mask, out_raw, ground_truth
                 )
 
-                reg_loss, reg_loss_log = self.model.compute_regularization_loss(
+                reg_loss, reg_loss_log = self.inner_model.compute_regularization_loss(
                     out_mask if out_raw is None else out_raw,
                     mean=batch["mean"].to(self.device),
                     std=batch["std"].to(self.device),
@@ -162,7 +163,7 @@ class Trainer(object):
             x = batch["image"].to(self.device)
 
             with autocast(enabled=self.amp):
-                out_raw = self.model(x)["image"]
+                out_raw = self.model(x)[1]["image"]
 
             rec_mse = torch.mean(torch.square(out_raw - x))
             total_loss += rec_mse.item()
@@ -218,7 +219,7 @@ class Trainer(object):
                         # limit the number of uploaded images
                         # if image is 3d, reduce it
                         k: [
-                            wandb.Image(im.max(0) if self.model.n_dim == 3 else im)
+                            wandb.Image(im.max(0) if self.inner_model.n_dim == 3 else im)
                             for im in v[:4]
                         ]
                         for k, v in images.items()

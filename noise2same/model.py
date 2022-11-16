@@ -12,7 +12,7 @@ from torchvision.transforms import GaussianBlur
 
 from noise2same.backbone.unet import UNet, ProjectHead, RegressionHead
 from noise2same.backbone.swinir import SwinIR
-from noise2same.backbone.bsp_swinir import BSPSwinIR
+from noise2same.backbone.bsp_swinir import BSpSwinIR
 from noise2same.contrast import PixelContrastLoss
 from noise2same.psf.psf_convolution import PSFParameter, read_psf
 
@@ -155,10 +155,10 @@ class Noise2Same(nn.Module):
             for param in self.psf.parameters():
                 param.requires_grad = False
 
-    def forward_full(
+    def forward(
         self,
         x: T,
-        mask: T,
+        mask: T = None,
         convolve: bool = True,
         crops: Optional[T] = None,
         full_size_image: Optional[T] = None,
@@ -177,16 +177,14 @@ class Noise2Same(nn.Module):
                     deconv - output before PSF if PSF is provided and `convolve` is True
                     proj - output features of projection head if `lambda_proj` > 0
         """
-        if self.mode == ModelMode.NOISE2SELF or self.mode == ModelMode.NOISE2SAME:
+        if self.mode != ModelMode.NOISE2SELF:
+            out_raw = self.forward_whole(x, convolve, crops, full_size_image)
+        if mask is not None:
             out_mask = self.forward_masked(x, mask, convolve, crops, full_size_image)
-        if self.mode == ModelMode.NOISE2TRUE or self.mode == ModelMode.NOISE2SAME:
-            out_raw = self.forward(x, convolve, crops, full_size_image)
-        if self.mode == ModelMode.NOISE2TRUE:
-            return None, out_raw
-        elif self.mode == ModelMode.NOISE2SELF:
+            if self.mode == ModelMode.NOISE2SAME:
+                return out_mask, out_raw
             return out_mask, None
-        elif self.mode == ModelMode.NOISE2SAME:
-            return out_mask, out_raw
+        return None, out_raw
 
     def forward_masked(
         self,
@@ -217,12 +215,12 @@ class Noise2Same(nn.Module):
             else self.mask_kernel(x)
         )
         x = (1 - mask) * x + mask * noise
-        if isinstance(self.net, BSPSwinIR):
-            return self.forward(x, convolve, crops, full_size_image, mask=mask)
+        if isinstance(self.net, BSpSwinIR):
+            return self.forward_whole(x, convolve, crops, full_size_image, mask=mask)
         else:
-            return self.forward(x, convolve, crops, full_size_image)
+            return self.forward_whole(x, convolve, crops, full_size_image)
 
-    def forward(
+    def forward_whole(
         self,
         x: T,
         convolve: bool = True,
@@ -346,7 +344,7 @@ class Noise2Same(nn.Module):
     def compute_losses(
         self, x: T, mask: T, convolve: bool = True
     ) -> Tuple[T, Dict[str, float]]:
-        out_mask, out_raw = self.forward_full(x, mask, convolve)
+        out_mask, out_raw = self.forward(x, mask, convolve)
         return self.compute_losses_from_output(x, mask, out_mask, out_raw)
 
     def compute_regularization_loss(

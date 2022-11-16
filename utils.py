@@ -2,7 +2,7 @@ from torch.nn import Identity
 from omegaconf import DictConfig
 
 from noise2same.backbone import SwinUPer, SwinIR, UNet, RegressionHead, ConvSwinUPer, SUNet
-from noise2same.backbone.bsp_swinir import BSPSwinIR
+from noise2same.backbone.bsp_swinir import BSpSwinIR
 from noise2same.dataset.getter import compute_pad_divisor
 
 
@@ -36,7 +36,7 @@ def parametrize_backbone_and_head(cfg: DictConfig):
             head = Identity()
         elif cfg.backbone_name == 'bsp_swinir':
             assert cfg.data.n_dim == 2
-            backbone = BSPSwinIR(
+            backbone = BSpSwinIR(
                 in_chans=cfg.data.n_channels,
                 img_size=recalculate_img_size(cfg),
                 **cfg.backbone

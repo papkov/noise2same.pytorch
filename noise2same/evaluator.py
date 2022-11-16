@@ -29,7 +29,6 @@ class Evaluator(object):
         :param checkpoint_path: optional str, path to the model checkpoint
         :param masked: if perform forward pass masked
         """
-
         self.model = model
         self.device = device
         self.checkpoint_path = checkpoint_path
@@ -45,7 +44,7 @@ class Evaluator(object):
             )
         elif isinstance(self.model.net, SwinIR):
             self.resizer = PadAndCropResizer(
-                mode="reflect", div_n=self.model.net.window_size
+                mode="reflect", div_n=self.model.net.window_size * self.model.net.patch_embed.patch_size
             )
         else:
             self.resizer = PadAndCropResizer(div_n=1)
@@ -83,11 +82,11 @@ class Evaluator(object):
                     if self.masked:
                         # TODO remove randomness
                         # idea: use the same mask for all images? mask as tta?
-                        out = self.model.forward_masked(
-                            batch["image"], batch["mask"], convolve=convolve
+                        out, _ = self.model.forward(
+                            batch["image"], mask=batch["mask"], convolve=convolve
                         )
                     else:
-                        out = self.model.forward(batch["image"], convolve=convolve)
+                        _, out = self.model.forward(batch["image"], convolve=convolve)
                     out_raw = out[key] * batch["std"] + batch["mean"]
 
                 out_raw = {"image": np.moveaxis(out_raw.detach().cpu().numpy(), 1, -1)}
@@ -186,7 +185,7 @@ class Evaluator(object):
             }
             with autocast(enabled=half):
                 pred_batch = (
-                    self.model.forward(batch["image"], convolve=convolve)[key]
+                    self.model.forward(batch["image"], convolve=convolve)[1][key]
                     * batch["std"]
                     + batch["mean"]
                 )
@@ -245,7 +244,8 @@ class Evaluator(object):
 
     def load_checkpoint(self, checkpoint_path: str):
         checkpoint = torch.load(checkpoint_path, map_location="cpu")
+        print(checkpoint.keys())
         if "model" in checkpoint:
             checkpoint["model"].pop("mask_kernel.kernel", None)
-            checkpoint = checkpoint["model"]
+            checkpoint = checkpoint["model.module"]
         self.model.load_state_dict(checkpoint, strict=False)

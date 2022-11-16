@@ -54,7 +54,7 @@ def main(cfg: DictConfig) -> None:
         return
 
     print(OmegaConf.to_yaml(cfg))
-    os.environ["CUDA_VISIBLE_DEVICES"] = f"{cfg.device}"
+    # os.environ["CUDA_VISIBLE_DEVICES"] = f"{cfg.device}"
     print(f"Run backbone {cfg.backbone_name} on experiment {cfg.experiment}, work in {os.getcwd()}")
     cwd = Path(get_original_cwd())
 
@@ -80,7 +80,7 @@ def main(cfg: DictConfig) -> None:
         batch_size=cfg.training.batch_size,
         num_workers=cfg.training.num_workers,
         sampler=RandomSampler(dataset_train, replacement=True, num_samples=num_samples),
-        pin_memory=False,
+        pin_memory=True,
         drop_last=True,
     )
 
@@ -91,7 +91,7 @@ def main(cfg: DictConfig) -> None:
             batch_size=4,
             num_workers=cfg.training.num_workers,
             shuffle=False,
-            pin_memory=False,
+            pin_memory=True,
             drop_last=False,
         )
 
@@ -115,6 +115,10 @@ def main(cfg: DictConfig) -> None:
         head=head,
         **cfg.model,
     )
+
+    if torch.cuda.device_count() > 1:
+        print(f'Using data parallel with {torch.cuda.device_count()} GPUs')
+        mdl = torch.nn.DataParallel(mdl)
 
     # Optimization
     if cfg.optim.optimizer == "adam":
