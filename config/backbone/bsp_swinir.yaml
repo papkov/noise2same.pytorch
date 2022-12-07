@@ -4,7 +4,6 @@ backbone_name: bsp_swinir
 backbone:
   embed_dim: 96
   upscale: 1
-  patch_size: 1
   window_size: 8
   depths: [ 6, 6, 6, 6, 6, 6 ]
   num_heads: [ 6, 6, 6, 6, 6, 6 ]

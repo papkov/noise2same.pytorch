@@ -44,7 +44,7 @@ class Evaluator(object):
             )
         elif isinstance(self.model.net, SwinIR):
             self.resizer = PadAndCropResizer(
-                mode="reflect", div_n=self.model.net.window_size * self.model.net.patch_embed.patch_size
+                mode="reflect", div_n=self.model.net.window_size
             )
         else:
             self.resizer = PadAndCropResizer(div_n=1)

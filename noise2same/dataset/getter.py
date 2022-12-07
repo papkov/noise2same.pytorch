@@ -17,7 +17,7 @@ def compute_pad_divisor(cfg: DictConfig):
     if cfg.backbone_name == 'unet':
         return 2 ** cfg.backbone.depth
     elif cfg.backbone_name == 'swinir':
-        return cfg.backbone.patch_size * cfg.backbone.window_size
+        return cfg.backbone.window_size
     # elif cfg.backbone_name == 'swin_uper':
     #     return cfg.backbone.patch_size * cfg.backbone.window_size * 2 ** (len(cfg.backbone.depths) - 1)
     else:
