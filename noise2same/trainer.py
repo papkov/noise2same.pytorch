@@ -16,6 +16,7 @@ from noise2same.util import (
     load_checkpoint_to_module,
     normalize_zero_one_dict,
 )
+from evaluate import get_scores
 
 
 class Trainer(object):
@@ -27,6 +28,7 @@ class Trainer(object):
         device: str = "cuda",
         checkpoint_path: str = "checkpoints",
         monitor: str = "val_rec_mse",
+        experiment: str = None,
         check: bool = False,
         wandb_log: bool = True,
         amp: bool = False,
@@ -40,6 +42,7 @@ class Trainer(object):
         self.device = device
         self.checkpoint_path = Path(checkpoint_path)
         self.monitor = monitor
+        self.experiment = experiment
         self.check = check
         if check:
             wandb_log = False
@@ -158,6 +161,7 @@ class Trainer(object):
         iterator = tqdm(loader, desc="valid")
 
         total_loss = 0
+        val_mse_log = []
         images = {}
         for i, batch in enumerate(iterator):
             x = batch["image"].to(self.device)
@@ -165,8 +169,13 @@ class Trainer(object):
             with autocast(enabled=self.amp):
                 out_raw = self.model(x)[1]["image"]
 
+            if "ground_truth" in batch.keys():
+                val_mse = torch.mean(torch.square(out_raw - batch["ground_truth"].to(self.device)))
+                val_mse_log.append(val_mse.item())
+
             rec_mse = torch.mean(torch.square(out_raw - x))
             total_loss += rec_mse.item()
+
             iterator.set_postfix({"val_rec_mse": total_loss / (i + 1)})
 
             if self.check and i > 3:
@@ -179,7 +188,8 @@ class Trainer(object):
                 }
                 images = detach_to_np(images, mean=batch["mean"], std=batch["std"])
                 images = normalize_zero_one_dict(images)
-
+        if len(val_mse_log) > 0:
+            return {"val_rec_mse": total_loss / len(loader), "val_mse": np.mean(val_mse_log)}, images
         return {"val_rec_mse": total_loss / len(loader)}, images
 
     def inference(self, *args: Any, **kwargs: Any):
@@ -258,7 +268,7 @@ class Trainer(object):
     def save_model(self, name: str = "model"):
         torch.save(
             {
-                "model": self.model.state_dict(),
+                "model": self.inner_model.state_dict(),
                 "optimizer": self.optimizer.state_dict(),
                 "scheduler": self.scheduler.state_dict(),
             },

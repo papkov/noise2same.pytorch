@@ -19,14 +19,10 @@ from noise2same.evaluator import Evaluator
 from utils import parametrize_backbone_and_head
 
 
-def evaluate(
-    evaluator: Evaluator,
+def get_loader(
     dataset: Dataset,
-    ground_truth: np.ndarray,
     experiment: str,
     num_workers: int,
-    cwd: Path,
-    half: bool = False,
 ):
     loader = None
     if experiment.lower() in ("bsd68", "imagenet", "hanzi"):
@@ -47,6 +43,18 @@ def evaluate(
             pin_memory=True,
             drop_last=False,
         )
+    return loader
+
+
+def get_ground_truth_and_predictions(
+    evaluator: Evaluator,
+    experiment: str,
+    ground_truth: np.ndarray,
+    cwd: Path,
+    loader: DataLoader = None,
+    dataset: Dataset = None,
+    half: bool = False
+):
     if experiment in ("bsd68", "hanzi"):
         predictions, _ = evaluator.inference(loader, half=half)
     elif experiment in ("imagenet",):
@@ -77,6 +85,14 @@ def evaluate(
     if experiment not in ("planaria", "microtubules"):
         predictions = {k: [d[k].squeeze() for d in predictions] for k in predictions[0]}
 
+    return ground_truth, predictions
+
+
+def get_scores(
+    ground_truth: np.ndarray,
+    predictions: np.ndarray,
+    experiment: str
+):
     # Calculate scores
     if experiment in ("bsd68",):
         scores = [
@@ -115,19 +131,45 @@ def evaluate(
         scores = pd.concat(scores)
     else:
         raise ValueError
+    return scores
+
+
+def evaluate(
+    evaluator: Evaluator,
+    ground_truth: np.ndarray,
+    experiment: str,
+    cwd: Path,
+    loader: DataLoader = None,
+    dataset: Dataset = None,
+    num_workers: int = None,
+    half: bool = False,
+    save_results: bool = True,
+    verbose: bool = True,
+):
+    assert loader is not None or dataset is not None
+
+    if loader is None:
+        loader = get_loader(dataset, experiment, num_workers)
+
+    ground_truth, predictions = get_ground_truth_and_predictions(
+        evaluator, experiment, ground_truth, cwd, loader, dataset, half
+    )
+
+    scores = get_scores(ground_truth, predictions, experiment)
 
     result = scores
-    # Save results
     scores = pd.DataFrame(scores)
-    scores.to_csv("scores.csv")
-    np.savez("predictions.npz", **predictions)
 
-    # Show summary
-    print("\nEvaluation results:")
-    if experiment in ("planaria",):
-        pprint(scores.groupby("c").mean())
-    else:
-        pprint(scores.mean())
+    if save_results:
+        scores.to_csv("scores.csv")
+        np.savez("predictions.npz", **predictions)
+
+    if verbose:
+        print("\nEvaluation results:")
+        if experiment in ("planaria",):
+            pprint(scores.groupby("c").mean())
+        else:
+            pprint(scores.mean())
     return result
 
 
@@ -167,7 +209,9 @@ def main(train_dir: str, checkpoint: str = 'last', other_args: list = None) -> N
     half = getattr(cfg, "amp", False)
     masked = getattr(cfg, "masked", False)
     evaluator = Evaluator(mdl, checkpoint_path=checkpoint_path, masked=masked)
-    evaluate(evaluator, dataset, ground_truth, cfg.experiment, cfg.training.num_workers, cwd, half)
+    evaluate(
+        evaluator, ground_truth, cfg.experiment, cwd, dataset=dataset, half=half, num_workers=cfg.training.num_workers
+    )
 
 
 if __name__ == "__main__":

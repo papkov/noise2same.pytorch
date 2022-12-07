@@ -8,5 +8,6 @@ training:
   steps: 50000
   crop: 64
   batch_size: 64
-  validate: False
+  validate: True
+  val_partition: 0.05
   monitor: bsp_mse

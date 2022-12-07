@@ -32,6 +32,8 @@ training:
   num_workers: 8
   crop: 64
   validate: True
+  val_partition: 1.0
+  val_batch_size: 4
   monitor: bsp_mse
   amp: True
   info_padding: False

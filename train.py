@@ -86,13 +86,18 @@ def main(cfg: DictConfig) -> None:
 
     loader_valid = None
     if cfg.training.validate:
+        n_samples_val = int(cfg.training.val_partition * len(dataset_valid))
         loader_valid = DataLoader(
-            dataset_valid,
-            batch_size=4,
+            torch.utils.data.random_split(
+                dataset_valid,
+                [n_samples_val, len(dataset_valid) - n_samples_val],
+                generator=torch.Generator().manual_seed(42)
+            )[0],
+            batch_size=cfg.training.val_batch_size,
             num_workers=cfg.training.num_workers,
             shuffle=False,
             pin_memory=True,
-            drop_last=False,
+            drop_last=True,
         )
 
     # Read PSF from dataset if available or by path
@@ -144,6 +149,7 @@ def main(cfg: DictConfig) -> None:
         scheduler=scheduler,
         check=cfg.check,
         monitor=cfg.training.monitor,
+        experiment=cfg.experiment,
         amp=cfg.training.amp,
         info_padding=cfg.training.info_padding
     )
@@ -163,9 +169,8 @@ def main(cfg: DictConfig) -> None:
     if cfg.evaluate:
         test_dataset, ground_truth = get_test_dataset_and_gt(cfg, cwd)
 
-        scores = evaluate.evaluate(trainer.evaluator, test_dataset, ground_truth,
-                                   cfg.experiment, cfg.training.num_workers, cwd,
-                                   half=cfg.training.amp)
+        scores = evaluate.evaluate(trainer.evaluator, ground_truth, cfg.experiment, cwd, dataset=test_dataset,
+                                   half=cfg.training.amp, num_workers=cfg.training.num_workers)
 
         if not cfg.check:
             wandb.run.summary.update(scores)
