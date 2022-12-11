@@ -1,5 +1,5 @@
 from pathlib import Path
-from typing import Tuple
+from typing import Tuple, Optional, Dict
 
 import numpy as np
 import tifffile
@@ -13,18 +13,28 @@ from .util import training_augmentations_2d, training_augmentations_3d
 from noise2same.util import normalize_percentile
 
 
-def compute_pad_divisor(cfg: DictConfig):
-    if cfg.backbone_name == 'unet':
+def compute_pad_divisor(cfg: DictConfig) -> Optional[int]:
+    """
+    Compute the number by which the padded image size should
+    be divisible, so that it is suitable for the chosen backbone
+    :param cfg: DictConfig, training/evaluation configuration object
+    :return: Optional[int]
+    """
+    if cfg.backbone_name == "unet":
         return 2 ** cfg.backbone.depth
-    elif cfg.backbone_name == 'swinir':
+    elif cfg.backbone_name == "swinir" or cfg.backbone_name == "bsp_swinir":
         return cfg.backbone.window_size
-    # elif cfg.backbone_name == 'swin_uper':
-    #     return cfg.backbone.patch_size * cfg.backbone.window_size * 2 ** (len(cfg.backbone.depths) - 1)
     else:
-        return 1
+        raise ValueError("Incorrect backbone name")
 
 
 def get_dataset(cfg: DictConfig, cwd: Path) -> Tuple[Dataset, Dataset]:
+    """
+    Collects training and validation datasets specified in the configuration
+    :param cfg: DictConfig, training/evaluation configuration object
+    :param cwd: Path, project working directory
+    :return: Tuple[Dataset, Dataset]
+    """
 
     dataset_valid = None
 
@@ -120,6 +130,12 @@ def get_dataset(cfg: DictConfig, cwd: Path) -> Tuple[Dataset, Dataset]:
 
 
 def get_test_dataset_and_gt(cfg: DictConfig, cwd: Path) -> Tuple[Dataset, np.ndarray]:
+    """
+    Collects test dataset and ground truth specified in the configuration
+    :param cfg: DictConfig, training/evaluation configuration object
+    :param cwd: Path, project working directory
+    :return: Tuple[Dataset, np.ndarray]
+    """
 
     pad_divisor = compute_pad_divisor(cfg)
 
@@ -195,7 +211,12 @@ def get_test_dataset_and_gt(cfg: DictConfig, cwd: Path) -> Tuple[Dataset, np.nda
     return dataset, gt
 
 
-def get_planaria_dataset_and_gt(filename_gt: str):
+def get_planaria_dataset_and_gt(filename_gt: str) -> Tuple[Dict[str, Dataset], np.ndarray]:
+    """
+    Collects Planaria dataset and ground truth
+    :param filename_gt: str, Planaria dataset ground truth filename
+    :return: Tuple[Dict[str, Dataset], np.ndarray]
+    """
     gt = tifffile.imread(filename_gt)
     gt = normalize_percentile(gt, 0.1, 99.9)
     datasets = {}
