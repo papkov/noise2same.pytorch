@@ -1,0 +1,21 @@
+# @package _global_
+name: imagenet
+project: noise2same-imagenet-deconv
+
+data:
+  n_channels: 3
+  version: 0
+  add_blur_and_noise: True
+
+training:
+  steps: 50000
+  crop: 64
+  batch_size: 64
+  validate: False
+  monitor: rec_mse
+
+psf:
+  path: null
+  psf_size: null
+  psf_pad_mode: replicate  # check if reflect affected anything
+  psf_fft: auto

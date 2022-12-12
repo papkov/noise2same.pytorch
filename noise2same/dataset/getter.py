@@ -67,6 +67,7 @@ def get_dataset(cfg: DictConfig) -> Tuple[Dataset, Dataset]:
             mode="train",
             transforms=training_augmentations_2d(crop=cfg.training.crop),
             version=cfg.data.version,
+            add_blur_and_noise=cfg.data.add_blur_and_noise,
         )
         if cfg.training.validate:
             dataset_valid = imagenet.ImagenetDatasetPrepared(
@@ -74,6 +75,7 @@ def get_dataset(cfg: DictConfig) -> Tuple[Dataset, Dataset]:
                 mode="val",
                 version=cfg.data.version,
                 transforms=validation_augmentations_2d(),
+                add_blur_and_noise=cfg.data.add_blur_and_noise,
             )
 
     elif cfg.name.lower() == "planaria":
@@ -152,7 +154,9 @@ def get_test_dataset_and_gt(cfg: DictConfig) -> Tuple[Dataset, np.ndarray]:
         gt = np.load(str(cwd / "data/Hanzi/tiles/testing.npy"))[:, 0]
 
     elif cfg.name.lower() == "imagenet":
-        dataset = imagenet.ImagenetDatasetTest(path=cwd / "data/ImageNet/")
+        dataset = imagenet.ImagenetDatasetTest(
+            path=cwd / "data/ImageNet/", add_blur_and_noise=cfg.data.add_blur_and_noise
+        )
         gt = [
             np.load(p)[0] for p in tqdm(sorted((dataset.path / "test").glob("*.npy")))
         ]
