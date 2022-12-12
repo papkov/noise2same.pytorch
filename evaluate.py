@@ -48,10 +48,16 @@ def main(cfg: DictConfig) -> None:
             drop_last=False,
         )
 
+    # Read PSF from dataset if available or by path
+    psf = getattr(dataset, "psf", None)
+    if psf is None and getattr(cfg, "psf", None) is not None:
+        psf = cwd / cfg.psf.path
+        print(f"Read PSF from {psf}")
+
     mdl = model.Noise2Same(
         n_dim=cfg.data.n_dim,
         in_channels=cfg.data.n_channels,
-        psf=cfg.psf.path if "psf" in cfg else None,
+        psf=psf,
         psf_size=cfg.psf.psf_size if "psf" in cfg else None,
         psf_pad_mode=cfg.psf.psf_pad_mode if "psf" in cfg else None,
         **cfg.model,
@@ -74,6 +80,7 @@ def main(cfg: DictConfig) -> None:
             half=half,
             empty_cache=cfg.name
             == "imagenet",  # slower but otherwise doesn't fit with FFC
+            key=getattr(cfg, "key", "image"),
         )
     elif cfg.name in ("microtubules",):
         predictions = evaluator.inference_single_image_dataset(

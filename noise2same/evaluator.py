@@ -87,7 +87,11 @@ class Evaluator(object):
                 for k in out.keys():
                     out[k] = self.resizer.after(out[k])
 
-                out_raw = out[key] * batch["std"] + batch["mean"]
+                try:
+                    out_raw = out[key] * batch["std"] + batch["mean"]
+                except KeyError as e:
+                    print("Available keys:", out.keys())
+                    raise e
 
             out_raw = {"image": np.moveaxis(out_raw.detach().cpu().numpy(), 1, -1)}
             if self.model.lambda_proj > 0:
