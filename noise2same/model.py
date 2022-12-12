@@ -157,7 +157,9 @@ class Noise2Same(nn.Module):
                 # TODO check
                 psf = read_psf(psf, psf_size=psf_size)
             print("PSF shape", psf.shape)
-            self.psf = PSFParameter(psf, pad_mode=psf_pad_mode, fft=psf_fft)
+            self.psf = PSFParameter(
+                psf, pad_mode=psf_pad_mode, fft=psf_fft, in_channels=in_channels
+            )
             for param in self.psf.parameters():
                 param.requires_grad = False
 

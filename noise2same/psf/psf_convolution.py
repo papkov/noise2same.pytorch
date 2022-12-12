@@ -121,6 +121,8 @@ class PSFParameter(nn.Module):
         self.auto_padding = auto_padding
 
         self.psf = torch.from_numpy(kernel_psf.squeeze()[(None,) * 2]).float()
+        if in_channels > 1:
+            self.psf = self.psf.repeat(in_channels, 1, 1, 1)
         self.psf = nn.Parameter(self.psf, requires_grad=trainable)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
