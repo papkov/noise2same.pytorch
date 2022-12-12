@@ -38,4 +38,3 @@ class PlanariaDatasetTiff(AbstractNoiseDataset3DLarge):
     tile_step: int = 192
     crop_border: int = 32
     stack_depth: int = 96
-

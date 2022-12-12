@@ -4,8 +4,8 @@ from typing import Union
 
 import numpy as np
 
-from noise2same.dataset.planaria import PlanariaDatasetPrepared, PlanariaDatasetTiff
 from noise2same.dataset.abc import AbstractNoiseDataset3D, AbstractNoiseDataset3DLarge
+from noise2same.dataset.planaria import PlanariaDatasetPrepared, PlanariaDatasetTiff
 
 
 @dataclass

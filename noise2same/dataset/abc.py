@@ -15,11 +15,10 @@ from torch import tensor as T
 from torch.utils.data import Dataset
 
 from noise2same.dataset import transforms as t3d
-from noise2same.dataset.util import mask_like_image
-
 from noise2same.dataset.util import (
     add_microscope_blur_3d,
     add_poisson_gaussian_noise,
+    mask_like_image,
     normalize,
 )
 from noise2same.util import normalize_percentile
@@ -74,6 +73,8 @@ class AbstractNoiseDataset(Dataset, ABC):
             )
 
         self.images = self._get_images()
+        if not self.transforms:
+            self.transforms = []
         if not isinstance(self.transforms, list):
             self.transforms = [self.transforms]
         self.transforms = self._compose_transforms(
