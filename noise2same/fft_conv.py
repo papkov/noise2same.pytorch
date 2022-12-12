@@ -106,7 +106,7 @@ def fft_conv(
 
     padded_kernel = f.pad(kernel, kernel_padding)
     assert (
-        padded_kernel.shape[1:] == signal.shape[1:]
+        padded_kernel.shape[2:] == signal.shape[2:]
     ), f"padded kernel shape {padded_kernel.shape} not equal to signal shape {signal.shape}"
 
     # Perform fourier convolution -- FFT, matrix multiply, then IFFT
