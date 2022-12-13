@@ -4,6 +4,7 @@
 # -----------------------------------------------------------------------------------
 
 import torch
+import einops
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.utils.checkpoint as checkpoint
@@ -37,26 +38,22 @@ def window_partition(x, window_size):
     Returns:
         windows: (num_windows*B, window_size, window_size, C)
     """
-    B, H, W, C = x.shape
-    x = x.view(B, H // window_size, window_size, W // window_size, window_size, C)
-    windows = x.permute(0, 1, 3, 2, 4, 5).contiguous().view(-1, window_size, window_size, C)
-    return windows
+    return einops.rearrange(x, 'b (h wh) (w ww) c -> (b h w) wh ww c', wh=window_size, ww=window_size)
 
 
-def window_reverse(windows, window_size, H, W):
+def window_reverse(windows, window_size, image_height, image_width):
     """
     Args:
         windows: (num_windows*B, window_size, window_size, C)
         window_size (int): Window size
-        H (int): Height of image
-        W (int): Width of image
+        image_height (int): Height of image
+        image_width (int): Width of image
     Returns:
         x: (B, H, W, C)
     """
-    B = int(windows.shape[0] / (H * W / window_size / window_size))
-    x = windows.view(B, H // window_size, W // window_size, window_size, window_size, -1)
-    x = x.permute(0, 1, 3, 2, 4, 5).contiguous().view(B, H, W, -1)
-    return x
+    h = image_height // window_size
+    w = image_width // window_size
+    return einops.rearrange(windows, '(b h w) wh ww c -> b (h wh) (w ww) c', h=h, w=w)
 
 
 class WindowAttention(nn.Module):
