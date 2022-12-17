@@ -30,7 +30,7 @@ def compute_pad_divisor(cfg: DictConfig) -> Optional[int]:
 
 def get_dataset(cfg: DictConfig, cwd: Path) -> Tuple[Dataset, Dataset]:
     """
-    Collects training and validation datasets specified in the configuration
+    Collect training and validation datasets specified in the configuration
     :param cfg: DictConfig, training/evaluation configuration object
     :param cwd: Path, project working directory
     :return: Tuple[Dataset, Dataset]
@@ -131,7 +131,7 @@ def get_dataset(cfg: DictConfig, cwd: Path) -> Tuple[Dataset, Dataset]:
 
 def get_test_dataset_and_gt(cfg: DictConfig, cwd: Path) -> Tuple[Dataset, np.ndarray]:
     """
-    Collects test dataset and ground truth specified in the configuration
+    Collect test dataset and ground truth specified in the configuration
     :param cfg: DictConfig, training/evaluation configuration object
     :param cwd: Path, project working directory
     :return: Tuple[Dataset, np.ndarray]
@@ -213,7 +213,7 @@ def get_test_dataset_and_gt(cfg: DictConfig, cwd: Path) -> Tuple[Dataset, np.nda
 
 def get_planaria_dataset_and_gt(filename_gt: str) -> Tuple[Dict[str, Dataset], np.ndarray]:
     """
-    Collects Planaria dataset and ground truth
+    Collect Planaria dataset and ground truth
     :param filename_gt: str, Planaria dataset ground truth filename
     :return: Tuple[Dict[str, Dataset], np.ndarray]
     """

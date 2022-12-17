@@ -10,7 +10,7 @@ from noise2same.dataset.getter import compute_pad_divisor
 
 def recalculate_img_size(cfg: DictConfig) -> int:
     """
-    Recalculates image size with respect to future padding
+    Recalculate image size with respect to future padding
     :param cfg: DictConfig, training/evaluation configuration object
     :return: int
     """
