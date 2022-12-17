@@ -244,8 +244,7 @@ class Evaluator(object):
 
     def load_checkpoint(self, checkpoint_path: str):
         checkpoint = torch.load(checkpoint_path, map_location="cpu")
-        print(checkpoint.keys())
         if "model" in checkpoint:
             checkpoint["model"].pop("mask_kernel.kernel", None)
-            checkpoint = checkpoint["model.module"]
+            checkpoint = checkpoint["model"]
         self.model.load_state_dict(checkpoint, strict=False)
