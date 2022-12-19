@@ -122,8 +122,10 @@ class WindowAttention(nn.Module):
         attn = attn + relative_position_bias.unsqueeze(0)
 
         if mask is not None:
-            attn = einops.rearrange(attn, "(b nw) ... -> b nw ...", nw=mask.shape[0]) + mask.unsqueeze(1).unsqueeze(0)
-            attn = einops.rearrange(attn, "b nw ... -> (b nw) ...", nw=mask.shape[0])
+            num_windows = mask.shape[1] if len(mask.shape) == 4 else mask.shape[0]
+            attn = einops.rearrange(attn, "(b nw) ... -> b nw ...", nw=num_windows)
+            attn += mask.unsqueeze(2) if len(mask.shape) == 4 else mask.unsqueeze(1).unsqueeze(0)
+            attn = einops.rearrange(attn, "b nw ... -> (b nw) ...", nw=num_windows)
 
         attn = self.softmax(attn)
         attn = self.attn_drop(attn)
