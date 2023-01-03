@@ -441,22 +441,18 @@ class PatchEmbed(nn.Module):
         super().__init__()
         self.img_size = to_2tuple(img_size)
         self.embed_dim = embed_dim
-        if norm_layer is not None:
-            self.norm = norm_layer(embed_dim)
-        else:
-            self.norm = None
+        self.norm = None if norm_layer is None else norm_layer(embed_dim)
 
     def forward(self, x):
-        x = x.flatten(2).transpose(1, 2)  # B Ph*Pw C
+        x = einops.rearrange(x, "b c ... -> b (...) c")
         if self.norm is not None:
             x = self.norm(x)
         return x
 
     def flops(self):
         flops = 0
-        H, W = self.img_size
         if self.norm is not None:
-            flops += H * W * self.embed_dim
+            flops += np.prod(self.img_size) * self.embed_dim
         return flops
 
 
@@ -471,8 +467,7 @@ class PatchUnEmbed(nn.Module):
         self.embed_dim = embed_dim
 
     def forward(self, x, x_size):
-        B, HW, C = x.shape
-        x = x.transpose(1, 2).view(B, self.embed_dim, x_size[0], x_size[1])  # B Ph*Pw C
+        x = einops.rearrange(x, "b (h w) c -> b c h w", h=x_size[0])
         return x
 
     def flops(self):
