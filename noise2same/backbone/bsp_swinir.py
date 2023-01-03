@@ -208,6 +208,7 @@ class BSpRSTB(RSTB):
                                             norm_layer=norm_layer,
                                             downsample=downsample,
                                             use_checkpoint=use_checkpoint)
+        self.conv = nn.Conv2d(dim, dim, 1)
 
     def forward(self, x, x_size, **kwargs):
         return self.patch_embed(self.conv(self.patch_unembed(self.residual_group(x, x_size, **kwargs), x_size))) + x
@@ -257,6 +258,7 @@ class BSpSwinIR(SwinIR):
         )
 
         self.conv_first = nn.Conv2d(in_chans, embed_dim, 1)
+        self.conv_after_body = nn.Conv2d(embed_dim, embed_dim, 1)
 
         self.layers = nn.ModuleList()
         for i_layer in range(self.num_layers):
