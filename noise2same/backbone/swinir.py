@@ -62,7 +62,7 @@ class WindowAttention(nn.Module):
     r""" Window based multi-head self attention (W-MSA) module with relative position bias.
     It supports both of shifted and non-shifted window.
     Args:
-        dim (int): Number of input channels.
+        embed_dim (int): Number of input channels.
         window_size (tuple[int]): The height and width of the window.
         num_heads (int): Number of attention heads.
         qkv_bias (bool, optional):  If True, add a learnable bias to query, key, value. Default: True
@@ -126,7 +126,7 @@ class WindowAttention(nn.Module):
             batched = len(mask.shape) == 4
             num_windows = mask.shape[1] if batched else mask.shape[0]
             attn = einops.rearrange(attn, "(b nw) ... -> b nw ...", nw=num_windows)
-            attn += einops.rearrange(mask, f"{'b nw' if batched else '(b nw)'} (nh n) n -> b nw nh n n",
+            attn += einops.rearrange(mask, f"{'b nw' if batched else '(b nw)'} (nh np1) np2 -> b nw nh np1 np2",
                                      nw=num_windows, nh=1)
             attn = einops.rearrange(attn, "b nw ... -> (b nw) ...", nw=num_windows)
 
@@ -141,17 +141,16 @@ class WindowAttention(nn.Module):
     def extra_repr(self) -> str:
         return f'dim={self.dim}, window_size={self.window_size}, num_heads={self.num_heads}'
 
-    def flops(self, N):
-        # calculate flops for 1 window with token length of N
+    def flops(self, num_pixels):
         flops = 0
-        # qkv = self.qkv(x)
-        flops += N * self.dim * 3 * self.dim
-        # attn = (q @ k.transpose(-2, -1))
-        flops += self.num_heads * N * (self.dim // self.num_heads) * N
-        #  x = (attn @ v)
-        flops += self.num_heads * N * N * (self.dim // self.num_heads)
-        # x = self.proj(x)
-        flops += N * self.dim * self.dim
+        # self.qkv(x)
+        flops += num_pixels * self.dim * 3 * self.dim
+        # torch.einsum("...ik,...jk->...ij", q, k)
+        flops += self.num_heads * num_pixels * (self.dim // self.num_heads) * num_pixels
+        # attn @ v
+        flops += self.num_heads * num_pixels * num_pixels * (self.dim // self.num_heads)
+        # self.proj(x)
+        flops += num_pixels * self.dim * self.dim
         return flops
 
 
