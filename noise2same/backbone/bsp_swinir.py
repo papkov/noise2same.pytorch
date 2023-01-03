@@ -89,9 +89,9 @@ class BSpSwinTransformerBlock(SwinTransformerBlock):
             # (B, nW, window_size ** 2, window_size ** 2)
             bsp_mask = bsp_mask.unsqueeze(2).repeat(1, 1, self.window_size ** 2, 1)
             if attn_mask is None:
-                attn_mask = bsp_mask.masked_fill(bsp_mask != 0, float(-100.0)).masked_fill(bsp_mask == 0, float(0.0))
+                attn_mask = bsp_mask.masked_fill(bsp_mask != 0, float(-10 ** 9)).masked_fill(bsp_mask == 0, 0.)
             else:
-                attn_mask = attn_mask.masked_fill(bsp_mask != 0, float(-100.0))
+                attn_mask = attn_mask.masked_fill(bsp_mask != 0, float(-10 ** 9))
         attn_windows = self.attn(x_windows, mask=attn_mask)  # nW*B, window_size*window_size, C
 
         # merge windows
