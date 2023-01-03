@@ -118,7 +118,7 @@ class WindowAttention(nn.Module):
 
         relative_position_bias = einops.rearrange(
             self.relative_position_bias_table[self.relative_position_index],
-            "(b np1 np2) nh -> b nh np1 np2", np1=self.num_pixels, b=1
+            "(np1 np2) nh -> 1 nh np1 np2", np1=self.num_pixels
         )
         attn = attn + relative_position_bias
 
@@ -126,8 +126,8 @@ class WindowAttention(nn.Module):
             batched = len(mask.shape) == 4
             num_windows = mask.shape[1] if batched else mask.shape[0]
             attn = einops.rearrange(attn, "(b nw) ... -> b nw ...", nw=num_windows)
-            attn += einops.rearrange(mask, f"{'b nw' if batched else '(b nw)'} (nh np1) np2 -> b nw nh np1 np2",
-                                     nw=num_windows, nh=1)
+            attn += einops.rearrange(mask, f"{'b nw' if batched else '(b nw)'} np1 np2 -> b nw 1 np1 np2",
+                                     nw=num_windows)
             attn = einops.rearrange(attn, "b nw ... -> (b nw) ...", nw=num_windows)
 
         attn = self.softmax(attn)
