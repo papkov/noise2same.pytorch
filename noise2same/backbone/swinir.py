@@ -221,21 +221,18 @@ class SwinTransformerBlock(nn.Module):
                 img_mask[:, h, w, :] = cnt
                 cnt += 1
 
-        mask_windows = window_partition(img_mask, self.window_size)  # nW, window_size, window_size, 1
-        mask_windows = mask_windows.view(-1, self.window_size * self.window_size)
-        attn_mask = mask_windows.unsqueeze(1) - mask_windows.unsqueeze(2)
+        mask_windows = window_partition(img_mask, self.window_size)
+        mask_windows = einops.rearrange(mask_windows, "nw ws1 ws2 1 -> nw (ws1 ws2)")
+        attn_mask = einops.rearrange(mask_windows, "nw np -> nw 1 np") - \
+                    einops.rearrange(mask_windows, "nw np -> nw np 1")
         attn_mask = attn_mask.masked_fill(attn_mask != 0, float(-10 ** 9)).masked_fill(attn_mask == 0, 0.)
 
         return attn_mask
 
     def forward(self, x, x_size):
-        H, W = x_size
-        B, L, C = x.shape
-        # assert L == H * W, "input feature has wrong size"
-
         shortcut = x
         x = self.norm1(x)
-        x = x.view(B, H, W, C)
+        x = einops.rearrange(x, "b (h w) c -> b h w c", h=x_size[0])
 
         # cyclic shift
         if self.shift_size > 0:
@@ -244,25 +241,25 @@ class SwinTransformerBlock(nn.Module):
             shifted_x = x
 
         # partition windows
-        x_windows = window_partition(shifted_x, self.window_size)  # nW*B, window_size, window_size, C
-        x_windows = x_windows.view(-1, self.window_size * self.window_size, C)  # nW*B, window_size*window_size, C
+        x_windows = window_partition(shifted_x, self.window_size)
+        x_windows = einops.rearrange(x_windows, "... ws1 ws2 c -> ... (ws1 ws2) c")
 
         # W-MSA/SW-MSA (to be compatible for testing on images whose shapes are the multiple of window size
         if self.input_resolution == x_size:
-            attn_windows = self.attn(x_windows, mask=self.attn_mask)  # nW*B, window_size*window_size, C
+            attn_windows = self.attn(x_windows, mask=self.attn_mask)
         else:
             attn_windows = self.attn(x_windows, mask=self.calculate_mask(x_size).to(x.device))
 
         # merge windows
-        attn_windows = attn_windows.view(-1, self.window_size, self.window_size, C)
-        shifted_x = window_reverse(attn_windows, self.window_size, H, W)  # B H' W' C
+        attn_windows = einops.rearrange(attn_windows, "... (ws1 ws2) c -> ... ws1 ws2 c", ws1=self.window_size)
+        shifted_x = window_reverse(attn_windows, self.window_size, *x_size)
 
         # reverse cyclic shift
         if self.shift_size > 0:
             x = torch.roll(shifted_x, shifts=(self.shift_size, self.shift_size), dims=(1, 2))
         else:
             x = shifted_x
-        x = x.view(B, H * W, C)
+        x = einops.rearrange(x, "b ... c -> b (...) c")
 
         # FFN
         x = shortcut + self.drop_path(x)
@@ -276,16 +273,16 @@ class SwinTransformerBlock(nn.Module):
 
     def flops(self):
         flops = 0
-        H, W = self.input_resolution
+        num_pixels = np.prod(self.input_resolution)
         # norm1
-        flops += self.dim * H * W
+        flops += self.dim * num_pixels
         # W-MSA/SW-MSA
-        nW = H * W / self.window_size / self.window_size
-        flops += nW * self.attn.flops(self.window_size * self.window_size)
+        num_windows = num_pixels / self.window_size / self.window_size
+        flops += num_windows * self.attn.flops(self.window_size * self.window_size)
         # mlp
-        flops += 2 * H * W * self.dim * self.dim * self.mlp_ratio
+        flops += 2 * num_pixels * self.dim * self.dim * self.mlp_ratio
         # norm2
-        flops += self.dim * H * W
+        flops += self.dim * num_pixels
         return flops
 
 
