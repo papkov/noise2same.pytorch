@@ -7,7 +7,6 @@ import torch
 import einops
 import numpy as np
 import torch.nn as nn
-import torch.nn.functional as F
 import torch.utils.checkpoint as checkpoint
 from timm.models.layers import DropPath, to_2tuple, trunc_normal_
 
@@ -77,7 +76,7 @@ class WindowAttention(nn.Module):
         self.window_size = window_size
         self.num_heads = num_heads
         self.scale = qk_scale or (embed_dim // num_heads) ** -0.5
-        self.num_pixels = np.prod(window_size).item()
+        self.num_patches = np.prod(window_size).item()
 
         window_bias_shape = [2 * s - 1 for s in window_size]
         self.relative_position_bias_table = nn.Parameter(torch.zeros(np.prod(window_bias_shape).item(), num_heads))
@@ -118,7 +117,7 @@ class WindowAttention(nn.Module):
 
         relative_position_bias = einops.rearrange(
             self.relative_position_bias_table[self.relative_position_index],
-            "(np1 np2) nh -> 1 nh np1 np2", np1=self.num_pixels
+            "(np1 np2) nh -> 1 nh np1 np2", np1=self.num_patches
         )
         attn = attn + relative_position_bias
 
@@ -141,16 +140,16 @@ class WindowAttention(nn.Module):
     def extra_repr(self) -> str:
         return f'dim={self.dim}, window_size={self.window_size}, num_heads={self.num_heads}'
 
-    def flops(self, num_pixels):
+    def flops(self, num_patches):
         flops = 0
         # self.qkv(x)
-        flops += num_pixels * self.dim * 3 * self.dim
+        flops += num_patches * self.dim * 3 * self.dim
         # torch.einsum("...ik,...jk->...ij", q, k)
-        flops += self.num_heads * num_pixels * (self.dim // self.num_heads) * num_pixels
+        flops += self.num_heads * num_patches * (self.dim // self.num_heads) * num_patches
         # attn @ v
-        flops += self.num_heads * num_pixels * num_pixels * (self.dim // self.num_heads)
+        flops += self.num_heads * num_patches * num_patches * (self.dim // self.num_heads)
         # self.proj(x)
-        flops += num_pixels * self.dim * self.dim
+        flops += num_patches * self.dim * self.dim
         return flops
 
 
@@ -207,8 +206,7 @@ class SwinTransformerBlock(nn.Module):
 
     def calculate_mask(self, x_size):
         # calculate attention mask for SW-MSA
-        H, W = x_size
-        img_mask = torch.zeros((1, H, W, 1))  # 1 H W 1
+        img_mask = torch.zeros((1, *x_size, 1))
         h_slices = (slice(0, -self.window_size),
                     slice(-self.window_size, -self.shift_size),
                     slice(-self.shift_size, None))
@@ -273,16 +271,16 @@ class SwinTransformerBlock(nn.Module):
 
     def flops(self):
         flops = 0
-        num_pixels = np.prod(self.input_resolution)
+        num_patches = np.prod(self.input_resolution)
         # norm1
-        flops += self.dim * num_pixels
+        flops += self.dim * num_patches
         # W-MSA/SW-MSA
-        num_windows = num_pixels / self.window_size / self.window_size
+        num_windows = num_patches / self.window_size / self.window_size
         flops += num_windows * self.attn.flops(self.window_size * self.window_size)
         # mlp
-        flops += 2 * num_pixels * self.dim * self.dim * self.mlp_ratio
+        flops += 2 * num_patches * self.dim * self.dim * self.mlp_ratio
         # norm2
-        flops += self.dim * num_pixels
+        flops += self.dim * num_patches
         return flops
 
 
@@ -418,8 +416,8 @@ class RSTB(nn.Module):
     def flops(self):
         flops = 0
         flops += self.residual_group.flops()
-        H, W = self.input_resolution
-        flops += H * W * self.dim * self.dim * 9
+        num_patches = np.prod(self.input_resolution)
+        flops += num_patches * self.dim * self.dim * 9
         flops += self.patch_embed.flops()
         flops += self.patch_unembed.flops()
 
@@ -602,7 +600,7 @@ class SwinIR(nn.Module):
         _, _, h, w = x.size()
         mod_pad_h = (self.window_size - h % self.window_size) % self.window_size
         mod_pad_w = (self.window_size - w % self.window_size) % self.window_size
-        x = F.pad(x, [0, mod_pad_w, 0, mod_pad_h], 'reflect')
+        x = torch.nn.functional.pad(x, [0, mod_pad_w, 0, mod_pad_h], 'reflect')
         return x
 
     def forward_features(self, x):
@@ -631,11 +629,11 @@ class SwinIR(nn.Module):
 
     def flops(self):
         flops = 0
-        H, W = self.patches_resolution
-        flops += H * W * 3 * self.embed_dim * 9
+        num_patches = np.prod(self.patches_resolution)
+        flops += num_patches * 3 * self.embed_dim * 9
         flops += self.patch_embed.flops()
         for i, layer in enumerate(self.layers):
             flops += layer.flops()
-        flops += H * W * 3 * self.embed_dim * self.embed_dim
+        flops += num_patches * 3 * self.embed_dim * self.embed_dim
         flops += self.upsample.flops()
         return flops
