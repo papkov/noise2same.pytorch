@@ -177,7 +177,7 @@ class Noise2Same(nn.Module):
                     deconv - output before PSF if PSF is provided and `convolve` is True
                     proj - output features of projection head if `lambda_proj` > 0
         """
-        if self.mode != ModelMode.NOISE2SELF:
+        if self.mode != ModelMode.NOISE2SELF or mask is None:
             out_raw = self.forward_whole(x, convolve, crops, full_size_image)
         if mask is not None:
             out_mask = self.forward_masked(x, mask, convolve, crops, full_size_image)
@@ -210,14 +210,14 @@ class Noise2Same(nn.Module):
         noise = (
             torch.randn(*x.shape, device=x.device, requires_grad=False) * self.noise_std
             + self.noise_mean
-            # np.random.normal(self.noise_mean, self.noise_std, x.shape)
             if self.masking == "gaussian"
             else self.mask_kernel(x)
         )
-        x = (1 - mask) * x + mask * noise
+
         if isinstance(self.net, BSpSwinIR):
             return self.forward_whole(x, convolve, crops, full_size_image, mask=mask)
         else:
+            x = (1 - mask) * x + mask * noise
             return self.forward_whole(x, convolve, crops, full_size_image)
 
     def forward_whole(
@@ -291,9 +291,9 @@ class Noise2Same(nn.Module):
         if self.mode in (ModelMode.NOISE2SELF, ModelMode.NOISE2SAME):
             # default Noise2Self blind-spot MSE loss
             bsp_mse = self.compute_mse(x, out_mask["image"], mask)
+            loss_log["bsp_mse"] = bsp_mse.item()
 
         if self.mode == ModelMode.NOISE2SAME:
-            loss_log["bsp_mse"] = bsp_mse.item()
 
             # Noise2Same losses
             loss = torch.tensor(0.0, device=x.device)
