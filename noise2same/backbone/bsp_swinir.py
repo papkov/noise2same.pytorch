@@ -2,15 +2,13 @@
 # SwinIR: Image Restoration Using Swin Transformer, https://arxiv.org/abs/2108.10257
 # Originally Written by Ze Liu, Modified by Jingyun Liang.
 # -----------------------------------------------------------------------------------
-
+import einops
 import torch
 import torch.nn as nn
 import torch.utils.checkpoint as checkpoint
-from timm.models.layers import to_2tuple
 from .swinir import (
     window_partition,
     window_reverse,
-    WindowAttention,
     SwinTransformerBlock,
     BasicLayer,
     RSTB,
@@ -44,18 +42,12 @@ class BSpSwinTransformerBlock(SwinTransformerBlock):
             mlp_ratio=mlp_ratio, qkv_bias=qkv_bias, qk_scale=qk_scale, drop=drop, attn_drop=attn_drop,
             drop_path=drop_path, act_layer=act_layer, norm_layer=norm_layer
         )
-        self.attn = WindowAttention(
-            dim, window_size=to_2tuple(self.window_size), num_heads=num_heads,
-            qkv_bias=qkv_bias, qk_scale=qk_scale, attn_drop=attn_drop, proj_drop=drop)
 
     def forward(self, x, x_size, mask=None):
-        H, W = x_size
-        B, L, C = x.shape
-        # assert L == H * W, "input feature has wrong size"
-
         shortcut = x
+        batch_size = x.shape[0]
         x = self.norm1(x)
-        x = x.view(B, H, W, C)
+        x = einops.rearrange(x, "b (h w) c -> b h w c", h=x_size[0])
 
         shifted_mask = mask
         shifted_x = x
@@ -67,8 +59,8 @@ class BSpSwinTransformerBlock(SwinTransformerBlock):
                 shifted_mask = torch.roll(mask, shifts=(-self.shift_size, -self.shift_size), dims=(1, 2))
 
         # partition windows
-        x_windows = window_partition(shifted_x, self.window_size)  # (nW*B, window_size, window_size, C)
-        x_windows = x_windows.view(-1, self.window_size * self.window_size, C)  # (nW*B, window_size*window_size, C)
+        x_windows = window_partition(shifted_x, self.window_size)
+        x_windows = einops.rearrange(x_windows, "nw ... c -> nw (...) c")
 
         # W-MSA/SW-MSA (to be compatible for testing on images whose shapes are the multiple of window size
         if self.input_resolution == x_size:
@@ -78,32 +70,29 @@ class BSpSwinTransformerBlock(SwinTransformerBlock):
 
         # replicating the mask for the whole batch
         if attn_mask is not None:
-            attn_mask = attn_mask.unsqueeze(0).repeat(B, 1, 1, 1)  # (B, nW, window_size, window_size)
+            attn_mask = einops.repeat(attn_mask, "... -> b ...", b=batch_size)
 
         # adding input mask to existing blind-spot mask
         if shifted_mask is not None:
-            # (B * nW, window_size, window_size, 1)
-            bsp_mask = window_partition(shifted_mask.view(B, H, W, 1), self.window_size)
-            # (B, nW, window_size ** 2)
-            bsp_mask = bsp_mask.view(B, -1, self.window_size ** 2)
-            # (B, nW, window_size ** 2, window_size ** 2)
-            bsp_mask = bsp_mask.unsqueeze(2).repeat(1, 1, self.window_size ** 2, 1)
+            bsp_mask = window_partition(einops.rearrange(shifted_mask, "b 1 ... -> b ... 1"), self.window_size)
+            bsp_mask = einops.rearrange(bsp_mask, "(b nw) ... -> b nw (...)", b=batch_size)
+            bsp_mask = einops.repeat(bsp_mask, "... n -> ... repeat n", repeat=bsp_mask.shape[-1])
+            bsp_mask = bsp_mask + bsp_mask.transpose(-1, -2)
             if attn_mask is None:
-                attn_mask = bsp_mask.masked_fill(bsp_mask != 0, float(-10 ** 9)).masked_fill(bsp_mask == 0, 0.)
-            else:
-                attn_mask = attn_mask.masked_fill(bsp_mask != 0, float(-10 ** 9))
-        attn_windows = self.attn(x_windows, mask=attn_mask)  # nW*B, window_size*window_size, C
+                attn_mask = bsp_mask
+            attn_mask = attn_mask.masked_fill(bsp_mask != 0, float(-10 ** 9))
+        attn_windows = self.attn(x_windows, mask=attn_mask)
 
         # merge windows
-        attn_windows = attn_windows.view(-1, self.window_size, self.window_size, C)
-        shifted_x = window_reverse(attn_windows, self.window_size, H, W)  # B H' W' C
+        attn_windows = einops.rearrange(attn_windows, "... (ws1 ws2) c -> ... ws1 ws2 c", ws1=self.window_size)
+        shifted_x = window_reverse(attn_windows, self.window_size, *x_size)
 
         # reverse cyclic shift
         if self.shift_size > 0:
             x = torch.roll(shifted_x, shifts=(self.shift_size, self.shift_size), dims=(1, 2))
         else:
             x = shifted_x
-        x = x.view(B, H * W, C)
+        x = einops.rearrange(x, "b ... c -> b (...) c")
 
         # FFN
         x = shortcut + self.drop_path(x)
