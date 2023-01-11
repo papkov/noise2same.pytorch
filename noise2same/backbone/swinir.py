@@ -243,7 +243,7 @@ class SwinTransformerBlock(nn.Module):
 
         # partition windows
         x_windows = window_partition(shifted_x, self.window_size)
-        x_windows = einops.rearrange(x_windows, "... ws1 ws2 c -> ... (ws1 ws2) c")
+        x_windows = einops.rearrange(x_windows, "nw ... c -> nw (...) c")
 
         # W-MSA/SW-MSA (to be compatible for testing on images whose shapes are the multiple of window size
         if self.input_resolution == x_size:
