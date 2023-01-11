@@ -125,9 +125,12 @@ class WindowAttention(nn.Module):
             batched = len(mask.shape) == 4
             num_windows = mask.shape[1] if batched else mask.shape[0]
             attn = einops.rearrange(attn, "(b nw) ... -> b nw ...", nw=num_windows)
-            attn += einops.rearrange(mask, f"{'b nw' if batched else '(b nw)'} np1 np2 -> b nw 1 np1 np2",
-                                     nw=num_windows)
-            attn = einops.rearrange(attn, "b nw ... -> (b nw) ...", nw=num_windows)
+            batch_dimension = 'b nw' if batched else '(b nw)'
+            attn += einops.rearrange(mask, f"{batch_dimension} np1 np2 -> b nw 1 np1 np2", nw=num_windows)
+            attn = einops.rearrange(attn, "b nw ... -> (b nw) ...")
+            v_mask = einops.rearrange(mask[..., 0], f"{batch_dimension} np -> (b nw) 1 np 1")
+            v_mask = v_mask.masked_fill(v_mask != 0, 0).masked_fill(v_mask == 0, 1)
+            v = v * v_mask
 
         attn = self.softmax(attn)
         attn = self.attn_drop(attn)
@@ -138,18 +141,18 @@ class WindowAttention(nn.Module):
         return x
 
     def extra_repr(self) -> str:
-        return f'dim={self.dim}, window_size={self.window_size}, num_heads={self.num_heads}'
+        return f'dim={self.embed_dim}, window_size={self.window_size}, num_heads={self.num_heads}'
 
     def flops(self, num_patches):
         flops = 0
         # self.qkv(x)
-        flops += num_patches * self.dim * 3 * self.dim
+        flops += num_patches * self.embed_dim * 3 * self.embed_dim
         # torch.einsum("...ik,...jk->...ij", q, k)
-        flops += self.num_heads * num_patches * (self.dim // self.num_heads) * num_patches
+        flops += self.num_heads * num_patches * (self.embed_dim // self.num_heads) * num_patches
         # attn @ v
-        flops += self.num_heads * num_patches * num_patches * (self.dim // self.num_heads)
+        flops += self.num_heads * num_patches * num_patches * (self.embed_dim // self.num_heads)
         # self.proj(x)
-        flops += num_patches * self.dim * self.dim
+        flops += num_patches * self.embed_dim * self.embed_dim
         return flops
 
 
