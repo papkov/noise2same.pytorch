@@ -378,7 +378,7 @@ class RSTB(nn.Module):
                  mlp_ratio=4., qkv_bias=True, qk_scale=None, drop=0., attn_drop=0.,
                  drop_path=0., norm_layer=nn.LayerNorm, downsample=None, use_checkpoint=False,
                  img_size=224, resi_connection='1conv'):
-        super(RSTB, self).__init__()
+        super().__init__()
 
         self.dim = dim
         self.input_resolution = input_resolution
@@ -503,7 +503,7 @@ class SwinIR(nn.Module):
                  norm_layer=nn.LayerNorm, ape=False, patch_norm=True,
                  use_checkpoint=False, upscale=2, img_range=1., resi_connection='1conv',
                  **kwargs):
-        super(SwinIR, self).__init__()
+        super().__init__()
         num_in_ch = in_chans
         num_out_ch = in_chans
         self.img_range = img_range
