@@ -128,9 +128,6 @@ class WindowAttention(nn.Module):
             batch_dimension = 'b nw' if batched else '(b nw)'
             attn += einops.rearrange(mask, f"{batch_dimension} np1 np2 -> b nw 1 np1 np2", nw=num_windows)
             attn = einops.rearrange(attn, "b nw ... -> (b nw) ...")
-            v_mask = einops.rearrange(mask[..., 0], f"{batch_dimension} np -> (b nw) 1 np 1")
-            v_mask = v_mask.masked_fill(v_mask != 0, 0).masked_fill(v_mask == 0, 1)
-            v = v * v_mask
 
         attn = self.softmax(attn)
         attn = self.attn_drop(attn)

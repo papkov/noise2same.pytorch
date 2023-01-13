@@ -77,7 +77,6 @@ class BSpSwinTransformerBlock(SwinTransformerBlock):
             bsp_mask = window_partition(einops.rearrange(shifted_mask, "b 1 ... -> b ... 1"), self.window_size)
             bsp_mask = einops.rearrange(bsp_mask, "(b nw) ... -> b nw (...)", b=batch_size)
             bsp_mask = einops.repeat(bsp_mask, "... n -> ... repeat n", repeat=bsp_mask.shape[-1])
-            bsp_mask = bsp_mask + bsp_mask.transpose(-1, -2)
             if attn_mask is None:
                 attn_mask = bsp_mask
             attn_mask = attn_mask.masked_fill(bsp_mask != 0, float(-10 ** 9))
