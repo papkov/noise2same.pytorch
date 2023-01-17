@@ -94,7 +94,7 @@ class BSpSwinTransformerBlock(SwinTransformerBlock):
         x = einops.rearrange(x, "b ... c -> b (...) c")
 
         # FFN
-        x = shortcut + self.drop_path(x)
+        x = self.drop_path(x) if mask is not None else shortcut + self.drop_path(x)
         x = x + self.drop_path(self.mlp(self.norm2(x)))
 
         return x
@@ -141,12 +141,13 @@ class BSpBasicLayer(BasicLayer):
                                     norm_layer=norm_layer)
             for i in range(depth)])
 
-    def forward(self, x, x_size, **kwargs):
-        for blk in self.blocks:
+    def forward(self, x, x_size, mask=None):
+        for i, blk in enumerate(self.blocks):
             if self.use_checkpoint:
-                x = checkpoint.checkpoint(blk, x, x_size)
+                x = checkpoint.checkpoint(blk, x, x_size, mask=mask) if i == 0 else \
+                    checkpoint.checkpoint(blk, x, x_size)
             else:
-                x = blk(x, x_size, **kwargs)
+                x = blk(x, x_size, mask=mask) if i == 0 else blk(x, x_size)
         if self.downsample is not None:
             x = self.downsample(x)
         return x
@@ -196,10 +197,15 @@ class BSpRSTB(RSTB):
                                             norm_layer=norm_layer,
                                             downsample=downsample,
                                             use_checkpoint=use_checkpoint)
-        self.conv = nn.Conv2d(dim, dim, 1)
 
-    def forward(self, x, x_size, **kwargs):
-        return self.patch_embed(self.conv(self.patch_unembed(self.residual_group(x, x_size, **kwargs), x_size))) + x
+    def forward(self, x, x_size, mask=None):
+        return self.patch_embed(
+            self.conv(
+                self.patch_unembed(
+                    self.residual_group(x, x_size, mask=mask),
+                    x_size)
+            )
+        ) + (x if mask is None else 0)
 
 
 class BSpSwinIR(SwinIR):
@@ -246,7 +252,6 @@ class BSpSwinIR(SwinIR):
         )
 
         self.conv_first = nn.Conv2d(in_chans, embed_dim, 1)
-        self.conv_after_body = nn.Conv2d(embed_dim, embed_dim, 1)
 
         self.layers = nn.ModuleList()
         for i_layer in range(self.num_layers):
@@ -270,26 +275,26 @@ class BSpSwinIR(SwinIR):
 
         self.apply(self._init_weights)
 
-    def forward_features(self, x, **kwargs):
+    def forward_features(self, x, mask=None):
         x_size = (x.shape[2], x.shape[3])
         x = self.patch_embed(x)
         if self.ape:
             x = x + self.absolute_pos_embed
         x = self.pos_drop(x)
 
-        for layer in self.layers:
-            x = layer(x, x_size, **kwargs)
+        for i, layer in enumerate(self.layers):
+            x = layer(x, x_size, mask=mask) if i == 0 else layer(x, x_size)
 
         x = self.norm(x)  # B L C
         x = self.patch_unembed(x, x_size)
 
         return x
 
-    def forward(self, x, **kwargs):
+    def forward(self, x, mask=None):
         x = self.check_image_size(x)
 
         x_first = self.conv_first(x)
-        res = self.conv_after_body(self.forward_features(x_first, **kwargs)) + x_first
+        res = self.conv_after_body(self.forward_features(x_first, mask=mask))
         x = self.conv_last(res)
 
         return x
