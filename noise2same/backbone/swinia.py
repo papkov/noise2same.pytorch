@@ -158,7 +158,7 @@ class BlindSpotBlock(nn.Module):
         value: Tensor,
     ):
         image_size = key.shape[1:-1]
-        query, key, value = map(self.shift_image, map(self.window_partition, (query, key, value)))
+        query, key, value = map(self.window_partition, map(self.shift_image, (query, key, value)))
         mask = self.attn_mask if image_size == self.input_size else self.calculate_mask(image_size).to(key.device)
         query = self.attn(query, key, value, mask=mask)
         query = self.shift_image_reversed(self.window_partition_reversed(query, image_size))
@@ -184,7 +184,7 @@ class SwinIA(nn.Module):
             BlindSpotBlock(
                 embed_dim=embed_dim,
                 window_size=window_size,
-                shift_size=0,
+                shift_size=0 if i % 2 == 0 else window_size // 2,
                 num_heads=n
             ) for i, n in enumerate(num_heads)
         ])
