@@ -105,32 +105,29 @@ class BlindSpotBlock(nn.Module):
         self.attn_mask = self.calculate_mask(input_size)
 
     def shift_image(self, x: Optional[Tensor]):
-        if x is None or x.shape[-1] != self.embed_dim or self.shift_size == 0:
+        if x.shape[-1] != self.embed_dim or self.shift_size == 0:
             return x
         else:
             return torch.roll(x, shifts=(-self.shift_size, -self.shift_size), dims=(1, 2))
 
     def shift_image_reversed(self, x: Optional[Tensor]):
-        if x is None or self.shift_size == 0:
+        if self.shift_size == 0:
             return x
-        else:
-            return torch.roll(x, shifts=(self.shift_size, self.shift_size), dims=(1, 2))
+        return torch.roll(x, shifts=(self.shift_size, self.shift_size), dims=(1, 2))
 
     def window_partition(self, x: Optional[Tensor]):
-        if x is None or len(x.shape) == 3:
+        if len(x.shape) == 3:
             return x
         return einops.rearrange(x, 'b (h wh) (w ww) c -> (b h w) (wh ww) c', wh=self.window_size, ww=self.window_size)
 
     def window_partition_reversed(self, x: Optional[Tensor], x_size: Iterable[int]):
-        if x is None:
-            return
         height, width = x_size
         h, w = height // self.window_size, width // self.window_size
         return einops.rearrange(x, '(b h w) wh ww c -> b (h wh) (w ww) c', h=h, w=w)
 
     def calculate_mask(self, x_size):
+        attn_mask = torch.zeros((1, *x_size, 1))
         if self.shift_size != 0:
-            img_mask = torch.zeros((1, *x_size, 1))
             h_slices = (slice(0, -self.window_size),
                         slice(-self.window_size, -self.shift_size),
                         slice(-self.shift_size, None))
@@ -140,12 +137,9 @@ class BlindSpotBlock(nn.Module):
             cnt = 0
             for h in h_slices:
                 for w in w_slices:
-                    img_mask[:, h, w, :] = cnt
+                    attn_mask[:, h, w, :] = cnt
                     cnt += 1
-
-            attn_mask = self.window_partition(img_mask)
-        else:
-            attn_mask = self.window_partition(torch.zeros((1, *x_size, 1)))
+        attn_mask = self.window_partition(attn_mask)
         attn_mask = einops.rearrange(attn_mask, "nw np 1 -> nw 1 np") - attn_mask
         torch.diagonal(attn_mask, dim1=-2, dim2=-1).fill_(1)
         attn_mask = attn_mask.masked_fill(attn_mask != 0, float(-10 ** 9))
