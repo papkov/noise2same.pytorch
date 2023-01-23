@@ -36,12 +36,13 @@ class BSpSwinTransformerBlock(SwinTransformerBlock):
 
     def __init__(self, dim, input_resolution, num_heads, window_size=7, shift_size=0,
                  mlp_ratio=4., qkv_bias=True, qk_scale=None, drop=0., attn_drop=0., drop_path=0.,
-                 act_layer=nn.GELU, norm_layer=nn.LayerNorm):
+                 act_layer=nn.GELU, norm_layer=nn.LayerNorm, first=False):
         super().__init__(
             dim, input_resolution, num_heads, window_size=window_size, shift_size=shift_size,
             mlp_ratio=mlp_ratio, qkv_bias=qkv_bias, qk_scale=qk_scale, drop=drop, attn_drop=attn_drop,
             drop_path=drop_path, act_layer=act_layer, norm_layer=norm_layer
         )
+        self.first = first
 
     def forward(self, x, x_size, mask=None):
         shortcut = x
@@ -73,7 +74,7 @@ class BSpSwinTransformerBlock(SwinTransformerBlock):
             attn_mask = einops.repeat(attn_mask, "... -> b ...", b=batch_size)
 
         # adding input mask to existing blind-spot mask
-        if shifted_mask is not None:
+        if self.first:
             bsp_mask = window_partition(einops.rearrange(shifted_mask, "b 1 ... -> b ... 1"), self.window_size)
             bsp_mask = einops.rearrange(bsp_mask, "(b nw) ... -> b nw (...)", b=batch_size)
             bsp_mask = einops.repeat(bsp_mask, "... n -> ... repeat n", repeat=bsp_mask.shape[-1])
@@ -94,7 +95,7 @@ class BSpSwinTransformerBlock(SwinTransformerBlock):
         x = einops.rearrange(x, "b ... c -> b (...) c")
 
         # FFN
-        x = self.drop_path(x) if mask is not None else shortcut + self.drop_path(x)
+        x = self.drop_path(x) if self.first else shortcut + self.drop_path(x)
         x = x + self.drop_path(self.mlp(self.norm2(x)))
 
         return x
@@ -121,7 +122,7 @@ class BSpBasicLayer(BasicLayer):
 
     def __init__(self, dim, input_resolution, depth, num_heads, window_size,
                  mlp_ratio=4., qkv_bias=True, qk_scale=None, drop=0., attn_drop=0.,
-                 drop_path=0., norm_layer=nn.LayerNorm, downsample=None, use_checkpoint=False):
+                 drop_path=0., norm_layer=nn.LayerNorm, downsample=None, use_checkpoint=False, first=False):
 
         super().__init__(
             dim, input_resolution, depth, num_heads, window_size, mlp_ratio=mlp_ratio,
@@ -138,16 +139,16 @@ class BSpBasicLayer(BasicLayer):
                                     qkv_bias=qkv_bias, qk_scale=qk_scale,
                                     drop=drop, attn_drop=attn_drop,
                                     drop_path=drop_path[i] if isinstance(drop_path, list) else drop_path,
-                                    norm_layer=norm_layer)
+                                    norm_layer=norm_layer,
+                                    first=first and i == 0)
             for i in range(depth)])
 
     def forward(self, x, x_size, mask=None):
         for i, blk in enumerate(self.blocks):
             if self.use_checkpoint:
-                x = checkpoint.checkpoint(blk, x, x_size, mask=mask) if i == 0 else \
-                    checkpoint.checkpoint(blk, x, x_size)
+                x = checkpoint.checkpoint(blk, x, x_size, mask=mask)
             else:
-                x = blk(x, x_size, mask=mask) if i == 0 else blk(x, x_size)
+                x = blk(x, x_size, mask=mask)
         if self.downsample is not None:
             x = self.downsample(x)
         return x
@@ -177,13 +178,14 @@ class BSpRSTB(RSTB):
     def __init__(self, dim, input_resolution, depth, num_heads, window_size,
                  mlp_ratio=4., qkv_bias=True, qk_scale=None, drop=0., attn_drop=0.,
                  drop_path=0., norm_layer=nn.LayerNorm, downsample=None, use_checkpoint=False,
-                 img_size=224, resi_connection='1conv'):
+                 img_size=224, resi_connection='1conv', first=False):
         super().__init__(
             dim, input_resolution, depth, num_heads, window_size,
             mlp_ratio=mlp_ratio, qkv_bias=qkv_bias, qk_scale=qk_scale, drop=drop, attn_drop=attn_drop,
             drop_path=drop_path, norm_layer=norm_layer, downsample=downsample, use_checkpoint=use_checkpoint,
             img_size=img_size, resi_connection=resi_connection
         )
+        self.first = first
 
         self.residual_group = BSpBasicLayer(dim=dim,
                                             input_resolution=input_resolution,
@@ -196,7 +198,8 @@ class BSpRSTB(RSTB):
                                             drop_path=drop_path,
                                             norm_layer=norm_layer,
                                             downsample=downsample,
-                                            use_checkpoint=use_checkpoint)
+                                            use_checkpoint=use_checkpoint,
+                                            first=first)
 
     def forward(self, x, x_size, mask=None):
         return self.patch_embed(
@@ -205,7 +208,7 @@ class BSpRSTB(RSTB):
                     self.residual_group(x, x_size, mask=mask),
                     x_size)
             )
-        ) + (x if mask is None else 0)
+        ) + (0 if self.first else x)
 
 
 class BSpSwinIR(SwinIR):
@@ -270,7 +273,8 @@ class BSpSwinIR(SwinIR):
                             downsample=None,
                             use_checkpoint=use_checkpoint,
                             img_size=img_size,
-                            resi_connection=resi_connection)
+                            resi_connection=resi_connection,
+                            first=i_layer == 0)
             self.layers.append(layer)
 
         self.apply(self._init_weights)
@@ -283,7 +287,7 @@ class BSpSwinIR(SwinIR):
         x = self.pos_drop(x)
 
         for i, layer in enumerate(self.layers):
-            x = layer(x, x_size, mask=mask) if i == 0 else layer(x, x_size)
+            x = layer(x, x_size, mask=mask)
 
         x = self.norm(x)  # B L C
         x = self.patch_unembed(x, x_size)
