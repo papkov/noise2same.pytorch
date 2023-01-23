@@ -1,0 +1,7 @@
+# @package _global_
+backbone_name: swinia
+
+backbone:
+  embed_dim: 96
+  window_size: 8
+  num_heads: [ 6, 6, 6, 6, 6, 6 ]

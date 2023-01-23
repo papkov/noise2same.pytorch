@@ -4,6 +4,7 @@ from omegaconf import DictConfig
 from typing import Tuple
 
 from noise2same.backbone import SwinIR, UNet, RegressionHead
+from noise2same.backbone.swinia import SwinIA
 from noise2same.backbone.bsp_swinir import BSpSwinIR
 from noise2same.dataset.getter import compute_pad_divisor
 
@@ -50,6 +51,12 @@ def parametrize_backbone_and_head(cfg: DictConfig) -> Tuple[torch.nn.Module, tor
         backbone = BSpSwinIR(
             in_chans=cfg.data.n_channels,
             img_size=recalculate_img_size(cfg),
+            **cfg.backbone
+        )
+    elif cfg.backbone_name == 'swinia':
+        assert cfg.data.n_dim == 2
+        backbone = SwinIA(
+            in_chans=cfg.data.n_channels,
             **cfg.backbone
         )
     else:

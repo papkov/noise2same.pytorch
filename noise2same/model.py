@@ -10,6 +10,7 @@ from torch.nn import functional as F, Identity
 from torch.nn.functional import conv2d, conv3d
 from torchvision.transforms import GaussianBlur
 
+from noise2same.backbone.swinia import SwinIA
 from noise2same.backbone.unet import UNet, ProjectHead, RegressionHead
 from noise2same.backbone.swinir import SwinIR
 from noise2same.backbone.bsp_swinir import BSpSwinIR
@@ -177,14 +178,12 @@ class Noise2Same(nn.Module):
                     deconv - output before PSF if PSF is provided and `convolve` is True
                     proj - output features of projection head if `lambda_proj` > 0
         """
+        out_raw, out_mask = None, None
         if self.mode != ModelMode.NOISE2SELF or mask is None:
             out_raw = self.forward_whole(x, convolve, crops, full_size_image)
         if mask is not None:
             out_mask = self.forward_masked(x, mask, convolve, crops, full_size_image)
-            if self.mode == ModelMode.NOISE2SAME:
-                return out_mask, out_raw
-            return out_mask, None
-        return None, out_raw
+        return out_mask, out_raw
 
     def forward_masked(
         self,
@@ -214,10 +213,12 @@ class Noise2Same(nn.Module):
             else self.mask_kernel(x)
         )
 
-        if isinstance(self.net, BSpSwinIR):
-            return self.forward_whole(x, convolve, crops, full_size_image, mask=mask)
+        if isinstance(self.net, SwinIA):
+            return self.forward_whole(x, convolve, crops, full_size_image)
         else:
             x = (1 - mask) * x + mask * noise
+            if isinstance(self.net, BSpSwinIR):
+                return self.forward_whole(x, convolve, crops, full_size_image, mask=mask)
             return self.forward_whole(x, convolve, crops, full_size_image)
 
     def forward_whole(
@@ -290,7 +291,7 @@ class Noise2Same(nn.Module):
 
         if self.mode in (ModelMode.NOISE2SELF, ModelMode.NOISE2SAME):
             # default Noise2Self blind-spot MSE loss
-            bsp_mse = self.compute_mse(x, out_mask["image"], mask)
+            bsp_mse = self.compute_mse(x, out_mask["image"], mask=None if isinstance(self.net, SwinIA) else mask)
             loss_log["bsp_mse"] = bsp_mse.item()
 
         if self.mode == ModelMode.NOISE2SAME:
