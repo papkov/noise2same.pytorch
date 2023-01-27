@@ -77,12 +77,14 @@ class DiagWinAttention(nn.Module):
         super().__init__()
         self.softmax = nn.Softmax(dim=-1)
         self.attn_drop = nn.Dropout(attn_drop)
+        self.norm = nn.LayerNorm(embed_dim)
         self.proj = nn.Linear(embed_dim, embed_dim)
         self.proj_drop = nn.Dropout(proj_drop)
         self.window_size = window_size
         self.num_patches = np.prod(window_size).item()
         self.num_heads = num_heads
         self.embed_dim = embed_dim
+        self.scale = (embed_dim // num_heads) ** -0.5
 
         window_bias_shape = [2 * s - 1 for s in window_size]
         self.relative_position_bias_table = nn.Parameter(torch.zeros(np.prod(window_bias_shape).item(), num_heads))
@@ -100,6 +102,7 @@ class DiagWinAttention(nn.Module):
 
         relative_position_index = relative_coords.sum(-1).flatten()
         self.register_buffer("relative_position_index", relative_position_index)
+        trunc_normal_(self.relative_position_bias_table, std=.02)
 
     def head_partition(self, x):
         if x.shape[-1] != self.embed_dim:
@@ -114,6 +117,7 @@ class DiagWinAttention(nn.Module):
         mask: Tensor
     ):
         query, key, value = map(self.head_partition, (query, key, value))
+        query = query * self.scale
         attn = torch.einsum("...ik,...jk->...ij", query, key)
         relative_position_bias = einops.rearrange(
             self.relative_position_bias_table[self.relative_position_index],
@@ -128,8 +132,10 @@ class DiagWinAttention(nn.Module):
         attn = einops.rearrange(attn, "b nw ... -> (b nw) ...")
 
         attn = self.softmax(attn)
+        attn = self.attn_drop(attn)
         query = einops.rearrange(attn @ value + query, "nw nh (ws1 ws2) ch -> nw ws1 ws2 (nh ch)",
                                  ws1=self.window_size[0])
+        query = self.norm(query)
         query = self.proj(query)
         query = self.proj_drop(query)
         return query
