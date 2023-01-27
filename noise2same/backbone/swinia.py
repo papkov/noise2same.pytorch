@@ -156,7 +156,7 @@ class BlindSpotBlock(nn.Module):
     ):
         super().__init__()
         self.softmax = nn.Softmax(dim=-1)
-        self.mlp = Mlp(embed_dim, embed_dim, embed_dim)
+        self.mlp = MLP(embed_dim, embed_dim)
         self.attn = DiagWinAttention(embed_dim, to_2tuple(window_size), num_heads, attn_drop, proj_drop)
         self.norm1 = nn.LayerNorm(embed_dim)
         self.norm2 = nn.LayerNorm(embed_dim)
@@ -237,6 +237,43 @@ class BlindSpotBlock(nn.Module):
         return query
 
 
+class ResidualGroup(nn.Module):
+
+    def __init__(
+        self,
+        embed_dim: int = 96,
+        window_size: int = 8,
+        depth: int = 6,
+        num_heads: int = 6,
+        stride: int = 1
+    ):
+        super().__init__()
+        self.blocks = nn.ModuleList([
+            BlindSpotBlock(
+                embed_dim=embed_dim,
+                window_size=window_size,
+                shift_size=0 if i % 2 == 0 else window_size // 2,
+                num_heads=num_heads,
+                stride=stride
+            ) for i in range(depth)
+        ])
+        self.conv = Conv1x1(embed_dim, embed_dim)
+
+    def forward(
+        self,
+        query: Tensor,
+        key: Tensor,
+        value: Tensor
+    ):
+        shortcut = query
+        for block in self.blocks:
+            query = block(query, key, value)
+        query = self.conv(query)
+        if query.shape[-1] == shortcut.shape[-1]:
+            query = query + shortcut
+        return query
+
+
 class SwinIA(nn.Module):
 
     def __init__(
@@ -244,28 +281,37 @@ class SwinIA(nn.Module):
         in_chans: int = 1,
         embed_dim: int = 96,
         window_size: int = 8,
+        depths: Tuple[int] = (6, 6),
         num_heads: Tuple[int] = (6, 6)
     ):
         super().__init__()
-        self.conv_first = nn.Conv2d(in_chans, embed_dim, 1)
-        self.conv_last = nn.Conv2d(embed_dim, in_chans, 1)
+        self.window_size = window_size
+        self.num_heads = num_heads
+        self.embed_k = MLP(in_chans, embed_dim, two_layers=False, layer=Conv1x1)
+        self.embed_v = MLP(in_chans, embed_dim, two_layers=False, layer=Conv1x1)
+        self.conv_last = Conv1x1(embed_dim, in_chans, channels_last=False)
         self.absolute_pos_embed = nn.Parameter(torch.zeros(1, window_size ** 2, embed_dim // num_heads[0]))
         trunc_normal_(self.absolute_pos_embed, std=.02)
-        self.blocks = nn.ModuleList([
-            BlindSpotBlock(
+        self.groups = nn.ModuleList([
+            ResidualGroup(
                 embed_dim=embed_dim,
                 window_size=window_size,
-                shift_size=0 if i % 2 == 0 else window_size // 2,
-                num_heads=n
-            ) for i, n in enumerate(num_heads)
+                depth=d,
+                num_heads=n,
+                stride=2 ** i
+            ) for i, (d, n) in enumerate(zip(depths, num_heads))
         ])
 
     def forward(self, x):
-        x = self.conv_first(x)
-        x = einops.rearrange(x, 'b c ... -> b ... c')
-        q, k, v = self.absolute_pos_embed, x, x
-        for block in self.blocks:
-            q = block(q, k, v)
-        q = einops.rearrange(q, 'b ... c -> b c ...')
+        k = self.embed_k(x)
+        v = self.embed_v(x)
+        wh, ww = x.shape[-2] // self.window_size, x.shape[-1] // self.window_size
+        full_pos_embed = einops.repeat(self.absolute_pos_embed, "1 (ws1 ws2) ch -> 1 (wh ws1) (ww ws2) (nh ch)",
+                                       ws1=self.window_size, nh=self.num_heads[0], wh=wh, ww=ww)
+        q = self.absolute_pos_embed
+        k = k + full_pos_embed
+        v = v + full_pos_embed
+        for group in self.groups:
+            q = group(q, k, v)
         q = self.conv_last(q)
         return q
