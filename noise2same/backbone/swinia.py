@@ -6,7 +6,62 @@ import torch
 import einops
 from timm.models.layers import to_2tuple, trunc_normal_
 
-from noise2same.backbone.swinir import Mlp
+
+class Conv1x1(nn.Module):
+
+    def __init__(
+        self,
+        in_features: int = 96,
+        out_features: int = 96,
+        channels_last: bool = True
+    ):
+        super().__init__()
+        self.in_features = in_features
+        self.channels_last = channels_last
+        self.conv = nn.Conv2d(in_features, out_features, 1)
+
+    def forward(self, x):
+        if x.shape[1] != self.in_features:
+            x = einops.rearrange(x, 'b ... c -> b c ...')
+        x = self.conv(x)
+        if self.channels_last:
+            return einops.rearrange(x, 'b c ... -> b ... c')
+        return x
+
+
+class MLP(nn.Module):
+
+    def __init__(
+        self,
+        in_features: int = 96,
+        out_features: int = 96,
+        two_layers: bool = True,
+        hidden_features: Optional[int] = None,
+        layer: nn.Module = nn.Linear,
+        act_layer: nn.Module = nn.GELU,
+        drop=0.,
+    ):
+        super().__init__()
+        hidden_features = hidden_features or out_features
+        self.layer1 = layer(in_features, hidden_features)
+        self.bn1 = nn.LayerNorm(hidden_features)
+        self.two_layers = two_layers
+        if two_layers:
+            self.layer2 = layer(hidden_features, out_features)
+            self.bn2 = nn.LayerNorm(out_features)
+        self.act = act_layer()
+        self.drop = nn.Dropout(drop)
+
+    def forward(self, x):
+        x = self.layer1(x)
+        x = self.bn1(x)
+        x = self.act(x)
+        x = self.drop(x)
+        if self.two_layers:
+            x = self.layer2(x)
+            x = self.bn2(x)
+        x = self.drop(x)
+        return x
 
 
 class DiagWinAttention(nn.Module):
