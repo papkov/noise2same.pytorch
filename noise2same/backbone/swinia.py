@@ -149,6 +149,7 @@ class BlindSpotBlock(nn.Module):
         window_size: int = 8,
         shift_size: int = 0,
         num_heads: int = 6,
+        stride: int = 1,
         input_size: Tuple[int] = (128, 128),
         attn_drop: float = 0.05,
         proj_drop: float = 0.05,
@@ -161,6 +162,7 @@ class BlindSpotBlock(nn.Module):
         self.norm2 = nn.LayerNorm(embed_dim)
         self.window_size = window_size
         self.shift_size = shift_size
+        self.stride = stride
         self.embed_dim = embed_dim
         self.input_size = input_size
         self.attn_mask = self.calculate_mask(input_size)
@@ -185,6 +187,18 @@ class BlindSpotBlock(nn.Module):
         height, width = x_size
         h, w = height // self.window_size, width // self.window_size
         return einops.rearrange(x, '(b h w) wh ww c -> b (h wh) (w ww) c', h=h, w=w)
+
+    def strided_window_partition(self, x: Optional[Tensor]):
+        if len(x.shape) == 3:
+            return x
+        return einops.rearrange(x, 'b (h wh sh) (w ww sw) c -> (b h w sh sw) (wh ww) c',
+                                wh=self.window_size, ww=self.window_size, sh=self.stride, sw=self.stride)
+
+    def strided_window_partition_reversed(self, x: Optional[Tensor], x_size: Iterable[int]):
+        height, width = x_size
+        h, w = height // self.window_size // self.stride, width // self.window_size // self.stride
+        return einops.rearrange(x, '(b h w sh sw) wh ww c -> b (h wh sh) (w ww sw) c',
+                                h=h, w=w, sh=self.stride, sw=self.stride)
 
     def calculate_mask(self, x_size):
         attn_mask = torch.zeros((1, *x_size, 1))
@@ -213,10 +227,12 @@ class BlindSpotBlock(nn.Module):
         value: Tensor,
     ):
         image_size = key.shape[1:-1]
-        query, key, value = map(self.window_partition, map(self.shift_image, (query, key, value)))
+        query, key, value = map(self.shift_image, (query, key, value))
+        query, key, value = map(self.strided_window_partition, (query, key, value))
         mask = self.attn_mask if image_size == self.input_size else self.calculate_mask(image_size).to(key.device)
         query = self.attn(query, key, value, mask=mask)
-        query = self.shift_image_reversed(self.window_partition_reversed(query, image_size))
+        query = self.strided_window_partition_reversed(query, image_size)
+        query = self.shift_image_reversed(query)
         query = query + self.mlp(self.norm2(query))
         return query
 
