@@ -85,6 +85,8 @@ class DiagWinAttention(nn.Module):
         self.num_heads = num_heads
         self.embed_dim = embed_dim
         self.scale = (embed_dim // num_heads) ** -0.5
+        self.k = MLP(embed_dim, embed_dim, two_layers=False)
+        self.v = MLP(embed_dim, embed_dim, two_layers=False)
 
         window_bias_shape = [2 * s - 1 for s in window_size]
         self.relative_position_bias_table = nn.Parameter(torch.zeros(np.prod(window_bias_shape).item(), num_heads))
@@ -116,6 +118,8 @@ class DiagWinAttention(nn.Module):
         value: Tensor,
         mask: Tensor
     ):
+        key = self.k(key)
+        value = self.v(value)
         query, key, value = map(self.head_partition, (query, key, value))
         query = query * self.scale
         attn = torch.einsum("...ik,...jk->...ij", query, key)
