@@ -286,7 +286,8 @@ class SwinIA(nn.Module):
         embed_dim: int = 96,
         window_size: int = 8,
         depths: Tuple[int] = (6, 6),
-        num_heads: Tuple[int] = (6, 6)
+        num_heads: Tuple[int] = (6, 6),
+        strides: Tuple[int] = (1, 1)
     ):
         super().__init__()
         self.window_size = window_size
@@ -302,8 +303,8 @@ class SwinIA(nn.Module):
                 window_size=window_size,
                 depth=d,
                 num_heads=n,
-                stride=2 ** i
-            ) for i, (d, n) in enumerate(zip(depths, num_heads))
+                stride=s
+            ) for i, (d, n, s) in enumerate(zip(depths, num_heads, strides))
         ])
 
     def forward(self, x):

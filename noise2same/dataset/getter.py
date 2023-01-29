@@ -25,7 +25,7 @@ def compute_pad_divisor(cfg: DictConfig) -> Optional[int]:
     elif cfg.backbone_name in ("swinir", "bsp_swinir"):
         return cfg.backbone.window_size
     elif cfg.backbone_name == "swinia":
-        return cfg.backbone.window_size * 2 ** (len(cfg.backbone.depths) - 1)
+        return cfg.backbone.window_size * max(cfg.backbone.strides)
     else:
         raise ValueError("Incorrect backbone name")
 
