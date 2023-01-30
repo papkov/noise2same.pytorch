@@ -1,3 +1,4 @@
+from enum import Enum
 from typing import Tuple, Optional, Iterable
 from torch import Tensor
 import torch.nn as nn
@@ -5,6 +6,12 @@ import numpy as np
 import torch
 import einops
 from timm.models.layers import to_2tuple, trunc_normal_
+
+
+class SwinIAMode(Enum):
+
+    DILATED = 0,
+    SHUFFLED = 1
 
 
 class Conv1x1(nn.Module):
@@ -160,11 +167,17 @@ class BlindSpotBlock(nn.Module):
         input_size: Tuple[int] = (128, 128),
         attn_drop: float = 0.05,
         proj_drop: float = 0.05,
+        mode: SwinIAMode = SwinIAMode.DILATED
     ):
         super().__init__()
         self.softmax = nn.Softmax(dim=-1)
         self.mlp = MLP(embed_dim, embed_dim)
-        self.attn = DiagWinAttention(embed_dim, to_2tuple(window_size), num_heads, attn_drop, proj_drop)
+        self.mode = mode
+        self.attn = DiagWinAttention(
+            embed_dim * stride ** 2 if mode == SwinIAMode.SHUFFLED else embed_dim,
+            to_2tuple(window_size),
+            num_heads, attn_drop, proj_drop
+        )
         self.norm1 = nn.LayerNorm(embed_dim)
         self.norm2 = nn.LayerNorm(embed_dim)
         self.window_size = window_size
@@ -178,12 +191,14 @@ class BlindSpotBlock(nn.Module):
         if x.shape[-1] != self.embed_dim or self.shift_size == 0:
             return x
         else:
-            return torch.roll(x, shifts=(-self.shift_size, -self.shift_size), dims=(1, 2))
+            coef = self.stride if self.mode == SwinIAMode.SHUFFLED else 1
+            return torch.roll(x, shifts=(-self.shift_size * coef, -self.shift_size * coef), dims=(1, 2))
 
     def shift_image_reversed(self, x: Optional[Tensor]):
         if self.shift_size == 0:
             return x
-        return torch.roll(x, shifts=(self.shift_size, self.shift_size), dims=(1, 2))
+        coef = self.stride if self.mode == SwinIAMode.SHUFFLED else 1
+        return torch.roll(x, shifts=(self.shift_size * coef, self.shift_size * coef), dims=(1, 2))
 
     def window_partition(self, x: Optional[Tensor]):
         if len(x.shape) == 3:
@@ -198,16 +213,20 @@ class BlindSpotBlock(nn.Module):
     def strided_window_partition(self, x: Optional[Tensor]):
         if len(x.shape) == 3:
             return x
-        return einops.rearrange(x, 'b (h wh sh) (w ww sw) c -> (b h w sh sw) (wh ww) c',
-                                wh=self.window_size, ww=self.window_size, sh=self.stride, sw=self.stride)
+        expression = 'b (h wh sh) (w ww sw) c -> (b h w) (wh ww) (c sh sw)' if self.mode == SwinIAMode.SHUFFLED else \
+                     'b (h wh sh) (w ww sw) c -> (b h w sh sw) (wh ww) c'
+        return einops.rearrange(x, expression, wh=self.window_size, ww=self.window_size, sh=self.stride, sw=self.stride)
 
     def strided_window_partition_reversed(self, x: Optional[Tensor], x_size: Iterable[int]):
         height, width = x_size
         h, w = height // self.window_size // self.stride, width // self.window_size // self.stride
-        return einops.rearrange(x, '(b h w sh sw) wh ww c -> b (h wh sh) (w ww sw) c',
-                                h=h, w=w, sh=self.stride, sw=self.stride)
+        expression = '(b h w) wh ww (c sh sw) -> b (h wh sh) (w ww sw) c' if self.mode == SwinIAMode.SHUFFLED else \
+                     '(b h w sh sw) wh ww c -> b (h wh sh) (w ww sw) c'
+        return einops.rearrange(x, expression, h=h, w=w, sh=self.stride, sw=self.stride)
 
     def calculate_mask(self, x_size):
+        if self.mode == SwinIAMode.SHUFFLED:
+            x_size = [s // self.stride for s in x_size]
         attn_mask = torch.zeros((1, *x_size, 1))
         if self.shift_size != 0:
             h_slices = (slice(0, -self.window_size),
@@ -221,7 +240,8 @@ class BlindSpotBlock(nn.Module):
                 for w in w_slices:
                     attn_mask[:, h, w, :] = cnt
                     cnt += 1
-        attn_mask = self.window_partition(attn_mask)
+        attn_mask = self.window_partition(attn_mask) if self.mode == SwinIAMode.SHUFFLED else \
+                    self.strided_window_partition(attn_mask)
         attn_mask = einops.rearrange(attn_mask, "nw np 1 -> nw 1 np") - attn_mask
         torch.diagonal(attn_mask, dim1=-2, dim2=-1).fill_(1)
         attn_mask = attn_mask.masked_fill(attn_mask != 0, float(-10 ** 9))
@@ -234,6 +254,8 @@ class BlindSpotBlock(nn.Module):
         value: Tensor,
     ):
         image_size = key.shape[1:-1]
+        if query.shape[-1] == self.embed_dim:
+            query = self.norm1(query)
         query, key, value = map(self.shift_image, (query, key, value))
         query, key, value = map(self.strided_window_partition, (query, key, value))
         mask = self.attn_mask if image_size == self.input_size else self.calculate_mask(image_size).to(key.device)
