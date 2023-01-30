@@ -111,6 +111,9 @@ class DiagWinAttention(nn.Module):
             return x
         return einops.rearrange(x, 'nw n (nh ch) -> nw nh n ch', nh=self.num_heads)
 
+    def head_partition_reversed(self, x):
+        return einops.rearrange(x, "nw nh (ws1 ws2) ch -> nw ws1 ws2 (nh ch)", ws1=self.window_size[0])
+
     def forward(
         self,
         query: Tensor,
@@ -137,12 +140,12 @@ class DiagWinAttention(nn.Module):
 
         attn = self.softmax(attn)
         attn = self.attn_drop(attn)
-        query = einops.rearrange(attn @ value + query, "nw nh (ws1 ws2) ch -> nw ws1 ws2 (nh ch)",
-                                 ws1=self.window_size[0])
+        query = attn @ value + query
+        query, key, value = map(self.head_partition_reversed, (query, key, value))
         query = self.norm(query)
         query = self.proj(query)
         query = self.proj_drop(query)
-        return query
+        return query, key, value
 
 
 class BlindSpotBlock(nn.Module):
@@ -234,11 +237,11 @@ class BlindSpotBlock(nn.Module):
         query, key, value = map(self.shift_image, (query, key, value))
         query, key, value = map(self.strided_window_partition, (query, key, value))
         mask = self.attn_mask if image_size == self.input_size else self.calculate_mask(image_size).to(key.device)
-        query = self.attn(query, key, value, mask=mask)
-        query = self.strided_window_partition_reversed(query, image_size)
-        query = self.shift_image_reversed(query)
+        query, key, value = self.attn(query, key, value, mask=mask)
+        query, key, value = map(self.strided_window_partition_reversed, (query, key, value), [image_size] * 3)
+        query, key, value = map(self.shift_image_reversed, (query, key, value))
         query = query + self.mlp(self.norm2(query))
-        return query
+        return query, key, value
 
 
 class ResidualGroup(nn.Module):
@@ -271,11 +274,11 @@ class ResidualGroup(nn.Module):
     ):
         shortcut = query
         for block in self.blocks:
-            query = block(query, key, value)
+            query, key, value = block(query, key, value)
         query = self.conv(query)
         if query.shape[-1] == shortcut.shape[-1]:
             query = query + shortcut
-        return query
+        return query, key, value
 
 
 class SwinIA(nn.Module):
@@ -334,7 +337,14 @@ class SwinIA(nn.Module):
         q = self.absolute_pos_embed
         k = k + full_pos_embed
         v = v + full_pos_embed
-        for group in self.groups:
-            q = group(q, k, v)
+        shortcuts = []
+        mid = len(self.groups) // 2
+        for i, group in enumerate(self.groups):
+            q, k, v = group(q, k, v)
+            if i < mid:
+                shortcuts.append((q, k, v))
+            elif shortcuts:
+                (q_, k_, v_) = shortcuts.pop()
+                q, k, v = q + q_, k + k_, v + v_
         q = self.conv_last(q)
         return q

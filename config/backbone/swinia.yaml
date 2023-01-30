@@ -4,6 +4,6 @@ backbone_name: swinia
 backbone:
   embed_dim: 96
   window_size: 8
-  depths: [ 6, 6, 6, 6 ]
-  num_heads: [ 6, 6, 6, 6 ]
-  strides: [ 1, 2, 4, 8 ]
+  depths: [ 6, 6, 6, 6, 6, 6, 6 ]
+  num_heads: [ 6, 6, 6, 6, 6, 6, 6 ]
+  strides: [ 1, 2, 4, 8, 4, 2, 1 ]
