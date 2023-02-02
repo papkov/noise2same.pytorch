@@ -186,6 +186,7 @@ class BlindSpotBlock(nn.Module):
         self.embed_dim = embed_dim
         self.input_size = input_size
         self.attn_mask = self.calculate_mask(input_size)
+        self.full_attn_mask = self.calculate_mask(input_size, diagonal=True)
 
     def shift_image(self, x: Tensor):
         if x.shape[-1] != self.embed_dim or self.shift_size == 0:
@@ -224,7 +225,7 @@ class BlindSpotBlock(nn.Module):
                      '(b h w sh sw) wh ww c -> b (h wh sh) (w ww sw) c'
         return einops.rearrange(x, expression, h=h, w=w, sh=self.stride, sw=self.stride)
 
-    def calculate_mask(self, x_size):
+    def calculate_mask(self, x_size, diagonal=False):
         if self.mode == SwinIAMode.SHUFFLED:
             x_size = [s // self.stride for s in x_size]
         attn_mask = torch.zeros((1, *x_size, 1))
@@ -241,7 +242,8 @@ class BlindSpotBlock(nn.Module):
         attn_mask = self.window_partition(attn_mask) if self.mode == SwinIAMode.SHUFFLED else \
                     self.strided_window_partition(attn_mask)
         attn_mask = einops.rearrange(attn_mask, "nw np 1 -> nw 1 np") - attn_mask
-        torch.diagonal(attn_mask, dim1=-2, dim2=-1).fill_(1)
+        if diagonal:
+            torch.diagonal(attn_mask, dim1=-2, dim2=-1).fill_(1)
         attn_mask = attn_mask.masked_fill(attn_mask != 0, float(-10 ** 9))
         return attn_mask
 
@@ -250,13 +252,17 @@ class BlindSpotBlock(nn.Module):
         query: Tensor,
         key: Tensor,
         value: Tensor,
+        masked: bool = False
     ):
         image_size = key.shape[1:-1]
         if query.shape[-1] == self.embed_dim:
             query = self.norm1(query)
         query, key, value = map(self.shift_image, (query, key, value))
         query, key, value = map(self.strided_window_partition, (query, key, value))
-        mask = self.attn_mask if image_size == self.input_size else self.calculate_mask(image_size).to(key.device)
+        if image_size == self.input_size:
+            mask = self.full_attn_mask if masked else self.attn_mask
+        else:
+            mask = self.calculate_mask(image_size, diagonal=masked).to(key.device)
         query, key, value = self.attn(query, key, value, mask=mask)
         query, key, value = map(self.strided_window_partition_reversed, (query, key, value), [image_size] * 3)
         query, key, value = map(self.shift_image_reversed, (query, key, value))
@@ -294,7 +300,7 @@ class ResidualGroup(nn.Module):
     ):
         shortcut = query
         for block in self.blocks:
-            query, key, value = block(query, key, value)
+            query, key, value = block(query, key, value, masked=masked)
         query = self.conv(query)
         if query.shape[-1] == shortcut.shape[-1]:
             query = query + shortcut
@@ -348,7 +354,7 @@ class SwinIA(nn.Module):
     def no_weight_decay_keywords(self):
         return {'relative_position_bias_table'}
 
-    def forward(self, x):
+    def forward(self, x, masked=False):
         k = self.embed_k(x)
         v = self.embed_v(x)
         wh, ww = x.shape[-2] // self.window_size, x.shape[-1] // self.window_size
@@ -360,7 +366,7 @@ class SwinIA(nn.Module):
         shortcuts = []
         mid = len(self.groups) // 2
         for i, group in enumerate(self.groups):
-            q, k, v = group(q, k, v)
+            q, k, v = group(q, k, v, masked=masked)
             if i < mid:
                 shortcuts.append((q, k, v))
             elif shortcuts:
