@@ -214,7 +214,7 @@ class Noise2Same(nn.Module):
         )
 
         if isinstance(self.net, SwinIA):
-            return self.forward_whole(x, convolve, crops, full_size_image)
+            return self.forward_whole(x, convolve, crops, full_size_image, masked=True)
         else:
             x = (1 - mask) * x + mask * noise
             if isinstance(self.net, BSpSwinIR):
@@ -312,7 +312,7 @@ class Noise2Same(nn.Module):
             # Invariance loss for image
             if self.lambda_inv > 0:
                 inv_mse = self.compute_mse(
-                    out_raw["image"], out_mask["image"], mask
+                    out_raw["image"], out_mask["image"], mask=None if isinstance(self.net, SwinIA) else mask
                 )
                 loss_log["inv_mse"] = inv_mse.item()
                 loss = loss + self.lambda_inv * torch.sqrt(inv_mse)
