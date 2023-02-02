@@ -187,37 +187,37 @@ class BlindSpotBlock(nn.Module):
         self.input_size = input_size
         self.attn_mask = self.calculate_mask(input_size)
 
-    def shift_image(self, x: Optional[Tensor]):
+    def shift_image(self, x: Tensor):
         if x.shape[-1] != self.embed_dim or self.shift_size == 0:
             return x
         else:
             coef = self.stride if self.mode == SwinIAMode.SHUFFLED else 1
             return torch.roll(x, shifts=(-self.shift_size * coef, -self.shift_size * coef), dims=(1, 2))
 
-    def shift_image_reversed(self, x: Optional[Tensor]):
+    def shift_image_reversed(self, x: Tensor):
         if self.shift_size == 0:
             return x
         coef = self.stride if self.mode == SwinIAMode.SHUFFLED else 1
         return torch.roll(x, shifts=(self.shift_size * coef, self.shift_size * coef), dims=(1, 2))
 
-    def window_partition(self, x: Optional[Tensor]):
+    def window_partition(self, x: Tensor):
         if len(x.shape) == 3:
             return x
         return einops.rearrange(x, 'b (h wh) (w ww) c -> (b h w) (wh ww) c', wh=self.window_size, ww=self.window_size)
 
-    def window_partition_reversed(self, x: Optional[Tensor], x_size: Iterable[int]):
+    def window_partition_reversed(self, x: Tensor, x_size: Iterable[int]):
         height, width = x_size
         h, w = height // self.window_size, width // self.window_size
         return einops.rearrange(x, '(b h w) wh ww c -> b (h wh) (w ww) c', h=h, w=w)
 
-    def strided_window_partition(self, x: Optional[Tensor]):
+    def strided_window_partition(self, x: Tensor):
         if len(x.shape) == 3:
             return x
         expression = 'b (h wh sh) (w ww sw) c -> (b h w) (wh ww) (c sh sw)' if self.mode == SwinIAMode.SHUFFLED else \
                      'b (h wh sh) (w ww sw) c -> (b h w sh sw) (wh ww) c'
         return einops.rearrange(x, expression, wh=self.window_size, ww=self.window_size, sh=self.stride, sw=self.stride)
 
-    def strided_window_partition_reversed(self, x: Optional[Tensor], x_size: Iterable[int]):
+    def strided_window_partition_reversed(self, x: Tensor, x_size: Iterable[int]):
         height, width = x_size
         h, w = height // self.window_size // self.stride, width // self.window_size // self.stride
         expression = '(b h w) wh ww (c sh sw) -> b (h wh sh) (w ww sw) c' if self.mode == SwinIAMode.SHUFFLED else \
