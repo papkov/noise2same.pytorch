@@ -14,28 +14,6 @@ class SwinIAMode(Enum):
     SHUFFLED = 1
 
 
-class Conv1x1(nn.Module):
-
-    def __init__(
-        self,
-        in_features: int = 96,
-        out_features: int = 96,
-        channels_last: bool = True
-    ):
-        super().__init__()
-        self.in_features = in_features
-        self.channels_last = channels_last
-        self.conv = nn.Conv2d(in_features, out_features, 1)
-
-    def forward(self, x):
-        if x.shape[1] != self.in_features:
-            x = einops.rearrange(x, 'b ... c -> b c ...')
-        x = self.conv(x)
-        if self.channels_last:
-            return einops.rearrange(x, 'b c ... -> b ... c')
-        return x
-
-
 class MLP(nn.Module):
 
     def __init__(
@@ -281,7 +259,7 @@ class ResidualGroup(nn.Module):
                 stride=stride
             ) for i in range(depth)
         ])
-        self.conv = Conv1x1(embed_dim, embed_dim)
+        self.mlp = MLP(embed_dim, embed_dim)
 
     def forward(
         self,
@@ -292,7 +270,7 @@ class ResidualGroup(nn.Module):
         shortcut = query
         for block in self.blocks:
             query, key, value = block(query, key, value)
-        query = self.conv(query)
+        query = self.mlp(query)
         if query.shape[-1] == shortcut.shape[-1]:
             query = query + shortcut
         return query, key, value
@@ -314,7 +292,7 @@ class SwinIA(nn.Module):
         self.num_heads = num_heads
         self.embed_k = MLP(in_chans, embed_dim)
         self.embed_v = MLP(in_chans, embed_dim)
-        self.conv_last = Conv1x1(embed_dim, in_chans, channels_last=False)
+        self.proj_last = nn.Linear(embed_dim, in_chans)
         self.absolute_pos_embed = nn.Parameter(torch.zeros(1, window_size ** 2, embed_dim // num_heads[0]))
         trunc_normal_(self.absolute_pos_embed, std=.02)
         self.groups = nn.ModuleList([
@@ -364,5 +342,6 @@ class SwinIA(nn.Module):
             elif shortcuts:
                 (q_, k_, v_) = shortcuts.pop()
                 q, k, v = q + q_, k + k_, v + v_
-        q = self.conv_last(q)
+        q = self.proj_last(q)
+        q = einops.rearrange(q, 'b ... c -> b c ...')
         return q
