@@ -8,6 +8,13 @@ import einops
 from timm.models.layers import to_2tuple, trunc_normal_
 
 
+def concat_shortcut(layer: nn.Module, x: Tensor, y: Tensor):
+    if len(y.shape) != len(x.shape):
+        return x + y
+    x = torch.cat([x, y], -1)
+    return layer(x)
+
+
 class SwinIAMode(Enum):
 
     DILATED = 0,
@@ -69,6 +76,7 @@ class DiagWinAttention(nn.Module):
         self.scale = (embed_dim // num_heads) ** -0.5
         self.k = MLP(embed_dim, embed_dim)
         self.v = MLP(embed_dim, embed_dim)
+        self.shortcut = MLP(embed_dim // num_heads * 2, embed_dim // num_heads)
 
         window_bias_shape = [2 * s - 1 for s in window_size]
         self.relative_position_bias_table = nn.Parameter(torch.zeros(np.prod(window_bias_shape).item(), num_heads))
@@ -122,7 +130,7 @@ class DiagWinAttention(nn.Module):
 
         attn = self.softmax(attn)
         attn = self.attn_drop(attn)
-        query = attn @ value + query
+        query = concat_shortcut(self.shortcut, attn @ value, query)
         query, key, value = map(self.head_partition_reversed, (query, key, value))
         query = self.norm(query)
         query = self.proj(query)
@@ -161,6 +169,7 @@ class BlindSpotBlock(nn.Module):
         self.embed_dim = embed_dim
         self.input_size = input_size
         self.attn_mask = self.calculate_mask(input_size)
+        self.shortcut = MLP(embed_dim * 2, embed_dim)
 
     def shift_image(self, x: Optional[Tensor]):
         if x.shape[-1] != self.embed_dim or self.shift_size == 0:
@@ -235,7 +244,7 @@ class BlindSpotBlock(nn.Module):
         query, key, value = self.attn(query, key, value, mask=mask)
         query, key, value = map(self.strided_window_partition_reversed, (query, key, value), [image_size] * 3)
         query, key, value = map(self.shift_image_reversed, (query, key, value))
-        query = query + self.mlp(self.norm2(query))
+        query = concat_shortcut(self.shortcut, query, self.mlp(self.norm2(query)))
         return query, key, value
 
 
@@ -260,6 +269,7 @@ class ResidualGroup(nn.Module):
             ) for i in range(depth)
         ])
         self.mlp = MLP(embed_dim, embed_dim)
+        self.shortcut = MLP(embed_dim * 2, embed_dim)
 
     def forward(
         self,
@@ -272,7 +282,7 @@ class ResidualGroup(nn.Module):
             query, key, value = block(query, key, value)
         query = self.mlp(query)
         if query.shape[-1] == shortcut.shape[-1]:
-            query = query + shortcut
+            query = concat_shortcut(self.shortcut, query, shortcut)
         return query, key, value
 
 
@@ -293,6 +303,7 @@ class SwinIA(nn.Module):
         self.embed_k = MLP(in_chans, embed_dim)
         self.embed_v = MLP(in_chans, embed_dim)
         self.proj_last = nn.Linear(embed_dim, in_chans)
+        self.shortcut = MLP(embed_dim * 2, embed_dim)
         self.absolute_pos_embed = nn.Parameter(torch.zeros(1, window_size ** 2, embed_dim // num_heads[0]))
         trunc_normal_(self.absolute_pos_embed, std=.02)
         self.groups = nn.ModuleList([
@@ -341,7 +352,7 @@ class SwinIA(nn.Module):
                 shortcuts.append((q, k, v))
             elif shortcuts:
                 (q_, k_, v_) = shortcuts.pop()
-                q, k, v = q + q_, k + k_, v + v_
+                q, k, v = map(concat_shortcut, [self.shortcut] * 3, (q, k, v), (q_, k_, v_))
         q = self.proj_last(q)
         q = einops.rearrange(q, 'b ... c -> b c ...')
         return q
