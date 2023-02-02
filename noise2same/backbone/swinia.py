@@ -181,7 +181,7 @@ class BlindSpotBlock(nn.Module):
         self.norm1 = nn.LayerNorm(embed_dim)
         self.norm2 = nn.LayerNorm(embed_dim)
         self.window_size = window_size
-        self.shift_size = shift_size
+        self.shift_size = shift_size if mode == SwinIAMode.SHUFFLED else shift_size * stride
         self.stride = stride
         self.embed_dim = embed_dim
         self.input_size = input_size
@@ -229,11 +229,9 @@ class BlindSpotBlock(nn.Module):
             x_size = [s // self.stride for s in x_size]
         attn_mask = torch.zeros((1, *x_size, 1))
         if self.shift_size != 0:
-            h_slices = (slice(0, -self.window_size),
-                        slice(-self.window_size, -self.shift_size),
+            h_slices = (slice(0, -self.shift_size),
                         slice(-self.shift_size, None))
-            w_slices = (slice(0, -self.window_size),
-                        slice(-self.window_size, -self.shift_size),
+            w_slices = (slice(0, -self.shift_size),
                         slice(-self.shift_size, None))
             cnt = 0
             for h in h_slices:
