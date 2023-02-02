@@ -8,32 +8,17 @@ import einops
 from timm.models.layers import to_2tuple, trunc_normal_
 
 
+def concat_shortcut(layer: nn.Module, x: Tensor, y: Tensor):
+    if len(y.shape) != len(x.shape):
+        return x + y
+    x = torch.cat([x, y], -1)
+    return layer(x)
+
+
 class SwinIAMode(Enum):
 
     DILATED = 0,
     SHUFFLED = 1
-
-
-class Conv1x1(nn.Module):
-
-    def __init__(
-        self,
-        in_features: int = 96,
-        out_features: int = 96,
-        channels_last: bool = True
-    ):
-        super().__init__()
-        self.in_features = in_features
-        self.channels_last = channels_last
-        self.conv = nn.Conv2d(in_features, out_features, 1)
-
-    def forward(self, x):
-        if x.shape[1] != self.in_features:
-            x = einops.rearrange(x, 'b ... c -> b c ...')
-        x = self.conv(x)
-        if self.channels_last:
-            return einops.rearrange(x, 'b c ... -> b ... c')
-        return x
 
 
 class MLP(nn.Module):
@@ -42,32 +27,29 @@ class MLP(nn.Module):
         self,
         in_features: int = 96,
         out_features: int = 96,
-        two_layers: bool = True,
+        n_layers: int = 1,
         hidden_features: Optional[int] = None,
-        layer: nn.Module = nn.Linear,
         act_layer: nn.Module = nn.GELU,
         drop=0.,
     ):
         super().__init__()
         hidden_features = hidden_features or out_features
-        self.layer1 = layer(in_features, hidden_features)
-        self.bn1 = nn.LayerNorm(hidden_features)
-        self.two_layers = two_layers
-        if two_layers:
-            self.layer2 = layer(hidden_features, out_features)
-            self.bn2 = nn.LayerNorm(out_features)
+        features = [hidden_features] * (n_layers + 1)
+        features[0], features[-1] = in_features, out_features
+        self.layers = nn.ModuleList([
+            nn.Sequential(
+                nn.Linear(features[i], features[i+1]),
+                nn.LayerNorm(features[i+1])
+            ) for i in range(n_layers)
+        ])
         self.act = act_layer()
         self.drop = nn.Dropout(drop)
 
     def forward(self, x):
-        x = self.layer1(x)
-        x = self.bn1(x)
-        x = self.act(x)
-        x = self.drop(x)
-        if self.two_layers:
-            x = self.layer2(x)
-            x = self.bn2(x)
-        x = self.drop(x)
+        for layer in self.layers:
+            x = layer(x)
+            x = self.act(x)
+            x = self.drop(x)
         return x
 
 
@@ -92,8 +74,9 @@ class DiagWinAttention(nn.Module):
         self.num_heads = num_heads
         self.embed_dim = embed_dim
         self.scale = (embed_dim // num_heads) ** -0.5
-        self.k = MLP(embed_dim, embed_dim, two_layers=False)
-        self.v = MLP(embed_dim, embed_dim, two_layers=False)
+        self.k = MLP(embed_dim, embed_dim)
+        self.v = MLP(embed_dim, embed_dim)
+        self.short = MLP(embed_dim // num_heads * 2, embed_dim // num_heads)
 
         window_bias_shape = [2 * s - 1 for s in window_size]
         self.relative_position_bias_table = nn.Parameter(torch.zeros(np.prod(window_bias_shape).item(), num_heads))
@@ -147,7 +130,7 @@ class DiagWinAttention(nn.Module):
 
         attn = self.softmax(attn)
         attn = self.attn_drop(attn)
-        query = attn @ value + query
+        query = concat_shortcut(self.short, attn @ value, query)
         query, key, value = map(self.head_partition_reversed, (query, key, value))
         query = self.norm(query)
         query = self.proj(query)
@@ -187,6 +170,7 @@ class BlindSpotBlock(nn.Module):
         self.input_size = input_size
         self.attn_mask = self.calculate_mask(input_size)
         self.full_attn_mask = self.calculate_mask(input_size, diagonal=True)
+        self.short = MLP(embed_dim * 2, embed_dim)
 
     def shift_image(self, x: Tensor):
         if x.shape[-1] != self.embed_dim or self.shift_size == 0:
@@ -266,7 +250,7 @@ class BlindSpotBlock(nn.Module):
         query, key, value = self.attn(query, key, value, mask=mask)
         query, key, value = map(self.strided_window_partition_reversed, (query, key, value), [image_size] * 3)
         query, key, value = map(self.shift_image_reversed, (query, key, value))
-        query = query + self.mlp(self.norm2(query))
+        query = concat_shortcut(self.short, query, self.mlp(self.norm2(query)))
         return query, key, value
 
 
@@ -290,20 +274,22 @@ class ResidualGroup(nn.Module):
                 stride=stride
             ) for i in range(depth)
         ])
-        self.conv = Conv1x1(embed_dim, embed_dim)
+        self.mlp = MLP(embed_dim, embed_dim)
+        self.short = MLP(embed_dim * 2, embed_dim)
 
     def forward(
         self,
         query: Tensor,
         key: Tensor,
-        value: Tensor
+        value: Tensor,
+        masked: bool = False
     ):
         shortcut = query
         for block in self.blocks:
             query, key, value = block(query, key, value, masked=masked)
         query = self.conv(query)
         if query.shape[-1] == shortcut.shape[-1]:
-            query = query + shortcut
+            query = concat_shortcut(self.short, query, shortcut)
         return query, key, value
 
 
@@ -321,9 +307,10 @@ class SwinIA(nn.Module):
         super().__init__()
         self.window_size = window_size
         self.num_heads = num_heads
-        self.embed_k = MLP(in_chans, embed_dim, two_layers=False, layer=Conv1x1)
-        self.embed_v = MLP(in_chans, embed_dim, two_layers=False, layer=Conv1x1)
-        self.conv_last = Conv1x1(embed_dim, in_chans, channels_last=False)
+        self.embed_k = MLP(in_chans, embed_dim)
+        self.embed_v = MLP(in_chans, embed_dim)
+        self.norm = nn.LayerNorm(embed_dim)
+        self.mlp_last = MLP(embed_dim, in_chans)
         self.absolute_pos_embed = nn.Parameter(torch.zeros(1, window_size ** 2, embed_dim // num_heads[0]))
         trunc_normal_(self.absolute_pos_embed, std=.02)
         self.groups = nn.ModuleList([
@@ -335,6 +322,7 @@ class SwinIA(nn.Module):
                 stride=s
             ) for i, (d, n, s) in enumerate(zip(depths, num_heads, strides))
         ])
+        self.short = MLP(embed_dim * 2, embed_dim)
         self.apply(self._init_weights)
 
     def _init_weights(self, m):
@@ -356,8 +344,9 @@ class SwinIA(nn.Module):
 
     def forward(self, x, masked=False):
         k = self.embed_k(x)
+        x = einops.rearrange(x, 'b c ... -> b ... c')
         v = self.embed_v(x)
-        wh, ww = x.shape[-2] // self.window_size, x.shape[-1] // self.window_size
+        wh, ww = x.shape[1] // self.window_size, x.shape[2] // self.window_size
         full_pos_embed = einops.repeat(self.absolute_pos_embed, "1 (ws1 ws2) ch -> 1 (wh ws1) (ww ws2) (nh ch)",
                                        ws1=self.window_size, nh=self.num_heads[0], wh=wh, ww=ww)
         q = self.absolute_pos_embed
@@ -371,6 +360,8 @@ class SwinIA(nn.Module):
                 shortcuts.append((q, k, v))
             elif shortcuts:
                 (q_, k_, v_) = shortcuts.pop()
-                q, k, v = q + q_, k + k_, v + v_
-        q = self.conv_last(q)
+                q, k, v = map(concat_shortcut, [self.short] * 3, (q, k, v), (q_, k_, v_))
+        q = self.norm(q)
+        q = self.mlp_last(q)
+        q = einops.rearrange(q, 'b ... c -> b c ...')
         return q
