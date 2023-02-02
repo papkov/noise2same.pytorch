@@ -39,35 +39,32 @@ class Conv1x1(nn.Module):
 class MLP(nn.Module):
 
     def __init__(
-        self,
-        in_features: int = 96,
-        out_features: int = 96,
-        two_layers: bool = True,
-        hidden_features: Optional[int] = None,
-        layer: nn.Module = nn.Linear,
-        act_layer: nn.Module = nn.GELU,
-        drop=0.,
+            self,
+            in_features: int = 96,
+            out_features: int = 96,
+            n_layers: int = 1,
+            hidden_features: Optional[int] = None,
+            act_layer: nn.Module = nn.GELU,
+            drop=0.,
     ):
         super().__init__()
         hidden_features = hidden_features or out_features
-        self.layer1 = layer(in_features, hidden_features)
-        self.bn1 = nn.LayerNorm(hidden_features)
-        self.two_layers = two_layers
-        if two_layers:
-            self.layer2 = layer(hidden_features, out_features)
-            self.bn2 = nn.LayerNorm(out_features)
+        features = [hidden_features] * (n_layers + 1)
+        features[0], features[-1] = in_features, out_features
+        self.layers = nn.ModuleList([
+            nn.Sequential(
+                nn.Linear(features[i], features[i + 1]),
+                nn.LayerNorm(features[i + 1])
+            ) for i in range(n_layers)
+        ])
         self.act = act_layer()
         self.drop = nn.Dropout(drop)
 
     def forward(self, x):
-        x = self.layer1(x)
-        x = self.bn1(x)
-        x = self.act(x)
-        x = self.drop(x)
-        if self.two_layers:
-            x = self.layer2(x)
-            x = self.bn2(x)
-        x = self.drop(x)
+        for layer in self.layers:
+            x = layer(x)
+            x = self.act(x)
+            x = self.drop(x)
         return x
 
 
@@ -92,8 +89,8 @@ class DiagWinAttention(nn.Module):
         self.num_heads = num_heads
         self.embed_dim = embed_dim
         self.scale = (embed_dim // num_heads) ** -0.5
-        self.k = MLP(embed_dim, embed_dim, two_layers=False)
-        self.v = MLP(embed_dim, embed_dim, two_layers=False)
+        self.k = MLP(embed_dim, embed_dim)
+        self.v = MLP(embed_dim, embed_dim)
 
         window_bias_shape = [2 * s - 1 for s in window_size]
         self.relative_position_bias_table = nn.Parameter(torch.zeros(np.prod(window_bias_shape).item(), num_heads))
@@ -171,7 +168,7 @@ class BlindSpotBlock(nn.Module):
     ):
         super().__init__()
         self.softmax = nn.Softmax(dim=-1)
-        self.mlp = MLP(embed_dim, embed_dim)
+        self.mlp = MLP(embed_dim, embed_dim, n_layers=2)
         self.mode = mode
         self.attn = DiagWinAttention(
             embed_dim * stride ** 2 if mode == SwinIAMode.SHUFFLED else embed_dim,
@@ -315,8 +312,8 @@ class SwinIA(nn.Module):
         super().__init__()
         self.window_size = window_size
         self.num_heads = num_heads
-        self.embed_k = MLP(in_chans, embed_dim, two_layers=False, layer=Conv1x1)
-        self.embed_v = MLP(in_chans, embed_dim, two_layers=False, layer=Conv1x1)
+        self.embed_k = MLP(in_chans, embed_dim)
+        self.embed_v = MLP(in_chans, embed_dim)
         self.conv_last = Conv1x1(embed_dim, in_chans, channels_last=False)
         self.absolute_pos_embed = nn.Parameter(torch.zeros(1, window_size ** 2, embed_dim // num_heads[0]))
         trunc_normal_(self.absolute_pos_embed, std=.02)
@@ -349,9 +346,10 @@ class SwinIA(nn.Module):
         return {'relative_position_bias_table'}
 
     def forward(self, x):
+        x = einops.rearrange(x, 'b c ... -> b ... c')
         k = self.embed_k(x)
         v = self.embed_v(x)
-        wh, ww = x.shape[-2] // self.window_size, x.shape[-1] // self.window_size
+        wh, ww = x.shape[1] // self.window_size, x.shape[2] // self.window_size
         full_pos_embed = einops.repeat(self.absolute_pos_embed, "1 (ws1 ws2) ch -> 1 (wh ws1) (ww ws2) (nh ch)",
                                        ws1=self.window_size, nh=self.num_heads[0], wh=wh, ww=ww)
         q = self.absolute_pos_embed
