@@ -149,7 +149,7 @@ class BlindSpotBlock(nn.Module):
         self,
         embed_dim: int = 96,
         window_size: int = 8,
-        shift_size: int = 0,
+        shift_size: Tuple[int] = (0, 0),
         num_heads: int = 6,
         stride: int = 1,
         input_size: Tuple[int] = (128, 128),
@@ -169,7 +169,7 @@ class BlindSpotBlock(nn.Module):
         self.norm1 = nn.LayerNorm(embed_dim)
         self.norm2 = nn.LayerNorm(embed_dim)
         self.window_size = window_size
-        self.shift_size = shift_size if mode == SwinIAMode.SHUFFLED else shift_size * stride
+        self.shift_size = np.array(shift_size) if mode == SwinIAMode.SHUFFLED else np.array(shift_size) * stride
         self.stride = stride
         self.embed_dim = embed_dim
         self.input_size = input_size
@@ -177,17 +177,15 @@ class BlindSpotBlock(nn.Module):
         self.shortcut = MLP(embed_dim * 2, embed_dim)
 
     def shift_image(self, x: Optional[Tensor]):
-        if x.shape[-1] != self.embed_dim or self.shift_size == 0:
+        if x.shape[-1] != self.embed_dim or np.all(self.shift_size == 0):
             return x
         else:
-            coef = self.stride if self.mode == SwinIAMode.SHUFFLED else 1
-            return torch.roll(x, shifts=(-self.shift_size * coef, -self.shift_size * coef), dims=(1, 2))
+            return torch.roll(x, shifts=tuple(-self.shift_size), dims=(1, 2))
 
     def shift_image_reversed(self, x: Optional[Tensor]):
-        if self.shift_size == 0:
+        if np.all(self.shift_size == 0):
             return x
-        coef = self.stride if self.mode == SwinIAMode.SHUFFLED else 1
-        return torch.roll(x, shifts=(self.shift_size * coef, self.shift_size * coef), dims=(1, 2))
+        return torch.roll(x, shifts=tuple(self.shift_size), dims=(1, 2))
 
     def window_partition(self, x: Optional[Tensor]):
         if len(x.shape) == 3:
@@ -217,11 +215,11 @@ class BlindSpotBlock(nn.Module):
         if self.mode == SwinIAMode.SHUFFLED:
             x_size = [s // self.stride for s in x_size]
         attn_mask = torch.zeros((1, *x_size, 1))
-        if self.shift_size != 0:
-            h_slices = (slice(0, -self.shift_size),
-                        slice(-self.shift_size, None))
-            w_slices = (slice(0, -self.shift_size),
-                        slice(-self.shift_size, None))
+        if np.any(self.shift_size != 0):
+            h_slices = (slice(0, -self.shift_size[0]),
+                        slice(-self.shift_size[0], None))
+            w_slices = (slice(0, -self.shift_size[1]),
+                        slice(-self.shift_size[1], None))
             cnt = 0
             for h in h_slices:
                 for w in w_slices:
@@ -265,11 +263,13 @@ class ResidualGroup(nn.Module):
         mode: SwinIAMode = SwinIAMode.DILATED
     ):
         super().__init__()
+        shift_size = window_size // 2
+        shifts = ((0, 0), (0, shift_size), (shift_size, shift_size), (shift_size, 0))
         self.blocks = nn.ModuleList([
             BlindSpotBlock(
                 embed_dim=embed_dim,
                 window_size=window_size,
-                shift_size=0 if i % 2 == 0 else window_size // 2,
+                shift_size=shifts[i % 4],
                 num_heads=num_heads,
                 stride=stride,
                 mode=mode
