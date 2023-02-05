@@ -59,6 +59,7 @@ class DiagWinAttention(nn.Module):
         self,
         embed_dim: int = 96,
         window_size: Tuple[int] = (8, 8),  # todo: something about tuple window size
+        mode: SwinIAMode = SwinIAMode.DILATED,
         num_heads: int = 6,
         attn_drop: float = 0.05,
         proj_drop: float = 0.05,
@@ -67,15 +68,17 @@ class DiagWinAttention(nn.Module):
         self.softmax = nn.Softmax(dim=-1)
         self.attn_drop = nn.Dropout(attn_drop)
         self.norm = nn.LayerNorm(embed_dim)
-        self.proj = nn.Linear(embed_dim, embed_dim)
-        self.proj_drop = nn.Dropout(proj_drop)
         self.window_size = window_size
         self.num_patches = np.prod(window_size).item()
         self.num_heads = num_heads
         self.embed_dim = embed_dim
         self.scale = (embed_dim // num_heads) ** -0.5
-        self.k = MLP(embed_dim, embed_dim)
-        self.v = MLP(embed_dim, embed_dim)
+        self.mode = mode
+        if mode == SwinIAMode.DILATED:
+            self.k = MLP(embed_dim, embed_dim)
+            self.v = MLP(embed_dim, embed_dim)
+            self.proj = nn.Linear(embed_dim, embed_dim)
+            self.proj_drop = nn.Dropout(proj_drop)
         self.shortcut = MLP(embed_dim // num_heads * 2, embed_dim // num_heads)
 
         window_bias_shape = [2 * s - 1 for s in window_size]
@@ -111,8 +114,9 @@ class DiagWinAttention(nn.Module):
         value: Tensor,
         mask: Tensor
     ):
-        key = self.k(key)
-        value = self.v(value)
+        if self.mode == SwinIAMode.DILATED:
+            key = self.k(key)
+            value = self.v(value)
         query, key, value = map(self.head_partition, (query, key, value))
         query = query * self.scale
         attn = torch.einsum("...ik,...jk->...ij", query, key)
@@ -133,8 +137,9 @@ class DiagWinAttention(nn.Module):
         query = concat_shortcut(self.shortcut, attn @ value, query)
         query, key, value = map(self.head_partition_reversed, (query, key, value))
         query = self.norm(query)
-        query = self.proj(query)
-        query = self.proj_drop(query)
+        if self.mode == SwinIAMode.DILATED:
+            query = self.proj(query)
+            query = self.proj_drop(query)
         return query, key, value
 
 
@@ -158,7 +163,7 @@ class BlindSpotBlock(nn.Module):
         self.mode = mode
         self.attn = DiagWinAttention(
             embed_dim * stride ** 2 if mode == SwinIAMode.SHUFFLED else embed_dim,
-            to_2tuple(window_size),
+            to_2tuple(window_size), mode,
             num_heads, attn_drop, proj_drop
         )
         self.norm1 = nn.LayerNorm(embed_dim)
@@ -256,7 +261,8 @@ class ResidualGroup(nn.Module):
         window_size: int = 8,
         depth: int = 6,
         num_heads: int = 6,
-        stride: int = 1
+        stride: int = 1,
+        mode: SwinIAMode = SwinIAMode.DILATED
     ):
         super().__init__()
         self.blocks = nn.ModuleList([
@@ -265,7 +271,8 @@ class ResidualGroup(nn.Module):
                 window_size=window_size,
                 shift_size=0 if i % 2 == 0 else window_size // 2,
                 num_heads=num_heads,
-                stride=stride
+                stride=stride,
+                mode=mode
             ) for i in range(depth)
         ])
         self.mlp = MLP(embed_dim, embed_dim)
@@ -295,11 +302,13 @@ class SwinIA(nn.Module):
         window_size: int = 8,
         depths: Tuple[int] = (6, 6),
         num_heads: Tuple[int] = (6, 6),
-        strides: Tuple[int] = (1, 1)
+        strides: Tuple[int] = (1, 1),
+        mode: str = 'dilated'
     ):
         super().__init__()
         self.window_size = window_size
         self.num_heads = num_heads
+        self.mode = SwinIAMode.DILATED if mode == 'dilated' else SwinIAMode.SHUFFLED
         self.embed_k = MLP(in_chans, embed_dim)
         self.embed_v = MLP(in_chans, embed_dim)
         self.proj_last = nn.Linear(embed_dim, in_chans)
@@ -312,7 +321,8 @@ class SwinIA(nn.Module):
                 window_size=window_size,
                 depth=d,
                 num_heads=n,
-                stride=s
+                stride=s,
+                mode=self.mode,
             ) for i, (d, n, s) in enumerate(zip(depths, num_heads, strides))
         ])
         self.apply(self._init_weights)
