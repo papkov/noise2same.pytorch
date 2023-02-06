@@ -105,7 +105,7 @@ class DiagWinAttention(nn.Module):
         return einops.rearrange(x, 'nw n (nh ch) -> nw nh n ch', nh=self.num_heads)
 
     def head_partition_reversed(self, x):
-        return einops.rearrange(x, "nw nh (ws1 ws2) ch -> nw ws1 ws2 (nh ch)", ws1=self.window_size[0])
+        return einops.rearrange(x, "nw nh n ch -> nw n (nh ch)")
 
     def forward(
         self,
@@ -207,9 +207,9 @@ class BlindSpotBlock(nn.Module):
     def strided_window_partition_reversed(self, x: Optional[Tensor], x_size: Iterable[int]):
         height, width = x_size
         h, w = height // self.window_size // self.stride, width // self.window_size // self.stride
-        expression = '(b h w) wh ww (c sh sw) -> b (h wh sh) (w ww sw) c' if self.mode == SwinIAMode.SHUFFLED else \
-                     '(b h w sh sw) wh ww c -> b (h wh sh) (w ww sw) c'
-        return einops.rearrange(x, expression, h=h, w=w, sh=self.stride, sw=self.stride)
+        expression = '(b h w) (wh ww) (c sh sw) -> b (h wh sh) (w ww sw) c' if self.mode == SwinIAMode.SHUFFLED else \
+                     '(b h w sh sw) (wh ww) c -> b (h wh sh) (w ww sw) c'
+        return einops.rearrange(x, expression, h=h, w=w, sh=self.stride, sw=self.stride, wh=self.window_size)
 
     def calculate_mask(self, x_size):
         if self.mode == SwinIAMode.SHUFFLED:
