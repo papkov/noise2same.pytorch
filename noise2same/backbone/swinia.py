@@ -200,14 +200,14 @@ class BlindSpotBlock(nn.Module):
     def strided_window_partition(self, x: Optional[Tensor]):
         if len(x.shape) == 3:
             return x
-        expression = 'b (h wh sh) (w ww sw) c -> (b h w) (wh ww) (c sh sw)' if self.mode == SwinIAMode.SHUFFLED else \
+        expression = 'b (h wh sh) (w ww sw) c -> (b h w) (wh ww) (sh sw c)' if self.mode == SwinIAMode.SHUFFLED else \
                      'b (h wh sh) (w ww sw) c -> (b h w sh sw) (wh ww) c'
         return einops.rearrange(x, expression, wh=self.window_size, ww=self.window_size, sh=self.stride, sw=self.stride)
 
     def strided_window_partition_reversed(self, x: Optional[Tensor], x_size: Iterable[int]):
         height, width = x_size
         h, w = height // self.window_size // self.stride, width // self.window_size // self.stride
-        expression = '(b h w) (wh ww) (c sh sw) -> b (h wh sh) (w ww sw) c' if self.mode == SwinIAMode.SHUFFLED else \
+        expression = '(b h w) (wh ww) (sh sw c) -> b (h wh sh) (w ww sw) c' if self.mode == SwinIAMode.SHUFFLED else \
                      '(b h w sh sw) (wh ww) c -> b (h wh sh) (w ww sw) c'
         return einops.rearrange(x, expression, h=h, w=w, sh=self.stride, sw=self.stride, wh=self.window_size)
 
