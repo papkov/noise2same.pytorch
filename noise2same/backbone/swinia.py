@@ -8,7 +8,7 @@ import einops
 from timm.models.layers import to_2tuple, trunc_normal_
 
 
-def concat_shortcut(layer: nn.Module, x: Tensor, y: Tensor):
+def connect_shortcut(layer: nn.Module, x: Tensor, y: Tensor):
     if len(y.shape) != len(x.shape):
         return x + y
     x = torch.cat([x, y], -1)
@@ -79,7 +79,7 @@ class DiagWinAttention(nn.Module):
             self.v = MLP(embed_dim, embed_dim)
             self.proj = nn.Linear(embed_dim, embed_dim)
             self.proj_drop = nn.Dropout(proj_drop)
-        self.shortcut = MLP(embed_dim // num_heads * 2, embed_dim // num_heads)
+            self.shortcut = MLP(embed_dim // num_heads * 2, embed_dim // num_heads)
 
         window_bias_shape = [2 * s - 1 for s in window_size]
         self.relative_position_bias_table = nn.Parameter(torch.zeros(np.prod(window_bias_shape).item(), num_heads))
@@ -134,7 +134,8 @@ class DiagWinAttention(nn.Module):
 
         attn = self.softmax(attn)
         attn = self.attn_drop(attn)
-        query = concat_shortcut(self.shortcut, attn @ value, query)
+        query = connect_shortcut(self.shortcut, attn @ value, query) if self.mode == SwinIAMode.DILATED \
+                else attn @ value + query
         query, key, value = map(self.head_partition_reversed, (query, key, value))
         query = self.norm(query)
         if self.mode == SwinIAMode.DILATED:
@@ -247,7 +248,7 @@ class BlindSpotBlock(nn.Module):
         query, key, value = self.attn(query, key, value, mask=mask)
         query, key, value = map(self.strided_window_partition_reversed, (query, key, value), [image_size] * 3)
         query, key, value = map(self.shift_image_reversed, (query, key, value))
-        query = concat_shortcut(self.shortcut, query, self.mlp(self.norm2(query)))
+        query = connect_shortcut(self.shortcut, query, self.mlp(self.norm2(query)))
         return query, key, value
 
 
@@ -289,7 +290,7 @@ class ResidualGroup(nn.Module):
             query, key, value = block(query, key, value)
         query = self.mlp(query)
         if query.shape[-1] == shortcut.shape[-1]:
-            query = concat_shortcut(self.shortcut, query, shortcut)
+            query = connect_shortcut(self.shortcut, query, shortcut)
         return query, key, value
 
 
@@ -362,7 +363,7 @@ class SwinIA(nn.Module):
                 shortcuts.append((q, k, v))
             elif shortcuts:
                 (q_, k_, v_) = shortcuts.pop()
-                q, k, v = map(concat_shortcut, [self.shortcut] * 3, (q, k, v), (q_, k_, v_))
+                q, k, v = map(connect_shortcut, [self.shortcut] * 3, (q, k, v), (q_, k_, v_))
         q = self.proj_last(q)
         q = einops.rearrange(q, 'b ... c -> b c ...')
         return q
