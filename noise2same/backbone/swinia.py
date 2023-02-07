@@ -183,12 +183,14 @@ class BlindSpotBlock(nn.Module):
         if x.shape[-1] != self.embed_dim or np.all(self.shift_size == 0):
             return x
         else:
-            return torch.roll(x, shifts=tuple(-self.shift_size), dims=(1, 2))
+            coef = self.stride if self.mode == SwinIAMode.SHUFFLED else 1
+            return torch.roll(x, shifts=tuple(-self.shift_size * coef), dims=(1, 2))
 
     def shift_image_reversed(self, x: Optional[Tensor]):
         if np.all(self.shift_size == 0):
             return x
-        return torch.roll(x, shifts=tuple(self.shift_size), dims=(1, 2))
+        coef = self.stride if self.mode == SwinIAMode.SHUFFLED else 1
+        return torch.roll(x, shifts=tuple(self.shift_size * coef), dims=(1, 2))
 
     def window_partition(self, x: Optional[Tensor]):
         if len(x.shape) == 3:
