@@ -196,7 +196,7 @@ class BlindSpotBlock(nn.Module):
     def window_partition_reversed(self, x: Optional[Tensor], x_size: Iterable[int]):
         height, width = x_size
         h, w = height // self.window_size, width // self.window_size
-        return einops.rearrange(x, '(b h w) wh ww c -> b (h wh) (w ww) c', h=h, w=w)
+        return einops.rearrange(x, '(b h w) (wh ww) c -> b (h wh) (w ww) c', h=h, w=w)
 
     def strided_window_partition(self, x: Optional[Tensor]):
         if len(x.shape) == 3:
