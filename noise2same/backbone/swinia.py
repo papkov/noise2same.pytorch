@@ -134,8 +134,10 @@ class DiagWinAttention(nn.Module):
 
         attn = self.softmax(attn)
         attn = self.attn_drop(attn)
-        query = connect_shortcut(self.shortcut, attn @ value, query) if self.mode == SwinIAMode.DILATED \
-                else attn @ value + query
+        shortcut = query
+        query = attn @ value
+        query = connect_shortcut(self.shortcut, query, shortcut) if self.mode == SwinIAMode.DILATED \
+                else query + shortcut
         query, key, value = map(self.head_partition_reversed, (query, key, value))
         query = self.norm(query)
         if self.mode == SwinIAMode.DILATED:
