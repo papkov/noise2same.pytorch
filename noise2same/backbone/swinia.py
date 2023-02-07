@@ -102,10 +102,10 @@ class DiagWinAttention(nn.Module):
     def head_partition(self, x):
         if x.shape[-1] != self.embed_dim:
             return x
-        return einops.rearrange(x, 'nw n (nh ch) -> nw nh n ch', nh=self.num_heads)
+        return einops.rearrange(x, 'nw ... (nh ch) -> nw nh ... ch', nh=self.num_heads)
 
     def head_partition_reversed(self, x):
-        return einops.rearrange(x, "nw nh n ch -> nw n (nh ch)")
+        return einops.rearrange(x, "nw nh ... ch -> nw ... (nh ch)")
 
     def forward(
         self,
@@ -119,7 +119,10 @@ class DiagWinAttention(nn.Module):
             value = self.v(value)
         query, key, value = map(self.head_partition, (query, key, value))
         query = query * self.scale
-        attn = torch.einsum("...ik,...jk->...ij", query, key)
+        if self.mode == SwinIAMode.DILATED:
+            attn = torch.einsum("...ik,...jk->...ij", query, key)
+        else:
+            attn = torch.einsum("...ipk,...jpk->...ij", query, key)
         relative_position_bias = einops.rearrange(
             self.relative_position_bias_table[self.relative_position_index],
             "(np1 np2) nh -> 1 nh np1 np2", np1=self.num_patches
@@ -135,7 +138,10 @@ class DiagWinAttention(nn.Module):
         attn = self.softmax(attn)
         attn = self.attn_drop(attn)
         shortcut = query
-        query = attn @ value
+        if self.mode == SwinIAMode.DILATED:
+            query = torch.einsum("...ik,...kj->...ij", attn, value)
+        else:
+            query = torch.einsum("...ik,...kjh->...ijh", attn, value)
         query = connect_shortcut(self.shortcut, query, shortcut) if self.mode == SwinIAMode.DILATED \
                 else query + shortcut
         query, key, value = map(self.head_partition_reversed, (query, key, value))
@@ -165,7 +171,7 @@ class BlindSpotBlock(nn.Module):
         self.mlp = MLP(embed_dim, embed_dim, n_layers=2)
         self.mode = mode
         self.attn = DiagWinAttention(
-            embed_dim * stride ** 2 if mode == SwinIAMode.SHUFFLED else embed_dim,
+            embed_dim,
             to_2tuple(window_size), mode,
             num_heads, attn_drop, proj_drop
         )
@@ -193,7 +199,7 @@ class BlindSpotBlock(nn.Module):
         return torch.roll(x, shifts=tuple(self.shift_size * coef), dims=(1, 2))
 
     def window_partition(self, x: Optional[Tensor]):
-        if len(x.shape) == 3:
+        if x.shape[-1] != self.embed_dim and x.shape[-1] != 1:
             return x
         return einops.rearrange(x, 'b (h wh) (w ww) c -> (b h w) (wh ww) c', wh=self.window_size, ww=self.window_size)
 
@@ -203,16 +209,16 @@ class BlindSpotBlock(nn.Module):
         return einops.rearrange(x, '(b h w) (wh ww) c -> b (h wh) (w ww) c', h=h, w=w)
 
     def strided_window_partition(self, x: Optional[Tensor]):
-        if len(x.shape) == 3:
+        if x.shape[-1] != self.embed_dim:
             return x
-        expression = 'b (h wh sh) (w ww sw) c -> (b h w) (wh ww) (sh sw c)' if self.mode == SwinIAMode.SHUFFLED else \
+        expression = 'b (h wh sh) (w ww sw) c -> (b h w) (wh ww) (sh sw) c' if self.mode == SwinIAMode.SHUFFLED else \
                      'b (h wh sh) (w ww sw) c -> (b h w sh sw) (wh ww) c'
         return einops.rearrange(x, expression, wh=self.window_size, ww=self.window_size, sh=self.stride, sw=self.stride)
 
     def strided_window_partition_reversed(self, x: Optional[Tensor], x_size: Iterable[int]):
         height, width = x_size
         h, w = height // self.window_size // self.stride, width // self.window_size // self.stride
-        expression = '(b h w) (wh ww) (sh sw c) -> b (h wh sh) (w ww sw) c' if self.mode == SwinIAMode.SHUFFLED else \
+        expression = '(b h w) (wh ww) (sh sw) c -> b (h wh sh) (w ww sw) c' if self.mode == SwinIAMode.SHUFFLED else \
                      '(b h w sh sw) (wh ww) c -> b (h wh sh) (w ww sw) c'
         return einops.rearrange(x, expression, h=h, w=w, sh=self.stride, sw=self.stride, wh=self.window_size)
 
@@ -305,9 +311,9 @@ class SwinIA(nn.Module):
         in_chans: int = 1,
         embed_dim: int = 96,
         window_size: int = 8,
-        depths: Tuple[int] = (6, 6),
-        num_heads: Tuple[int] = (6, 6),
-        strides: Tuple[int] = (1, 1),
+        depths: Tuple[int] = (8, 4, 4, 4, 4, 4, 8),
+        num_heads: Tuple[int] = (6, 6, 6, 6, 6, 6, 6),
+        strides: Tuple[int] = (1, 2, 4, 8, 4, 2, 1),
         mode: str = 'dilated'
     ):
         super().__init__()
@@ -357,6 +363,8 @@ class SwinIA(nn.Module):
         full_pos_embed = einops.repeat(self.absolute_pos_embed, "1 (ws1 ws2) ch -> 1 (wh ws1) (ww ws2) (nh ch)",
                                        ws1=self.window_size, nh=self.num_heads[0], wh=wh, ww=ww)
         q = self.absolute_pos_embed
+        if self.mode == SwinIAMode.SHUFFLED:
+            q = einops.rearrange(q, '... c -> ... 1 c')
         k = k + full_pos_embed
         v = v + full_pos_embed
         shortcuts = []
