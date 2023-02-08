@@ -56,7 +56,7 @@ def parametrize_backbone_and_head(cfg: DictConfig) -> Tuple[torch.nn.Module, tor
     elif cfg.backbone_name == 'swinia':
         assert cfg.data.n_dim == 2
         backbone = SwinIA(
-            in_chans=cfg.data.n_channels,
+            in_channels=cfg.data.n_channels,
             **cfg.backbone
         )
     else:
