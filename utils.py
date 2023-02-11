@@ -57,6 +57,7 @@ def parametrize_backbone_and_head(cfg: DictConfig) -> Tuple[torch.nn.Module, tor
         assert cfg.data.n_dim == 2
         backbone = SwinIA(
             in_chans=cfg.data.n_channels,
+            input_size=recalculate_img_size(cfg),
             **cfg.backbone
         )
     else:

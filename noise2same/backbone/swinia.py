@@ -233,6 +233,7 @@ class ResidualGroup(nn.Module):
         num_heads: int = 6,
         dilation: int = 1,
         shuffle: int = 1,
+        input_size: Tuple[int] = (128, 128),
         is_first: bool = False
     ):
         super().__init__()
@@ -247,6 +248,7 @@ class ResidualGroup(nn.Module):
                 num_heads=num_heads,
                 dilation=dilation,
                 shuffle=shuffle,
+                input_size=input_size,
                 is_first=is_first and i == 0
             ) for i in range(depth)
         ])
@@ -272,6 +274,7 @@ class SwinIA(nn.Module):
         in_chans: int = 1,
         embed_dim: int = 96,
         window_size: int = 8,
+        input_size: int = 128,
         depths: Tuple[int] = (8, 4, 4, 4, 4, 4, 8),
         num_heads: Tuple[int] = (6, 6, 6, 6, 6, 6, 6),
         dilations: Tuple[int] = (1, 1, 1, 1, 1, 1, 1),
@@ -294,6 +297,7 @@ class SwinIA(nn.Module):
                 num_heads=n,
                 dilation=dl,
                 shuffle=sh,
+                input_size=to_2tuple(input_size),
                 is_first=i == 0
             ) for i, (d, n, dl, sh) in enumerate(zip(depths, num_heads, dilations, shuffles))
         ])
