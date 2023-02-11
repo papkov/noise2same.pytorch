@@ -1,6 +1,6 @@
-from enum import Enum
-from typing import Tuple, Optional, Iterable
-from torch import Tensor
+import itertools
+from typing import Tuple, Optional, Iterable, Set
+from torch import Tensor as T
 import torch.nn as nn
 import numpy as np
 import torch
@@ -37,7 +37,7 @@ class MLP(nn.Module):
         self.act = act_layer()
         self.drop = nn.Dropout(drop)
 
-    def forward(self, x):
+    def forward(self, x: T) -> T:
         for layer in self.layers:
             x = layer(x)
             x = self.act(x)
@@ -99,14 +99,12 @@ class DiagWinAttention(nn.Module):
 
     def forward(
         self,
-        query: Tensor,
-        key: Tensor,
-        value: Tensor,
-        mask: Tensor
-    ):
-        if self.mode == SwinIAMode.DILATED:
-            key = self.k(key)
-            value = self.v(value)
+        query: T,
+        key: T,
+        value: T,
+        mask: T
+    ) -> Tuple[T, T, T]:
+        shortcut = query
         query, key, value = map(self.head_partition, (query, key, value))
         query = query * self.scale
         attn = torch.einsum("...qsc,...ksc->...qk", query, key)
@@ -166,7 +164,7 @@ class BlindSpotBlock(nn.Module):
             return x
         return torch.roll(x, shifts=tuple(-self.shift_size * self.dilation * self.shuffle), dims=(1, 2))
 
-    def shift_image_reversed(self, x: Optional[Tensor]):
+    def shift_image_reversed(self, x: T) -> T:
         if np.all(self.shift_size == 0):
             return x
         return torch.roll(x, shifts=tuple(self.shift_size * self.dilation * self.shuffle), dims=(1, 2))
@@ -176,14 +174,7 @@ class BlindSpotBlock(nn.Module):
                                 wh=self.window_size, ww=self.window_size, sh=self.shuffle, sw=self.shuffle,
                                 dh=self.dilation, dw=self.dilation)
 
-    def strided_window_partition(self, x: Optional[Tensor]):
-        if x.shape[-1] != self.embed_dim:
-            return x
-        expression = 'b (h wh sh) (w ww sw) c -> (b h w) (wh ww) (sh sw) c' if self.mode == SwinIAMode.SHUFFLED else \
-                     'b (h wh sh) (w ww sw) c -> (b h w sh sw) (wh ww) c'
-        return einops.rearrange(x, expression, wh=self.window_size, ww=self.window_size, sh=self.stride, sw=self.stride)
-
-    def strided_window_partition_reversed(self, x: Optional[Tensor], x_size: Iterable[int]):
+    def strided_window_partition_reversed(self, x: T, x_size: Iterable[int]) -> T:
         height, width = x_size
         h = height // (self.window_size * self.shuffle * self.dilation)
         w = width // (self.window_size * self.shuffle * self.dilation)
@@ -212,10 +203,10 @@ class BlindSpotBlock(nn.Module):
 
     def forward(
         self,
-        query: Tensor,
-        key: Tensor,
-        value: Tensor,
-    ):
+        query: T,
+        key: T,
+        value: T,
+    ) -> Tuple[T, T, T]:
         image_size = key.shape[1:-1]
         if not self.is_first:
             query = self.norm1(query)
@@ -261,10 +252,10 @@ class ResidualGroup(nn.Module):
 
     def forward(
         self,
-        query: Tensor,
-        key: Tensor,
-        value: Tensor
-    ):
+        query: T,
+        key: T,
+        value: T
+    ) -> Tuple[T, T, T]:
         shortcut = query
         for block in self.blocks:
             query, key, value = block(query, key, value)
@@ -306,7 +297,7 @@ class SwinIA(nn.Module):
         ])
         self.apply(self._init_weights)
 
-    def _init_weights(self, m):
+    def _init_weights(self, m: nn.Module):
         if isinstance(m, nn.Linear):
             trunc_normal_(m.weight, std=.02)
             if isinstance(m, nn.Linear) and m.bias is not None:
@@ -316,14 +307,14 @@ class SwinIA(nn.Module):
             nn.init.constant_(m.weight, 1.0)
 
     @torch.jit.ignore
-    def no_weight_decay(self):
+    def no_weight_decay(self) -> Set[str]:
         return {'absolute_pos_embed'}
 
     @torch.jit.ignore
-    def no_weight_decay_keywords(self):
+    def no_weight_decay_keywords(self) -> Set[str]:
         return {'relative_position_bias_table'}
 
-    def forward(self, x):
+    def forward(self, x: T) -> T:
         x = einops.rearrange(x, 'b c ... -> b ... c')
         k = self.embed_k(x)
         v = self.embed_v(x)
