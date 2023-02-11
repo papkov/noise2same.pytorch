@@ -13,12 +13,6 @@ def connect_shortcut(layer: nn.Module, x: T, y: T) -> T:
     return layer(x)
 
 
-class SwinIAMode(Enum):
-
-    DILATED = 0,
-    SHUFFLED = 1
-
-
 class MLP(nn.Module):
 
     def __init__(
@@ -297,7 +291,7 @@ class SwinIA(nn.Module):
         self.embed_v = MLP(in_chans, embed_dim)
         self.proj_last = nn.Linear(embed_dim, in_chans)
         self.shortcut = MLP(embed_dim * 2, embed_dim)
-        self.absolute_pos_embed = nn.Parameter(torch.zeros(1, window_size ** 2, embed_dim // num_heads[0]))
+        self.absolute_pos_embed = nn.Parameter(torch.zeros(window_size ** 2, embed_dim // num_heads[0]))
         trunc_normal_(self.absolute_pos_embed, std=.02)
         self.groups = nn.ModuleList([
             ResidualGroup(
@@ -334,22 +328,17 @@ class SwinIA(nn.Module):
         k = self.embed_k(x)
         v = self.embed_v(x)
         wh, ww = x.shape[1] // self.window_size, x.shape[2] // self.window_size
-        full_pos_embed = einops.repeat(self.absolute_pos_embed, "1 (ws1 ws2) ch -> 1 (wh ws1) (ww ws2) (nh ch)",
-                                       ws1=self.window_size, nh=self.num_heads[0], wh=wh, ww=ww)
-        q = self.absolute_pos_embed
-        if self.mode == SwinIAMode.SHUFFLED:
-            q = einops.rearrange(q, '... c -> ... 1 c')
-        k = k + full_pos_embed
-        v = v + full_pos_embed
-        shortcuts = []
-        mid = len(self.groups) // 2
+        full_pos_embed = einops.repeat(self.absolute_pos_embed, "(ws1 ws2) ch -> b (wh ws1) (ww ws2) (nh ch)",
+                                       b=x.shape[0], ws1=self.window_size, wh=wh, ww=ww, nh=self.num_heads[0])
+        q, k, v = full_pos_embed, k + full_pos_embed, v + full_pos_embed
+        # shortcuts = []
+        # mid = len(self.groups) // 2
         for i, group in enumerate(self.groups):
-            q, k, v = group(q, k, v)
-            if i < mid:
-                shortcuts.append((q, k, v))
-            elif shortcuts:
-                (q_, k_, v_) = shortcuts.pop()
-                q, k, v = map(connect_shortcut, [self.shortcut] * 3, (q, k, v), (q_, k_, v_))
+            q, _, _ = group(q, k, v)
+            # if i < mid:
+            #     shortcuts.append(q)
+            # elif shortcuts:
+            #     q = connect_shortcut(self.shortcut, q, shortcuts.pop())
         q = self.proj_last(q)
         q = einops.rearrange(q, 'b ... c -> b c ...')
         return q
