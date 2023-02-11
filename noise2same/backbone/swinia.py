@@ -119,6 +119,7 @@ class DiagWinAttention(nn.Module):
         attn = self.attn_drop(attn)
         query = torch.einsum("...qk,...ksc->...qsc", attn, value)
         query, key, value = map(self.head_partition_reversed, (query, key, value))
+        query = query + shortcut
         query = self.norm(query)
         query = self.proj(query)
         query = self.proj_drop(query)
@@ -210,13 +211,15 @@ class BlindSpotBlock(nn.Module):
         image_size = key.shape[1:-1]
         if not self.is_first:
             query = self.norm1(query)
+        shortcut = query
         query, key, value = map(self.shift_image, (query, key, value))
         query, key, value = map(self.strided_window_partition, (query, key, value))
         mask = self.attn_mask if image_size == self.input_size else self.calculate_mask(image_size).to(key.device)
         query, key, value = self.attn(query, key, value, mask=mask)
         query, key, value = map(self.strided_window_partition_reversed, (query, key, value), [image_size] * 3)
         query, key, value = map(self.shift_image_reversed, (query, key, value))
-        query = connect_shortcut(self.shortcut, query, self.mlp(self.norm2(query)))
+        query = query + self.mlp(self.norm2(query))
+        # query = connect_shortcut(self.shortcut, query, shortcut)
         return query, key, value
 
 
@@ -247,7 +250,6 @@ class ResidualGroup(nn.Module):
                 is_first=is_first and i == 0
             ) for i in range(depth)
         ])
-        self.mlp = MLP(embed_dim, embed_dim)
         self.shortcut = MLP(embed_dim * 2, embed_dim)
 
     def forward(
