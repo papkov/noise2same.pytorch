@@ -70,6 +70,9 @@ class DiagWinAttention(nn.Module):
         self.shuffle = shuffle
         self.proj = nn.Linear(embed_dim, embed_dim)
         self.proj_drop = nn.Dropout(proj_drop)
+        self.k = MLP(embed_dim, embed_dim)
+        self.v = MLP(embed_dim, embed_dim)
+        self.shortcut = MLP(embed_dim * 2, embed_dim)
 
         window_bias_shape = [2 * s - 1 for s in window_size]
         self.relative_position_bias_table = nn.Parameter(torch.zeros(np.prod(window_bias_shape).item(), num_heads))
@@ -102,7 +105,8 @@ class DiagWinAttention(nn.Module):
         query: T,
         key: T,
         value: T,
-        mask: T
+        mask: T,
+        is_masked: bool = True
     ) -> Tuple[T, T, T]:
         shortcut = query
         query, key, value = map(self.head_partition, (query, key, value))
@@ -113,6 +117,9 @@ class DiagWinAttention(nn.Module):
             "(np1 np2) nh -> 1 nh np1 np2", np1=self.num_patches
         )
         attn = attn + relative_position_bias
+        if is_masked:
+            torch.diagonal(mask, dim1=-2, dim2=-1).fill_(1)
+        mask = mask.masked_fill(mask != 0, -10 ** 9)
         attn += einops.repeat(mask, f"nw np1 np2 -> (b nw) 1 np1 np2", b=attn.shape[0] // mask.shape[0]).to(attn.device)
 
         attn = self.softmax(attn)
@@ -198,8 +205,6 @@ class BlindSpotBlock(nn.Module):
                 cnt += 1
         attn_mask = self.mask_window_partition(attn_mask)
         attn_mask = einops.rearrange(attn_mask, "nw np 1 -> nw 1 np") - attn_mask
-        torch.diagonal(attn_mask, dim1=-2, dim2=-1).fill_(1)
-        attn_mask = attn_mask.masked_fill(attn_mask != 0, -10 ** 9)
         return attn_mask
 
     def forward(
@@ -207,6 +212,7 @@ class BlindSpotBlock(nn.Module):
         query: T,
         key: T,
         value: T,
+        is_masked: bool = False
     ) -> Tuple[T, T, T]:
         image_size = key.shape[1:-1]
         if not self.is_first:
@@ -215,7 +221,7 @@ class BlindSpotBlock(nn.Module):
         query, key, value = map(self.shift_image, (query, key, value))
         query, key, value = map(self.strided_window_partition, (query, key, value))
         mask = self.attn_mask if image_size == self.input_size else self.calculate_mask(image_size).to(key.device)
-        query, key, value = self.attn(query, key, value, mask=mask)
+        query, key, value = self.attn(query, key, value, mask=mask, is_masked=is_masked)
         query, key, value = map(self.strided_window_partition_reversed, (query, key, value), [image_size] * 3)
         query, key, value = map(self.shift_image_reversed, (query, key, value))
         query = query + self.mlp(self.norm2(query))
@@ -258,11 +264,12 @@ class ResidualGroup(nn.Module):
         self,
         query: T,
         key: T,
-        value: T
+        value: T,
+        is_masked: bool = True
     ) -> Tuple[T, T, T]:
         shortcut = query
         for block in self.blocks:
-            query, key, value = block(query, key, value)
+            query, _, _ = block(query, key, value, is_masked)
         query = connect_shortcut(self.shortcut, query, shortcut)
         return query, key, value
 
@@ -320,7 +327,7 @@ class SwinIA(nn.Module):
     def no_weight_decay_keywords(self) -> Set[str]:
         return {'relative_position_bias_table'}
 
-    def forward(self, x: T) -> T:
+    def forward(self, x: T, is_masked: bool = True) -> T:
         x = einops.rearrange(x, 'b c ... -> b ... c')
         k = self.embed_k(x)
         v = self.embed_v(x)
@@ -328,10 +335,10 @@ class SwinIA(nn.Module):
         full_pos_embed = einops.repeat(self.absolute_pos_embed, "(ws1 ws2) ch -> b (wh ws1) (ww ws2) (nh ch)",
                                        b=x.shape[0], ws1=self.window_size, wh=wh, ww=ww, nh=self.num_heads[0])
         q, k, v = full_pos_embed, k + full_pos_embed, v + full_pos_embed
-        # shortcuts = []
-        # mid = len(self.groups) // 2
+        shortcuts = []
+        mid = len(self.groups) // 2
         for i, group in enumerate(self.groups):
-            q, _, _ = group(q, k, v)
+            q, _, _ = group(q, k, v, is_masked)
             # if i < mid:
             #     shortcuts.append(q)
             # elif shortcuts:
