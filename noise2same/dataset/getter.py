@@ -156,6 +156,7 @@ def get_test_dataset_and_gt(cfg: DictConfig, cwd: Path) -> Tuple[Dataset, np.nda
             path=cwd / "data/Hanzi/tiles",
             mode="testing",
             pad_divisor=pad_divisor,
+            noise_level=cfg.data.noise_level
         )
         gt = np.load(str(cwd / "data/Hanzi/tiles/testing.npy"))[:, 0]
 
