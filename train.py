@@ -173,6 +173,7 @@ def main(cfg: DictConfig) -> None:
                                    half=cfg.training.amp, num_workers=cfg.training.num_workers)
 
         if not cfg.check:
+            wandb.log(scores)
             wandb.run.summary.update(scores)
 
     if not cfg.check:

@@ -156,21 +156,22 @@ def evaluate(
     )
 
     scores = get_scores(ground_truth, predictions, experiment)
-
-    result = scores
     scores = pd.DataFrame(scores)
 
     if save_results:
         scores.to_csv("scores.csv")
         np.savez("predictions.npz", **predictions)
 
+    if experiment in ("planaria",):
+        scores = scores.groupby("c").mean()
+    else:
+        scores = scores.mean()
+
     if verbose:
         print("\nEvaluation results:")
-        if experiment in ("planaria",):
-            pprint(scores.groupby("c").mean())
-        else:
-            pprint(scores.mean())
-    return result
+        pprint(scores)
+
+    return scores.to_dict()
 
 
 def main(train_dir: str, checkpoint: str = 'last', other_args: list = None) -> None:
