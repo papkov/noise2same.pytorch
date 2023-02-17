@@ -133,14 +133,21 @@ def main(cfg: DictConfig) -> None:
     else:
         raise ValueError(f"Unknown optimizer {cfg.optim.optimizer}")
 
-    scheduler = torch.optim.lr_scheduler.LambdaLR(
-        optimizer,
-        lr_lambda=exponential_decay(
-            decay_rate=cfg.optim.decay_rate,
-            decay_steps=cfg.optim.decay_steps,
-            staircase=cfg.optim.staircase,
-        ),
-    )
+    if cfg.optim.scheduler == "cosine":
+        scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
+            optimizer,
+            cfg.training.steps,
+            eta_min=cfg.optim.eta_min,
+        )
+    else:
+        scheduler = torch.optim.lr_scheduler.LambdaLR(
+            optimizer,
+            lr_lambda=exponential_decay(
+                decay_rate=cfg.optim.decay_rate,
+                decay_steps=cfg.optim.decay_steps,
+                staircase=cfg.optim.staircase,
+            ),
+        )
 
     # Trainer
     trainer = noise2same.trainer.Trainer(
