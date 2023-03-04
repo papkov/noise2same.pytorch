@@ -4,7 +4,7 @@ backbone_name: swinia
 backbone:
   embed_dim: 144
   window_size: 8
-  depths: [ 8, 8, 8, 8, 8 ]
+  depths: [ 4, 4, 4, 4, 4 ]
   num_heads: [ 16, 16, 16, 16, 16 ]
   dilations: [ 1, 1, 1, 1, 1 ]
   shuffles: [ 1, 2, 4, 2, 1 ]

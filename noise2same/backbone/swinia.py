@@ -65,14 +65,15 @@ class DiagWinAttention(nn.Module):
         self.num_patches = np.prod(window_size).item()
         self.num_heads = num_heads
         self.embed_dim = embed_dim
-        self.scale = (embed_dim // num_heads) ** -0.5
         self.dilation = dilation
         self.shuffle = shuffle
+
+        head_dim = embed_dim // num_heads
+        self.scale = head_dim ** -0.5 / shuffle
         self.proj = nn.Linear(embed_dim, embed_dim)
         self.proj_drop = nn.Dropout(proj_drop)
-        self.k = MLP(embed_dim, embed_dim)
-        self.v = MLP(embed_dim, embed_dim)
-        self.shortcut = MLP(embed_dim * 2, embed_dim)
+        self.norm1 = nn.LayerNorm([shuffle ** 2, head_dim])
+        self.norm2 = nn.LayerNorm(embed_dim)
 
         window_bias_shape = [2 * s - 1 for s in window_size]
         self.relative_position_bias_table = nn.Parameter(torch.zeros(np.prod(window_bias_shape).item(), num_heads))
@@ -106,10 +107,10 @@ class DiagWinAttention(nn.Module):
         key: T,
         value: T,
         mask: T,
-        is_masked: bool = True
     ) -> Tuple[T, T, T]:
         shortcut = query
         query, key, value = map(self.head_partition, (query, key, value))
+        query = self.norm1(query)
         query = query * self.scale
         attn = torch.einsum("...qsc,...ksc->...qk", query, key)
         relative_position_bias = einops.rearrange(
@@ -117,17 +118,13 @@ class DiagWinAttention(nn.Module):
             "(np1 np2) nh -> 1 nh np1 np2", np1=self.num_patches
         )
         attn = attn + relative_position_bias
-        if is_masked:
-            torch.diagonal(mask, dim1=-2, dim2=-1).fill_(1)
-        mask = mask.masked_fill(mask != 0, -10 ** 9)
         attn += einops.repeat(mask, f"nw np1 np2 -> (b nw) 1 np1 np2", b=attn.shape[0] // mask.shape[0]).to(attn.device)
 
         attn = self.softmax(attn)
         attn = self.attn_drop(attn)
         query = torch.einsum("...qk,...ksc->...qsc", attn, value)
         query, key, value = map(self.head_partition_reversed, (query, key, value))
-        query = query + shortcut
-        query = self.norm(query)
+        query = self.norm2(query + shortcut)
         query = self.proj(query)
         query = self.proj_drop(query)
         return query, key, value
@@ -146,7 +143,6 @@ class BlindSpotBlock(nn.Module):
         input_size: Tuple[int] = (128, 128),
         attn_drop: float = 0.05,
         proj_drop: float = 0.05,
-        is_first: bool = False
     ):
         super().__init__()
         self.softmax = nn.Softmax(dim=-1)
@@ -161,7 +157,6 @@ class BlindSpotBlock(nn.Module):
         self.shift_size = np.array(shift_size)
         self.dilation = dilation
         self.shuffle = shuffle
-        self.is_first = is_first
         self.embed_dim = embed_dim
         self.input_size = input_size
         self.attn_mask = self.calculate_mask(input_size)
@@ -205,6 +200,8 @@ class BlindSpotBlock(nn.Module):
                 cnt += 1
         attn_mask = self.mask_window_partition(attn_mask)
         attn_mask = einops.rearrange(attn_mask, "nw np 1 -> nw 1 np") - attn_mask
+        torch.diagonal(attn_mask, dim1=-2, dim2=-1).fill_(1)
+        attn_mask = attn_mask.masked_fill(attn_mask != 0, -10 ** 9)
         return attn_mask
 
     def forward(
@@ -212,20 +209,17 @@ class BlindSpotBlock(nn.Module):
         query: T,
         key: T,
         value: T,
-        is_masked: bool = False
     ) -> Tuple[T, T, T]:
         image_size = key.shape[1:-1]
-        if not self.is_first:
-            query = self.norm1(query)
         shortcut = query
         query, key, value = map(self.shift_image, (query, key, value))
         query, key, value = map(self.strided_window_partition, (query, key, value))
         mask = self.attn_mask if image_size == self.input_size else self.calculate_mask(image_size).to(key.device)
-        query, key, value = self.attn(query, key, value, mask=mask, is_masked=is_masked)
+        query, key, value = self.attn(query, key, value, mask=mask)
         query, key, value = map(self.strided_window_partition_reversed, (query, key, value), [image_size] * 3)
         query, key, value = map(self.shift_image_reversed, (query, key, value))
-        query = query + self.mlp(self.norm2(query))
-        # query = connect_shortcut(self.shortcut, query, shortcut)
+        query = self.norm2(query + self.mlp(query))
+        query = connect_shortcut(self.shortcut, query, shortcut)
         return query, key, value
 
 
@@ -240,12 +234,11 @@ class ResidualGroup(nn.Module):
         dilation: int = 1,
         shuffle: int = 1,
         input_size: Tuple[int] = (128, 128),
-        is_first: bool = False
     ):
         super().__init__()
         shift_size = window_size // 2
         shifts = ((0, 0), (0, shift_size), (shift_size, shift_size), (shift_size, 0))
-        self.is_first = is_first
+        # shifts = ((0, 0), (shift_size, shift_size), (0, 0), (shift_size, shift_size))
         self.blocks = nn.ModuleList([
             BlindSpotBlock(
                 embed_dim=embed_dim,
@@ -255,7 +248,6 @@ class ResidualGroup(nn.Module):
                 dilation=dilation,
                 shuffle=shuffle,
                 input_size=input_size,
-                is_first=is_first and i == 0
             ) for i in range(depth)
         ])
         self.shortcut = MLP(embed_dim * 2, embed_dim)
@@ -265,11 +257,10 @@ class ResidualGroup(nn.Module):
         query: T,
         key: T,
         value: T,
-        is_masked: bool = True
     ) -> Tuple[T, T, T]:
         shortcut = query
         for block in self.blocks:
-            query, _, _ = block(query, key, value, is_masked)
+            query, _, _ = block(query, key, value)
         query = connect_shortcut(self.shortcut, query, shortcut)
         return query, key, value
 
@@ -304,8 +295,7 @@ class SwinIA(nn.Module):
                 num_heads=n,
                 dilation=dl,
                 shuffle=sh,
-                input_size=to_2tuple(input_size),
-                is_first=i == 0
+                input_size=to_2tuple(input_size)
             ) for i, (d, n, dl, sh) in enumerate(zip(depths, num_heads, dilations, shuffles))
         ])
         self.apply(self._init_weights)
@@ -338,11 +328,17 @@ class SwinIA(nn.Module):
         shortcuts = []
         mid = len(self.groups) // 2
         for i, group in enumerate(self.groups):
-            q, _, _ = group(q, k, v, is_masked)
-            # if i < mid:
-            #     shortcuts.append(q)
-            # elif shortcuts:
-            #     q = connect_shortcut(self.shortcut, q, shortcuts.pop())
+            if i < mid:
+                q_, _, _ = group(q, k, v)
+                shortcuts.append(q_)
+            elif i == mid:
+                q, _, _ = group(q, k, v)
+                q = connect_shortcut(self.shortcut, q, shortcuts.pop())
+            elif shortcuts:
+                q, _, _ = group(q, k, v)
+                q = connect_shortcut(self.shortcut, q, shortcuts.pop())
+            else:
+                q, _, _ = group(q, k, v)
         q = self.proj_last(q)
         q = einops.rearrange(q, 'b ... c -> b c ...')
         return q
