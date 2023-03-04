@@ -5,10 +5,10 @@ import numpy as np
 import tifffile
 from omegaconf import DictConfig
 from skimage import io
-from torch.utils.data import Dataset
+from torch.utils.data import Dataset, ConcatDataset
 from tqdm.auto import tqdm
 
-from . import bsd68, fmd, hanzi, imagenet, sidd, microtubules, planaria, ssi
+from . import bsd68, fmd, hanzi, imagenet, sidd, microtubules, planaria, ssi, synthetic
 from .util import training_augmentations_2d, training_augmentations_3d
 from noise2same.util import normalize_percentile
 
@@ -42,7 +42,8 @@ def get_dataset(cfg: DictConfig, cwd: Path) -> Tuple[Dataset, Dataset]:
 
     pad_divisor = compute_pad_divisor(cfg)
 
-    if cfg.experiment.lower() in ("bsd68", "fmd", "hanzi", "imagenet", "sidd", "ssi"):
+    transforms = None
+    if cfg.experiment.lower() in ("bsd68", "fmd", "synthetic", "hanzi", "imagenet", "sidd", "ssi"):
         transforms = training_augmentations_2d(crop=cfg.training.crop)
 
     if cfg.experiment.lower() == "bsd68":
@@ -55,6 +56,22 @@ def get_dataset(cfg: DictConfig, cwd: Path) -> Tuple[Dataset, Dataset]:
         if cfg.training.validate:
             dataset_valid = bsd68.BSD68DatasetPrepared(
                 path=cwd / "data/BSD68/", mode="val",
+                pad_divisor=pad_divisor,
+            )
+
+    elif cfg.experiment.lower() == "synthetic":
+        dataset_train = synthetic.ImagenetSyntheticDataset(
+            path=cwd / "data/Imagenet_val",
+            noise_type=cfg.data.noise_type,
+            noise_param=cfg.data.noise_param,
+            transforms=transforms,
+            pad_divisor=pad_divisor,
+        )
+        if cfg.training.validate:
+            dataset_valid = synthetic.Set14SyntheticDataset(
+                path=cwd / "data/Set14",
+                noise_type=cfg.data.noise_type,
+                noise_param=cfg.data.noise_param,
                 pad_divisor=pad_divisor,
             )
 
@@ -189,6 +206,30 @@ def get_test_dataset_and_gt(cfg: DictConfig, cwd: Path) -> Tuple[Dataset, np.nda
             part=cfg.data.part
         )
         gt = dataset.ground_truth
+
+    elif cfg.experiment.lower() == "synthetic":
+        params = {
+            "noise_type": cfg.data.noise_type,
+            "noise_param": cfg.data.noise_param,
+            "pad_divisor": pad_divisor,
+        }
+        dataset = {
+            "kodak": synthetic.KodakSyntheticDataset(path=cwd / "data/Kodak", **params),
+            "bsd300": synthetic.BSD300SyntheticDataset(path=cwd / "data/BSD300/test", **params),
+            "set14": synthetic.Set14SyntheticDataset(path=cwd / "data/Set14", **params),
+        }
+        gt = {name: [synthetic.read_image(p) for p in tqdm(ds.images, desc=name)] for name, ds in dataset.items()}
+
+        # Repeat datasets for stable validation
+        # https://github.com/TaoHuang2018/Neighbor2Neighbor/blob/2fff2978/train.py#L412
+        repeats = {"kodak": 10, "bsd300": 3, "set14": 20}
+        dataset = {name: ConcatDataset([ds] * repeats[name]) for name, ds in dataset.items()}
+        gt = {name: ds * repeats[name] for name, ds in gt.items()}
+
+        # Concatenate datasets together
+        dataset = ConcatDataset(list(dataset.values()))
+        gt = np.concatenate(list(gt.values()))
+        assert len(dataset) == len(gt)
 
     elif cfg.experiment.lower() == "hanzi":
         dataset = hanzi.HanziDatasetPrepared(

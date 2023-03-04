@@ -7,7 +7,7 @@ from argparse import ArgumentParser
 import numpy as np
 import pandas as pd
 from omegaconf import OmegaConf
-from torch.utils.data import DataLoader, Dataset
+from torch.utils.data import DataLoader, Dataset, ConcatDataset
 from tqdm.auto import tqdm
 
 from noise2same import model, util
@@ -25,7 +25,7 @@ def get_loader(
     num_workers: int,
 ):
     loader = None
-    if experiment.lower() in ("bsd68", "fmd", "imagenet", "sidd", "hanzi"):
+    if experiment.lower() in ("bsd68", "fmd", "imagenet", "sidd", "hanzi", "synthetic"):
         loader = DataLoader(
             dataset,
             batch_size=1,  # todo customize
@@ -55,7 +55,7 @@ def get_ground_truth_and_predictions(
     dataset: Dataset = None,
     half: bool = False
 ):
-    if experiment in ("bsd68", "fmd", "hanzi", "sidd"):
+    if experiment in ("bsd68", "fmd", "hanzi", "sidd", "synthetic"):
         predictions, _ = evaluator.inference(loader, half=half)
     elif experiment in ("imagenet",):
         predictions, indices = evaluator.inference(loader, half=half, empty_cache=True)
@@ -97,6 +97,15 @@ def get_scores(
     if experiment in ("bsd68", 'fmd'):
         scores = [
             util.calculate_scores(gtx, pred, data_range=255)
+            for gtx, pred in zip(ground_truth, predictions["image"])
+        ]
+    elif experiment in ("synthetic",):
+        scores = [
+            # https://github.com/TaoHuang2018/Neighbor2Neighbor/blob/2fff2978/train.py#L446
+            util.calculate_scores((gtx * 255).astype(np.uint8).astype(np.float32),
+                                  np.clip(pred * 255 + 0.5, 0, 255).astype(np.uint8).astype(np.float32),
+                                  data_range=255,
+                                  multichannel=True)
             for gtx, pred in zip(ground_truth, predictions["image"])
         ]
     elif experiment in ("hanzi",):
@@ -158,12 +167,33 @@ def evaluate(
     scores = get_scores(ground_truth, predictions, experiment)
     scores = pd.DataFrame(scores)
 
+    if experiment in ("synthetic",):
+        # Label each score with its dataset name and repeat id
+        # by default {"kodak": 10, "bsd300": 3, "set14": 20} but the code below generalizes to any number of repeats
+        dataset_name = []
+        repeat_id = []
+        repeat = 0
+        assert isinstance(dataset, ConcatDataset)
+        for ds in dataset.datasets:
+            assert isinstance(ds, ConcatDataset)
+            for repeat_ds in ds.datasets:
+                repeat_id += [repeat] * len(repeat_ds)
+                dataset_name += [repeat_ds.name] * len(repeat_ds)
+                repeat += 1
+            repeat = 0
+        scores = scores.assign(dataset_name=dataset_name, repeat_id=repeat_id)
+
     if save_results:
         scores.to_csv("scores.csv")
         np.savez("predictions.npz", **predictions)
 
     if experiment in ("planaria",):
         scores = scores.groupby("c").mean()
+    elif experiment in ("synthetic",):
+        if verbose:
+            print("\nBefore averaging over repeats:")
+            pprint(scores.groupby(["dataset_name", "repeat_id"]).mean())
+        scores = scores.groupby("dataset_name").mean().drop(columns="repeat_id")
     else:
         scores = scores.mean()
 
@@ -171,7 +201,12 @@ def evaluate(
         print("\nEvaluation results:")
         pprint(scores)
 
-    return scores.to_dict()
+    scores = scores.to_dict()
+    if experiment in ("synthetic", "planaria", ):
+        # Flatten scores dict as "metric.dataset" to make it compatible with wandb
+        scores = {f"{metric}.{dataset_name}": score for metric, dataset_dict in scores.items()
+                  for dataset_name, score in dataset_dict.items()}
+    return scores
 
 
 def main(train_dir: str, checkpoint: str = 'last', other_args: list = None) -> None:
