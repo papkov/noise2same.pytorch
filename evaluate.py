@@ -102,7 +102,7 @@ def get_scores(
     elif experiment in ("synthetic",):
         scores = [
             # https://github.com/TaoHuang2018/Neighbor2Neighbor/blob/2fff2978/train.py#L446
-            util.calculate_scores((gtx * 255).astype(np.uint8).astype(np.float32),
+            util.calculate_scores(gtx.astype(np.float32),
                                   np.clip(pred * 255 + 0.5, 0, 255).astype(np.uint8).astype(np.float32),
                                   data_range=255,
                                   multichannel=True)

@@ -1,7 +1,7 @@
 import os
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, List, Union, Tuple
+from typing import Dict, List, Union, Sequence, Tuple
 from PIL import Image
 import numpy as np
 from noise2same.dataset.abc import AbstractNoiseDataset2D
@@ -9,12 +9,12 @@ from noise2same.dataset.abc import AbstractNoiseDataset2D
 
 def read_image(path: Union[str, Path]) -> np.ndarray:
     """
-    Read image from path
+    Read image from path with PIL and convert to np.uint8
     :param path: path to image
-    :return: image
+    :return: np.uint8 image [0, 255]
     """
     im = Image.open(path)
-    im = np.array(im, dtype=np.float32) / 255.0
+    im = np.array(im, dtype=np.uint8)
     return im
 
 
@@ -24,10 +24,12 @@ class SyntheticDataset(AbstractNoiseDataset2D):
     extension: str = "JPEG"
     noise_param: Union[int, Tuple[int, int]] = 25
     name: str = ""
+    cached: str = ""
 
     def _validate(self) -> bool:
         assert self.noise_type in ("gaussian", "poisson", "none")
-        assert isinstance(self.noise_param, int) or (isinstance(self.noise_param, tuple) and len(self.noise_param) == 2)
+        assert isinstance(self.noise_param, int) or \
+               (isinstance(self.noise_param, Sequence) and len(self.noise_param) == 2)
         return True
 
     def _noise_param(self):
@@ -56,9 +58,14 @@ class SyntheticDataset(AbstractNoiseDataset2D):
         return np.array(np.random.poisson(lam * x) / lam, dtype=np.float32)
 
     def _get_images(self) -> Dict[str, Union[List[str], np.ndarray]]:
-        return {
-            "noisy_input": sorted(list(self.path.glob(f"*.{self.extension}")))
-        }
+        if self.cached:
+            cached_path = self.path / self.cached
+            if cached_path.exists():
+                print(f"Cache found in {cached_path}, reading images from npy...\n")
+                return {"noisy_input": np.load(self.path / self.cached, allow_pickle=True)}
+            else:
+                print(f"Cache not found in {cached_path}, read images from disk\n")
+        return {"noisy_input": sorted(list(self.path.glob(f"*.{self.extension}")))}
 
     def add_noise(self, x: np.ndarray):
         if self.noise_type == "gaussian":
@@ -69,7 +76,8 @@ class SyntheticDataset(AbstractNoiseDataset2D):
             return x
 
     def _read_image(self, image_or_path: Union[str, np.ndarray]) -> np.ndarray:
-        im = read_image(image_or_path)
+        im = read_image(image_or_path) if not self.cached else image_or_path
+        im = im.astype(np.float32) / 255.0
         im = self.add_noise(im)
         return im
 
@@ -79,6 +87,7 @@ class ImagenetSyntheticDataset(SyntheticDataset):
     path: Union[Path, str] = "data/Imagenet_val"
     extension: str = "JPEG"
     name: str = "imagenet"
+    cached: str = "Imagenet_val.npy"
 
 
 @dataclass
