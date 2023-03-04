@@ -9,7 +9,7 @@ from torch.utils.data import Dataset, ConcatDataset
 from tqdm.auto import tqdm
 
 from . import bsd68, fmd, hanzi, imagenet, sidd, microtubules, planaria, ssi, synthetic
-from .util import training_augmentations_2d, training_augmentations_3d
+from .util import training_augmentations_2d, training_augmentations_3d, validation_transforms_2d
 from noise2same.util import normalize_percentile
 
 
@@ -43,8 +43,10 @@ def get_dataset(cfg: DictConfig, cwd: Path) -> Tuple[Dataset, Dataset]:
     pad_divisor = compute_pad_divisor(cfg)
 
     transforms = None
+    transforms_valid = None
     if cfg.experiment.lower() in ("bsd68", "fmd", "synthetic", "hanzi", "imagenet", "sidd", "ssi"):
         transforms = training_augmentations_2d(crop=cfg.training.crop)
+        transforms_valid = validation_transforms_2d(crop=cfg.training.crop)
 
     if cfg.experiment.lower() == "bsd68":
         dataset_train = bsd68.BSD68DatasetPrepared(
@@ -72,6 +74,7 @@ def get_dataset(cfg: DictConfig, cwd: Path) -> Tuple[Dataset, Dataset]:
                 path=cwd / "data/Set14",
                 noise_type=cfg.data.noise_type,
                 noise_param=cfg.data.noise_param,
+                transforms=transforms_valid,
                 pad_divisor=pad_divisor,
             )
 

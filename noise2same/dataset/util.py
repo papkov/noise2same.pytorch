@@ -79,6 +79,12 @@ def training_augmentations_2d(crop: int = 64):
         ]
 
 
+def validation_transforms_2d(crop: int = 64):
+    return [
+            albu.CenterCrop(width=crop, height=crop, p=1)
+        ]
+
+
 def training_augmentations_3d():
     return t3d.Compose(
         [
