@@ -9,6 +9,3 @@ training:
   crop: 64
   steps: 50000
   batch_size: 64
-
-model:
-  lambda_inv: 0.95
