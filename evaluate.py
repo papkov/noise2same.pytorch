@@ -25,7 +25,7 @@ def get_loader(
     num_workers: int,
 ):
     loader = None
-    if experiment.lower() in ("bsd68", "imagenet", "hanzi"):
+    if experiment.lower() in ("bsd68", "fmd", "imagenet", "sidd", "hanzi"):
         loader = DataLoader(
             dataset,
             batch_size=1,  # todo customize
@@ -55,7 +55,7 @@ def get_ground_truth_and_predictions(
     dataset: Dataset = None,
     half: bool = False
 ):
-    if experiment in ("bsd68", "hanzi"):
+    if experiment in ("bsd68", "fmd", "hanzi", "sidd"):
         predictions, _ = evaluator.inference(loader, half=half)
     elif experiment in ("imagenet",):
         predictions, indices = evaluator.inference(loader, half=half, empty_cache=True)
