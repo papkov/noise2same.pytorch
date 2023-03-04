@@ -94,7 +94,7 @@ def get_scores(
     experiment: str
 ):
     # Calculate scores
-    if experiment in ("bsd68",):
+    if experiment in ("bsd68", 'fmd'):
         scores = [
             util.calculate_scores(gtx, pred, data_range=255)
             for gtx, pred in zip(ground_truth, predictions["image"])
@@ -104,7 +104,7 @@ def get_scores(
             util.calculate_scores(gtx * 255, pred, data_range=255, scale=True)
             for gtx, pred in zip(ground_truth, predictions["image"])
         ]
-    elif experiment in ("imagenet",):
+    elif experiment in ("imagenet", 'sidd'):
         scores = [
             util.calculate_scores(
                 gtx,

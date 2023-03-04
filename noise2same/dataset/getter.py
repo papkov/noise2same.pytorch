@@ -8,7 +8,7 @@ from skimage import io
 from torch.utils.data import Dataset
 from tqdm.auto import tqdm
 
-from . import bsd68, hanzi, imagenet, microtubules, planaria, ssi
+from . import bsd68, fmd, hanzi, imagenet, sidd, microtubules, planaria, ssi
 from .util import training_augmentations_2d, training_augmentations_3d
 from noise2same.util import normalize_percentile
 
@@ -42,7 +42,7 @@ def get_dataset(cfg: DictConfig, cwd: Path) -> Tuple[Dataset, Dataset]:
 
     pad_divisor = compute_pad_divisor(cfg)
 
-    if cfg.experiment.lower() in ("bsd68", "hanzi", "imagenet", "ssi"):
+    if cfg.experiment.lower() in ("bsd68", "fmd", "hanzi", "imagenet", "sidd", "ssi"):
         transforms = training_augmentations_2d(crop=cfg.training.crop)
 
     if cfg.experiment.lower() == "bsd68":
@@ -56,6 +56,22 @@ def get_dataset(cfg: DictConfig, cwd: Path) -> Tuple[Dataset, Dataset]:
             dataset_valid = bsd68.BSD68DatasetPrepared(
                 path=cwd / "data/BSD68/", mode="val",
                 pad_divisor=pad_divisor,
+            )
+
+    elif cfg.experiment.lower() == "fmd":
+        dataset_train = fmd.FMDDatasetPrepared(
+            path=cwd / "data/FMD",
+            mode="train",
+            transforms=transforms,
+            pad_divisor=pad_divisor,
+            part=cfg.data.part
+        )
+        if cfg.training.validate:
+            dataset_valid = fmd.FMDDatasetPrepared(
+                path=cwd / "data/FMD",
+                mode="val",
+                pad_divisor=pad_divisor,
+                part=cfg.data.part
             )
 
     elif cfg.experiment.lower() == "hanzi":
@@ -89,6 +105,20 @@ def get_dataset(cfg: DictConfig, cwd: Path) -> Tuple[Dataset, Dataset]:
                 path=cwd / "data/ImageNet",
                 mode="val",
                 version=cfg.data.version,
+                pad_divisor=pad_divisor,
+            )
+
+    elif cfg.experiment.lower() == "sidd":
+        dataset_train = sidd.SIDDDatasetPrepared(
+            path=cwd / "data/SIDD-NAFNet",
+            mode="train",
+            transforms=transforms,
+            pad_divisor=pad_divisor,
+        )
+        if cfg.training.validate:
+            dataset_valid = sidd.SIDDDatasetPrepared(
+                path=cwd / "data/SIDD-NAFNet",
+                mode="val",
                 pad_divisor=pad_divisor,
             )
 
@@ -151,6 +181,15 @@ def get_test_dataset_and_gt(cfg: DictConfig, cwd: Path) -> Tuple[Dataset, np.nda
             str(cwd / "data/BSD68/test/bsd68_groundtruth.npy"), allow_pickle=True
         )
 
+    elif cfg.experiment.lower() == "fmd":
+        dataset = fmd.FMDDatasetPrepared(
+            path=cwd / "data/FMD",
+            mode="test",
+            pad_divisor=pad_divisor,
+            part=cfg.data.part
+        )
+        gt = dataset.ground_truth
+
     elif cfg.experiment.lower() == "hanzi":
         dataset = hanzi.HanziDatasetPrepared(
             path=cwd / "data/Hanzi/tiles",
@@ -168,6 +207,14 @@ def get_test_dataset_and_gt(cfg: DictConfig, cwd: Path) -> Tuple[Dataset, np.nda
         gt = [
             np.load(p)[0] for p in tqdm(sorted((dataset.path / "test").glob("*.npy")))
         ]
+
+    elif cfg.experiment.lower() == "sidd":
+        dataset = sidd.SIDDDatasetPrepared(
+            path=cwd / "data/SIDD-NAFNet/",
+            mode='test',
+            pad_divisor=pad_divisor,
+        )
+        gt = dataset.ground_truth
 
     elif cfg.experiment.lower() == "planaria":
         # This returns just a single image!

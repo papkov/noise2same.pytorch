@@ -1,0 +1,12 @@
+# @package _global_
+experiment: sidd
+data:
+  n_channels: 3
+
+training:
+  steps: 50000
+  crop: 64
+  batch_size: 64
+  validate: True
+  val_partition: 0.1
+  monitor: bsp_mse
