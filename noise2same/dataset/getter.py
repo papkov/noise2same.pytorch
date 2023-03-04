@@ -156,7 +156,7 @@ def get_dataset(cfg: DictConfig, cwd: Path) -> Tuple[Dataset, Dataset]:
         )
     else:
         # todo add other datasets
-        raise ValueError
+        raise ValueError(f"Unknown experiment: {cfg.experiment}")
 
     return dataset_train, dataset_valid
 
