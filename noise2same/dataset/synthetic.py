@@ -1,9 +1,12 @@
-import os
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, List, Union, Sequence, Tuple
-from PIL import Image
+
 import numpy as np
+import torch
+from PIL import Image
+from torch import tensor as T
+
 from noise2same.dataset.abc import AbstractNoiseDataset2D
 
 
@@ -32,22 +35,23 @@ class SyntheticDataset(AbstractNoiseDataset2D):
                (isinstance(self.noise_param, Sequence) and len(self.noise_param) == 2)
         return True
 
-    def _noise_param(self):
+    def _noise_param(self) -> float:
         if isinstance(self.noise_param, int):
             return self.noise_param
         else:
-            return np.random.uniform(low=self.noise_param[0], high=self.noise_param[1], size=(1, 1, 1))
+            return np.random.uniform(low=self.noise_param[0], high=self.noise_param[1])
 
-    def add_gaussian(self, x: np.ndarray):
+    def add_gaussian(self, x: T) -> T:
         """
         Add gaussian noise to image
         :param x: image [0, 1]
 
         Adopted from Neighbor2Neighbor https://github.com/TaoHuang2018/Neighbor2Neighbor/blob/2fff2978/train.py#L115
         """
-        return np.array(x + np.random.normal(size=x.shape) * self._noise_param() / 255.0, dtype=np.float32)
+        noise = torch.FloatTensor(x.shape).normal_(mean=0.0, std=self._noise_param() / 255.0)
+        return x + noise
 
-    def add_poisson(self, x: np.ndarray):
+    def add_poisson(self, x: T) -> T:
         """
         Add gaussian noise to image
         :param x: image [0, 1]
@@ -55,7 +59,7 @@ class SyntheticDataset(AbstractNoiseDataset2D):
         Adopted from Neighbor2Neighbor https://github.com/TaoHuang2018/Neighbor2Neighbor/blob/2fff2978/train.py#L124
         """
         lam = self._noise_param()
-        return np.array(np.random.poisson(lam * x) / lam, dtype=np.float32)
+        return torch.poisson(lam * x) / lam
 
     def _get_images(self) -> Dict[str, Union[List[str], np.ndarray]]:
         if self.cached:
@@ -67,7 +71,7 @@ class SyntheticDataset(AbstractNoiseDataset2D):
                 print(f"Cache not found in {cached_path}, read images from disk\n")
         return {"noisy_input": sorted(list(self.path.glob(f"*.{self.extension}")))}
 
-    def add_noise(self, x: np.ndarray):
+    def add_noise(self, x: T):
         if self.noise_type == "gaussian":
             return self.add_gaussian(x)
         elif self.noise_type == "poisson":
@@ -78,8 +82,13 @@ class SyntheticDataset(AbstractNoiseDataset2D):
     def _read_image(self, image_or_path: Union[str, np.ndarray]) -> np.ndarray:
         im = image_or_path if isinstance(image_or_path, np.ndarray) else read_image(image_or_path)
         im = im.astype(np.float32) / 255.0
-        im = self.add_noise(im)
         return im
+
+    def _apply_transforms(self, image: np.ndarray, mask: np.ndarray, ground_truth: np.ndarray = None) -> Dict[str, T]:
+        ret = super()._apply_transforms(image, mask, ground_truth)
+        # Add noise on a cropped image (much faster than on the full one)
+        ret["image"] = self.add_noise(ret["image"])
+        return ret
 
 
 @dataclass
