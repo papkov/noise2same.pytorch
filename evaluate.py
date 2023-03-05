@@ -99,7 +99,21 @@ def get_scores(
             util.calculate_scores(gtx, pred, data_range=255)
             for gtx, pred in zip(ground_truth, predictions["image"])
         ]
-    elif experiment in ("synthetic", "fmd"):
+    elif experiment in ("fmd",):
+        scores = [
+            # https://github.com/TaoHuang2018/Neighbor2Neighbor/blob/2fff2978/train.py#L446
+            # SSIM is not exactly the same as the original Neighbor2Neighbor implementation,
+            # because skimage uses padding, while the original implementation crops the borders.
+            # However, the difference is negligible (<0.001).
+            util.calculate_scores(gtx.astype(np.float32),
+                                  np.clip(pred + 0.5, 0, 255).astype(np.uint8).astype(np.float32),
+                                  data_range=255,
+                                  multichannel=True,
+                                  gaussian_weights=True,
+                                  )
+            for gtx, pred in zip(ground_truth, predictions["image"])
+        ]
+    elif experiment in ("synthetic",):
         scores = [
             # https://github.com/TaoHuang2018/Neighbor2Neighbor/blob/2fff2978/train.py#L446
             # SSIM is not exactly the same as the original Neighbor2Neighbor implementation,
