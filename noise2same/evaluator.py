@@ -111,6 +111,7 @@ class Evaluator(object):
                     torch.cuda.empty_cache()
             except RuntimeError:
                 errors_num += 1
+                print('Skipping image ', i)
                 pass
             else:
                 indices.append(i)

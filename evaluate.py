@@ -94,12 +94,12 @@ def get_scores(
     experiment: str
 ):
     # Calculate scores
-    if experiment in ("bsd68", 'fmd'):
+    if experiment in ("bsd68",):
         scores = [
             util.calculate_scores(gtx, pred, data_range=255)
             for gtx, pred in zip(ground_truth, predictions["image"])
         ]
-    elif experiment in ("synthetic",):
+    elif experiment in ("synthetic", "fmd"):
         scores = [
             # https://github.com/TaoHuang2018/Neighbor2Neighbor/blob/2fff2978/train.py#L446
             # SSIM is not exactly the same as the original Neighbor2Neighbor implementation,
