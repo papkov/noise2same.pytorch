@@ -68,6 +68,7 @@ def get_dataset(cfg: DictConfig, cwd: Path) -> Tuple[Dataset, Dataset]:
             noise_param=cfg.data.noise_param,
             transforms=transforms,
             pad_divisor=pad_divisor,
+            standardize=cfg.data.standardize,
         )
         if cfg.training.validate:
             dataset_valid = synthetic.Set14SyntheticDataset(
@@ -76,6 +77,7 @@ def get_dataset(cfg: DictConfig, cwd: Path) -> Tuple[Dataset, Dataset]:
                 noise_param=cfg.data.noise_param,
                 transforms=transforms_valid,
                 pad_divisor=pad_divisor,
+                standardize=cfg.data.standardize,
             )
 
     elif cfg.experiment.lower() == "fmd":

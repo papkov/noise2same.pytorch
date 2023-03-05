@@ -41,6 +41,7 @@ training:
 data:
   n_dim: 2
   n_channels: 1
+  standardize: True  # subtract mean and divide by std for each image separately
 
 optim:
   optimizer: adam
