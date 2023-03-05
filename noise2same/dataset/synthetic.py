@@ -76,7 +76,7 @@ class SyntheticDataset(AbstractNoiseDataset2D):
             return x
 
     def _read_image(self, image_or_path: Union[str, np.ndarray]) -> np.ndarray:
-        im = read_image(image_or_path) if not self.cached else image_or_path
+        im = image_or_path if isinstance(image_or_path, np.ndarray) else read_image(image_or_path)
         im = im.astype(np.float32) / 255.0
         im = self.add_noise(im)
         return im
