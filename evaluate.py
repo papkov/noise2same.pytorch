@@ -99,30 +99,18 @@ def get_scores(
             util.calculate_scores(gtx, pred, data_range=255)
             for gtx, pred in zip(ground_truth, predictions["image"])
         ]
-    elif experiment in ("fmd",):
+    elif experiment in ("synthetic", "synthetic_grayscale", "sidd", "fmd",):
+        scale = 255 if experiment.startswith("synthetic") else 1
+        multichannel = experiment in ("synthetic", "sidd")
         scores = [
             # https://github.com/TaoHuang2018/Neighbor2Neighbor/blob/2fff2978/train.py#L446
             # SSIM is not exactly the same as the original Neighbor2Neighbor implementation,
-            # because skimage uses padding, while the original implementation crops the borders.
-            # However, the difference is negligible (<0.001).
+            # because skimage uses padding (which is more fair), while the original implementation crops the borders.
+            # However, the difference is negligible (<0.001 in their favor).
             util.calculate_scores(gtx.astype(np.float32),
-                                  np.clip(pred + 0.5, 0, 255).astype(np.uint8).astype(np.float32),
+                                  np.clip(pred * scale + 0.5, 0, 255).astype(np.uint8).astype(np.float32),
                                   data_range=255,
-                                  multichannel=True,
-                                  gaussian_weights=True,
-                                  )
-            for gtx, pred in zip(ground_truth, predictions["image"])
-        ]
-    elif experiment in ("synthetic", "synthetic_grayscale", ):
-        scores = [
-            # https://github.com/TaoHuang2018/Neighbor2Neighbor/blob/2fff2978/train.py#L446
-            # SSIM is not exactly the same as the original Neighbor2Neighbor implementation,
-            # because skimage uses padding, while the original implementation crops the borders.
-            # However, the difference is negligible (<0.001).
-            util.calculate_scores(gtx.astype(np.float32),
-                                  np.clip(pred * 255 + 0.5, 0, 255).astype(np.uint8).astype(np.float32),
-                                  data_range=255,
-                                  multichannel=experiment == "synthetic",
+                                  multichannel=multichannel,
                                   gaussian_weights=True,
                                   )
             for gtx, pred in zip(ground_truth, predictions["image"])
@@ -132,7 +120,7 @@ def get_scores(
             util.calculate_scores(gtx * 255, pred, data_range=255, scale=True)
             for gtx, pred in zip(ground_truth, predictions["image"])
         ]
-    elif experiment in ("imagenet", 'sidd'):
+    elif experiment in ("imagenet",):
         scores = [
             util.calculate_scores(
                 gtx,
