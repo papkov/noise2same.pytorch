@@ -237,6 +237,7 @@ def get_test_dataset_and_gt(cfg: DictConfig, cwd: Path) -> Tuple[Dataset, np.nda
             "noise_type": cfg.data.noise_type,
             "noise_param": cfg.data.noise_param,
             "pad_divisor": pad_divisor,
+            "standardize": cfg.data.standardize,
         }
         dataset = {
             "kodak": synthetic.KodakSyntheticDataset(path=cwd / "data/Kodak", **params),
@@ -261,6 +262,7 @@ def get_test_dataset_and_gt(cfg: DictConfig, cwd: Path) -> Tuple[Dataset, np.nda
             "noise_type": cfg.data.noise_type,
             "noise_param": cfg.data.noise_param,
             "pad_divisor": pad_divisor,
+            "standardize": cfg.data.standardize,
         }
         dataset = {
             "set12": synthetic_grayscale.Set12SyntheticDataset(path=cwd / "data/Set12", **params),
