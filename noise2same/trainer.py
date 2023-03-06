@@ -105,7 +105,10 @@ class Trainer(object):
                         x, mask=mask, crops=batch["crop"], full_size_image=full_size_image
                     )
                 else:
-                    out_mask, out_raw = self.model.forward(x, mask=mask)
+                    try:
+                        out_mask, out_raw = self.model.forward(x, mask=mask)
+                    except RuntimeError as e:
+                        raise RuntimeError(f"Batch {x.shape} failed on device {x.device}") from e
 
                 loss, loss_log = self.inner_model.compute_losses_from_output(
                     x, mask, out_mask, out_raw, ground_truth
