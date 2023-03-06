@@ -127,7 +127,7 @@ def main(cfg: DictConfig) -> None:
 
     # Optimization
     if cfg.optim.optimizer == "adam":
-        optimizer = torch.optim.Adam(mdl.parameters(), lr=cfg.optim.lr)
+        optimizer = torch.optim.Adam(mdl.parameters(), lr=cfg.optim.lr, weight_decay=cfg.optim.weight_decay)
     elif cfg.optim.optimizer == "esadam":
         optimizer = ESAdam(mdl.parameters(), lr=cfg.optim.lr)
     else:

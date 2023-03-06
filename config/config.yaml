@@ -46,6 +46,7 @@ data:
 optim:
   optimizer: adam
   lr: 0.0004
+  weight_decay: 0
   scheduler: lambda
   decay_rate: 0.5
   decay_steps: 5e3  # how many steps to decrease by decay rate
