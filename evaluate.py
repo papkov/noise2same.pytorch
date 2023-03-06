@@ -25,7 +25,7 @@ def get_loader(
     num_workers: int,
 ):
     loader = None
-    if experiment.lower() in ("bsd68", "fmd", "imagenet", "sidd", "hanzi", "synthetic"):
+    if experiment.lower() in ("bsd68", "fmd", "imagenet", "sidd", "hanzi", "synthetic", "synthetic_grayscale"):
         loader = DataLoader(
             dataset,
             batch_size=1,  # todo customize
@@ -55,7 +55,7 @@ def get_ground_truth_and_predictions(
     dataset: Dataset = None,
     half: bool = False
 ):
-    if experiment in ("bsd68", "fmd", "hanzi", "sidd", "synthetic"):
+    if experiment in ("bsd68", "fmd", "hanzi", "sidd", "synthetic", "synthetic_grayscale"):
         predictions, _ = evaluator.inference(loader, half=half)
     elif experiment in ("imagenet",):
         predictions, indices = evaluator.inference(loader, half=half, empty_cache=True)
@@ -113,7 +113,7 @@ def get_scores(
                                   )
             for gtx, pred in zip(ground_truth, predictions["image"])
         ]
-    elif experiment in ("synthetic",):
+    elif experiment in ("synthetic", "synthetic_grayscale", ):
         scores = [
             # https://github.com/TaoHuang2018/Neighbor2Neighbor/blob/2fff2978/train.py#L446
             # SSIM is not exactly the same as the original Neighbor2Neighbor implementation,
@@ -122,7 +122,7 @@ def get_scores(
             util.calculate_scores(gtx.astype(np.float32),
                                   np.clip(pred * 255 + 0.5, 0, 255).astype(np.uint8).astype(np.float32),
                                   data_range=255,
-                                  multichannel=True,
+                                  multichannel=experiment == "synthetic",
                                   gaussian_weights=True,
                                   )
             for gtx, pred in zip(ground_truth, predictions["image"])
@@ -186,7 +186,7 @@ def evaluate(
     scores = get_scores(ground_truth, predictions, experiment)
     scores = pd.DataFrame(scores)
 
-    if experiment in ("synthetic",):
+    if experiment in ("synthetic", "synthetic_grayscale",):
         # Label each score with its dataset name and repeat id
         # by default {"kodak": 10, "bsd300": 3, "set14": 20} but the code below generalizes to any number of repeats
         dataset_name = []
@@ -208,7 +208,7 @@ def evaluate(
 
     if experiment in ("planaria",):
         scores = scores.groupby("c").mean()
-    elif experiment in ("synthetic",):
+    elif experiment in ("synthetic", "synthetic_grayscale",):
         if verbose:
             print("\nBefore averaging over repeats:")
             pprint(scores.groupby(["dataset_name", "repeat_id"]).mean())
@@ -221,7 +221,7 @@ def evaluate(
         pprint(scores)
 
     scores = scores.to_dict()
-    if experiment in ("synthetic", "planaria", ):
+    if experiment in ("synthetic", "synthetic_grayscale", "planaria", ):
         # Flatten scores dict as "metric.dataset" to make it compatible with wandb
         scores = {f"{metric}.{dataset_name}": score for metric, dataset_dict in scores.items()
                   for dataset_name, score in dataset_dict.items()}

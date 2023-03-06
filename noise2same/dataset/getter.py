@@ -8,7 +8,7 @@ from skimage import io
 from torch.utils.data import Dataset, ConcatDataset
 from tqdm.auto import tqdm
 
-from . import bsd68, fmd, hanzi, imagenet, sidd, microtubules, planaria, ssi, synthetic
+from . import bsd68, fmd, hanzi, imagenet, sidd, microtubules, planaria, ssi, synthetic, synthetic_grayscale
 from .util import training_augmentations_2d, training_augmentations_3d, validation_transforms_2d
 from noise2same.util import normalize_percentile
 
@@ -44,7 +44,7 @@ def get_dataset(cfg: DictConfig, cwd: Path) -> Tuple[Dataset, Dataset]:
 
     transforms = None
     transforms_valid = None
-    if cfg.experiment.lower() in ("bsd68", "fmd", "synthetic", "hanzi", "imagenet", "sidd", "ssi"):
+    if cfg.experiment.lower() in ("bsd68", "fmd", "synthetic", "synthetic_grayscale", "hanzi", "imagenet", "sidd", "ssi"):
         transforms = training_augmentations_2d(crop=cfg.training.crop)
         transforms_valid = validation_transforms_2d(crop=cfg.training.crop)
 
@@ -78,6 +78,26 @@ def get_dataset(cfg: DictConfig, cwd: Path) -> Tuple[Dataset, Dataset]:
                 transforms=transforms_valid,
                 pad_divisor=pad_divisor,
                 standardize=cfg.data.standardize,
+            )
+
+    elif cfg.experiment.lower() == "synthetic_grayscale":
+        dataset_train = synthetic_grayscale.BSD400SyntheticDataset(
+            path=cwd / "data/BSD400",
+            noise_type=cfg.data.noise_type,
+            noise_param=cfg.data.noise_param,
+            transforms=transforms,
+            pad_divisor=pad_divisor,
+            standardize=cfg.data.standardize,
+        )
+        if cfg.training.validate:
+            dataset_valid = synthetic_grayscale.BSD68SyntheticDataset(
+                path=cwd / "data/BSD68-test",
+                noise_type=cfg.data.noise_type,
+                noise_param=cfg.data.noise_param,
+                transforms=transforms_valid,
+                pad_divisor=pad_divisor,
+                standardize=cfg.data.standardize,
+                fixed=True,
             )
 
     elif cfg.experiment.lower() == "fmd":
@@ -228,6 +248,29 @@ def get_test_dataset_and_gt(cfg: DictConfig, cwd: Path) -> Tuple[Dataset, np.nda
         # Repeat datasets for stable validation
         # https://github.com/TaoHuang2018/Neighbor2Neighbor/blob/2fff2978/train.py#L412
         repeats = {"kodak": 10, "bsd300": 3, "set14": 20}
+        dataset = {name: ConcatDataset([ds] * repeats[name]) for name, ds in dataset.items()}
+        gt = {name: ds * repeats[name] for name, ds in gt.items()}
+
+        # Concatenate datasets together
+        dataset = ConcatDataset(list(dataset.values()))
+        gt = np.concatenate(list(gt.values()))
+        assert len(dataset) == len(gt)
+
+    elif cfg.experiment.lower() == "synthetic_grayscale":
+        params = {
+            "noise_type": cfg.data.noise_type,
+            "noise_param": cfg.data.noise_param,
+            "pad_divisor": pad_divisor,
+        }
+        dataset = {
+            "set12": synthetic_grayscale.Set12SyntheticDataset(path=cwd / "data/Set12", **params),
+            "bsd68": synthetic_grayscale.BSD68SyntheticDataset(path=cwd / "data/BSD68-test", fixed=True, **params),
+        }
+        gt = {name: [synthetic.read_image(p) for p in tqdm(ds.images, desc=name)] for name, ds in dataset.items()}
+
+        # Repeat datasets for stable validation
+        # https://github.com/TaoHuang2018/Neighbor2Neighbor/blob/2fff2978/train.py#L412
+        repeats = {"set12": 1, "bsd68": 1}
         dataset = {name: ConcatDataset([ds] * repeats[name]) for name, ds in dataset.items()}
         gt = {name: ds * repeats[name] for name, ds in gt.items()}
 
