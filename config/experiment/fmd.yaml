@@ -7,5 +7,6 @@ data:
 
 training:
   crop: 64
-  steps: 50000
+  steps: 20000
   batch_size: 64
+  monitor: val_mse
