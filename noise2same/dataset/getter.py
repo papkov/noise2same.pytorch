@@ -266,7 +266,8 @@ def get_test_dataset_and_gt(cfg: DictConfig, cwd: Path) -> Tuple[Dataset, np.nda
         }
         dataset = {
             "set12": synthetic_grayscale.Set12SyntheticDataset(path=cwd / "data/Set12", **params),
-            "bsd68": synthetic_grayscale.BSD68SyntheticDataset(path=cwd / "data/BSD68-test", fixed=True, **params),
+            # Fixed noise is lower intensity, because it was quantized to 8-bit
+            "bsd68": synthetic_grayscale.BSD68SyntheticDataset(path=cwd / "data/BSD68-test", fixed=False, **params),
         }
         gt = {name: [synthetic.read_image(p) for p in
                      tqdm(ds.ground_truth if ds.ground_truth is not None else ds.images, desc=name)]
@@ -274,7 +275,8 @@ def get_test_dataset_and_gt(cfg: DictConfig, cwd: Path) -> Tuple[Dataset, np.nda
 
         # Repeat datasets for stable validation
         # https://github.com/TaoHuang2018/Neighbor2Neighbor/blob/2fff2978/train.py#L412
-        repeats = {"set12": 1, "bsd68": 1}
+        # repeats = {"set12": 10, "bsd68": 10}
+        repeats = {"set12": 20, "bsd68": 4}  # 240 and 272 images respectively
         dataset = {name: ConcatDataset([ds] * repeats[name]) for name, ds in dataset.items()}
         gt = {name: ds * repeats[name] for name, ds in gt.items()}
 
