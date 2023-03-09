@@ -71,6 +71,7 @@ def main(cfg: DictConfig) -> None:
 
     if not cfg.check:
         wandb.init(project=cfg.project, config=d_cfg, settings=wandb.Settings(start_method="fork"))
+        wandb.run.summary.update({'training_dir': os.getcwd()})
 
     # Data
     dataset_train, dataset_valid = get_dataset(cfg, cwd)
