@@ -1,5 +1,6 @@
 import glob
 import os
+import datetime
 from pathlib import Path
 from pprint import pprint
 
@@ -189,10 +190,13 @@ def evaluate(
                 repeat += 1
             repeat = 0
         scores = scores.assign(dataset_name=dataset_name, repeat_id=repeat_id)
+    evaluation_dir = cwd / f'evaluate' / datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+    evaluation_dir.mkdir(parents=True, exist_ok=True)
 
     if save_results:
-        scores.to_csv("scores.csv")
-        np.savez("predictions.npz", **predictions)
+        print("Saving results to", evaluation_dir)
+        scores.to_csv(evaluation_dir / "scores.csv")
+        np.savez(evaluation_dir / "predictions.npz", **predictions)
 
     if experiment in ("planaria",):
         scores = scores.groupby("c").mean()
@@ -253,7 +257,8 @@ def main(train_dir: str, checkpoint: str = 'last', other_args: list = None) -> N
     masked = getattr(cfg, "masked", False)
     evaluator = Evaluator(mdl, checkpoint_path=checkpoint_path, masked=masked)
     evaluate(
-        evaluator, ground_truth, cfg.experiment, cwd, dataset=dataset, half=half, num_workers=cfg.training.num_workers
+        evaluator, ground_truth, cfg.experiment, cwd / train_dir, dataset=dataset, half=half,
+        num_workers=cfg.training.num_workers
     )
 
 
