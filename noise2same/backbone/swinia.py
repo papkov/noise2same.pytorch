@@ -331,9 +331,6 @@ class SwinIA(nn.Module):
             if i < mid:
                 q_, _, _ = group(q, k, v)
                 shortcuts.append(q_)
-            elif i == mid:
-                q, _, _ = group(q, k, v)
-                q = connect_shortcut(self.shortcut, q, shortcuts.pop())
             elif shortcuts:
                 q, _, _ = group(q, k, v)
                 q = connect_shortcut(self.shortcut, q, shortcuts.pop())
