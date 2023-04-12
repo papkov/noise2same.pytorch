@@ -1,11 +1,12 @@
 import itertools
 from typing import Tuple, Optional, Iterable, Set
-from torch import Tensor as T
-import torch.nn as nn
-import numpy as np
+
 import torch
-import einops
+import torch.nn as nn
+from torch import Tensor as T
 from timm.models.layers import to_2tuple, trunc_normal_
+import numpy as np
+import einops
 
 
 def connect_shortcut(layer: nn.Module, x: T, y: T) -> T:
@@ -50,7 +51,7 @@ class DiagonalWindowAttention(nn.Module):
     def __init__(
         self,
         embed_dim: int = 96,
-        window_size: Tuple[int] = (8, 8),  # todo: something about tuple window size
+        window_size: Tuple[int] = (8, 8),
         dilation: int = 1,
         shuffle: int = 1,
         num_heads: int = 6,
