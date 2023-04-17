@@ -1,5 +1,6 @@
 import glob
 import os
+import datetime
 from pathlib import Path
 from pprint import pprint
 
@@ -158,6 +159,7 @@ def evaluate(
     ground_truth: np.ndarray,
     experiment: str,
     cwd: Path,
+    train_dir: Path,
     loader: DataLoader = None,
     dataset: Dataset = None,
     num_workers: int = None,
@@ -192,10 +194,13 @@ def evaluate(
                 repeat += 1
             repeat = 0
         scores = scores.assign(dataset_name=dataset_name, repeat_id=repeat_id)
+    evaluation_dir = train_dir / f'evaluate' / datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+    evaluation_dir.mkdir(parents=True, exist_ok=True)
 
     if save_results:
-        scores.to_csv("scores.csv")
-        np.savez("predictions.npz", **predictions)
+        print("Saving results to", evaluation_dir)
+        scores.to_csv(evaluation_dir / "scores.csv")
+        np.savez(evaluation_dir / "predictions.npz", **predictions)
 
     if experiment in ("planaria",):
         scores = scores.groupby("c").mean()
@@ -219,7 +224,7 @@ def evaluate(
     return scores
 
 
-def main(train_dir: str, checkpoint: str = 'last', other_args: list = None) -> None:
+def main(train_dir: Path, checkpoint: str = 'last', other_args: list = None) -> None:
 
     cfg = OmegaConf.load(f'{train_dir}/.hydra/config.yaml')
     if other_args is not None:
@@ -227,7 +232,7 @@ def main(train_dir: str, checkpoint: str = 'last', other_args: list = None) -> N
 
     os.environ["CUDA_VISIBLE_DEVICES"] = f"{cfg.device}"
 
-    print(f"Evaluate backbone {cfg.backbone_name} on experiment {cfg.experiment}, work in {os.getcwd()}")
+    print(f"Evaluate backbone {cfg.backbone_name} on experiment {cfg.experiment}, work in {train_dir}")
 
     cwd = Path(os.getcwd())
 
@@ -256,7 +261,8 @@ def main(train_dir: str, checkpoint: str = 'last', other_args: list = None) -> N
     masked = getattr(cfg, "masked", False)
     evaluator = Evaluator(mdl, checkpoint_path=checkpoint_path, masked=masked)
     evaluate(
-        evaluator, ground_truth, cfg.experiment, cwd, dataset=dataset, half=half, num_workers=cfg.training.num_workers
+        evaluator, ground_truth, cfg.experiment, cwd, train_dir, dataset=dataset, half=half,
+        num_workers=cfg.training.num_workers
     )
 
 
@@ -267,4 +273,4 @@ if __name__ == "__main__":
     parser.add_argument("--checkpoint", choices=["last", "best"],
                         default="last", help="The checkpoint to evaluate, 'last' or 'best'")
     args, unknown_args = parser.parse_known_args()
-    main(args.train_dir, args.checkpoint, unknown_args)
+    main(Path(args.train_dir), args.checkpoint, unknown_args)

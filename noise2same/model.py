@@ -214,7 +214,7 @@ class Noise2Same(nn.Module):
         )
 
         if isinstance(self.net, SwinIA):
-            return self.forward_whole(x, convolve, crops, full_size_image, is_masked=True)
+            return self.forward_whole(x, convolve, crops, full_size_image)
         else:
             x = (1 - mask) * x + mask * noise
             if isinstance(self.net, BSpSwinIR):
@@ -241,8 +241,6 @@ class Noise2Same(nn.Module):
                     deconv - output before PSF if PSF is provided and `convolve` is True
                     proj - output features of projection head if `lambda_proj` > 0
         """
-        if isinstance(self.net, SwinIA) and 'is_masked' not in kwargs:
-            kwargs['is_masked'] = False
         out = {}
         features = self.net(x, **kwargs)
         out["image"] = self.head(features)

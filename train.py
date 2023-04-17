@@ -77,6 +77,7 @@ def main(cfg: DictConfig) -> None:
 
     if not cfg.check:
         wandb.init(project=cfg.project, config=d_cfg, settings=wandb.Settings(start_method="fork"))
+        wandb.run.summary.update({'training_dir': os.getcwd()})
 
     # Data
     dataset_train, dataset_valid = get_dataset(cfg, cwd)
@@ -182,8 +183,8 @@ def main(cfg: DictConfig) -> None:
     if cfg.evaluate:
         test_dataset, ground_truth = get_test_dataset_and_gt(cfg, cwd)
 
-        scores = evaluate.evaluate(trainer.evaluator, ground_truth, cfg.experiment, cwd, dataset=test_dataset,
-                                   half=cfg.training.amp, num_workers=cfg.training.num_workers)
+        scores = evaluate.evaluate(trainer.evaluator, ground_truth, cfg.experiment, cwd, Path(os.getcwd()),
+                                   dataset=test_dataset, half=cfg.training.amp, num_workers=cfg.training.num_workers)
 
         if not cfg.check:
             wandb.log(scores)
