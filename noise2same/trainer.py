@@ -16,6 +16,7 @@ from noise2same.util import (
     load_checkpoint_to_module,
     normalize_zero_one_dict,
 )
+from evaluate import get_scores
 
 
 class Trainer(object):
@@ -27,6 +28,7 @@ class Trainer(object):
         device: str = "cuda",
         checkpoint_path: str = "checkpoints",
         monitor: str = "val_rec_mse",
+        experiment: str = None,
         check: bool = False,
         wandb_log: bool = True,
         amp: bool = False,
@@ -34,11 +36,13 @@ class Trainer(object):
     ):
 
         self.model = model
+        self.inner_model = model if not isinstance(model, torch.nn.DataParallel) else model.module
         self.optimizer = optimizer
         self.scheduler = scheduler
         self.device = device
         self.checkpoint_path = Path(checkpoint_path)
         self.monitor = monitor
+        self.experiment = experiment
         self.check = check
         if check:
             wandb_log = False
@@ -47,7 +51,7 @@ class Trainer(object):
 
         self.model.to(device)
         self.checkpoint_path.mkdir(parents=True, exist_ok=False)
-        self.evaluator = Evaluator(model=model, device=device)
+        self.evaluator = Evaluator(model=self.inner_model, device=device)
 
         self.amp = amp
         self.scaler = GradScaler() if amp else None
@@ -78,6 +82,7 @@ class Trainer(object):
         images = {}
         for i, batch in enumerate(iterator):
             x = batch["image"].to(self.device)
+            ground_truth = None if "ground_truth" not in batch else batch["ground_truth"].to(self.device)
             mask = batch["mask"].to(self.device)
             self.optimizer.zero_grad()
 
@@ -96,17 +101,20 @@ class Trainer(object):
                     full_size_image = torch.from_numpy(
                         np.moveaxis(full_size_image, -1, 0)
                     ).to(self.device)
-                    out_mask, out_raw = self.model.forward_full(
-                        x, mask, crops=batch["crop"], full_size_image=full_size_image
+                    out_mask, out_raw = self.model.forward(
+                        x, mask=mask, crops=batch["crop"], full_size_image=full_size_image
                     )
                 else:
-                    out_mask, out_raw = self.model.forward_full(x, mask)
+                    try:
+                        out_mask, out_raw = self.model.forward(x, mask=mask)
+                    except RuntimeError as e:
+                        raise RuntimeError(f"Batch {x.shape} failed on device {x.device}") from e
 
-                loss, loss_log = self.model.compute_losses_from_output(
-                    x, mask, out_mask, out_raw
+                loss, loss_log = self.inner_model.compute_losses_from_output(
+                    x, mask, out_mask, out_raw, ground_truth
                 )
 
-                reg_loss, reg_loss_log = self.model.compute_regularization_loss(
+                reg_loss, reg_loss_log = self.inner_model.compute_regularization_loss(
                     out_mask if out_raw is None else out_raw,
                     mean=batch["mean"].to(self.device),
                     std=batch["std"].to(self.device),
@@ -116,7 +124,6 @@ class Trainer(object):
                 if reg_loss_log:
                     loss += reg_loss
                     loss_log.update(reg_loss_log)
-
             self.optimizer_scheduler_step(loss)
             total_loss += loss_log
             iterator.set_postfix({k: v / (i + 1) for k, v in total_loss.items()})
@@ -127,14 +134,16 @@ class Trainer(object):
             # Log last batch of images
             if i == len(iterator) - 1 or (self.check and i == 3):
                 images = {
-                    "input": x,
-                    "out_mask": out_mask["image"],
+                    "input": x
                 }
+
+                if out_mask is not None:
+                    images["out_mask"] = out_mask["image"]
 
                 if out_raw is not None:
                     images["out_raw"] = out_raw["image"]
 
-                if "deconv" in out_mask:
+                if out_mask is not None and "deconv" in out_mask:
                     images["out_mask_deconv"] = out_mask["deconv"]
                 if out_raw is not None and "deconv" in out_raw:
                     images["out_raw_deconv"] = out_raw["deconv"]
@@ -155,15 +164,21 @@ class Trainer(object):
         iterator = tqdm(loader, desc="valid")
 
         total_loss = 0
+        val_mse_log = []
         images = {}
         for i, batch in enumerate(iterator):
             x = batch["image"].to(self.device)
 
             with autocast(enabled=self.amp):
-                out_raw = self.model(x)["image"]
+                out_raw = self.model(x)[1]["image"]
+
+            if "ground_truth" in batch.keys():
+                val_mse = torch.mean(torch.square(out_raw - batch["ground_truth"].to(self.device)))
+                val_mse_log.append(val_mse.item())
 
             rec_mse = torch.mean(torch.square(out_raw - x))
             total_loss += rec_mse.item()
+
             iterator.set_postfix({"val_rec_mse": total_loss / (i + 1)})
 
             if self.check and i > 3:
@@ -176,7 +191,8 @@ class Trainer(object):
                 }
                 images = detach_to_np(images, mean=batch["mean"], std=batch["std"])
                 images = normalize_zero_one_dict(images)
-
+        if len(val_mse_log) > 0:
+            return {"val_rec_mse": total_loss / len(loader), "val_mse": np.mean(val_mse_log)}, images
         return {"val_rec_mse": total_loss / len(loader)}, images
 
     def inference(self, *args: Any, **kwargs: Any):
@@ -195,7 +211,7 @@ class Trainer(object):
         loader_valid: Optional[DataLoader] = None,
     ) -> List[Dict[str, float]]:
 
-        iterator = trange(n_epochs)
+        iterator = trange(n_epochs, position=0, leave=True)
         history = []
         best_loss = np.inf
 
@@ -216,7 +232,7 @@ class Trainer(object):
                         # limit the number of uploaded images
                         # if image is 3d, reduce it
                         k: [
-                            wandb.Image(im.max(0) if self.model.n_dim == 3 else im)
+                            wandb.Image(im.max(0) if self.inner_model.n_dim == 3 else im)
                             for im in v[:4]
                         ]
                         for k, v in images.items()
@@ -255,7 +271,7 @@ class Trainer(object):
     def save_model(self, name: str = "model"):
         torch.save(
             {
-                "model": self.model.state_dict(),
+                "model": self.inner_model.state_dict(),
                 "optimizer": self.optimizer.state_dict(),
                 "scheduler": self.scheduler.state_dict(),
             },

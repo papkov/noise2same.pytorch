@@ -1,5 +1,5 @@
 # @package _global_
-name: hanzi
+experiment: hanzi
 data:
   version: 0
   noise_level: 3
@@ -8,5 +8,6 @@ training:
   steps: 50000
   crop: 64
   batch_size: 64
-  validate: False
-  monitor: rec_mse
+  validate: True
+  val_partition: 0.05
+  monitor: bsp_mse

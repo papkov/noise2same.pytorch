@@ -1,3 +1,4 @@
+from enum import Enum
 from pathlib import Path
 from typing import Any, Dict, Optional, Tuple, Union
 
@@ -5,13 +6,23 @@ import numpy as np
 import torch
 from torch import Tensor as T
 from torch import nn
-from torch.nn import functional as F
+from torch.nn import functional as F, Identity
 from torch.nn.functional import conv2d, conv3d
 from torchvision.transforms import GaussianBlur
 
-from noise2same import network
+from noise2same.backbone.swinia import SwinIA
+from noise2same.backbone.unet import UNet, ProjectHead, RegressionHead
+from noise2same.backbone.swinir import SwinIR
+from noise2same.backbone.bsp_swinir import BSpSwinIR
 from noise2same.contrast import PixelContrastLoss
 from noise2same.psf.psf_convolution import PSFParameter, read_psf
+
+
+class ModelMode(Enum):
+
+    NOISE2TRUE = 0,
+    NOISE2SELF = 1,
+    NOISE2SAME = 2
 
 
 class DonutMask(nn.Module):
@@ -73,11 +84,11 @@ class Noise2Same(nn.Module):
         psf_size: Optional[int] = None,
         psf_pad_mode: str = "reflect",
         residual: bool = False,
-        skip_method: str = "concat",
-        arch: str = "unet",
         regularization_key: str = "image",
-        only_masked: bool = False,
+        mode: str = "noise2same",
         psf_fft: Union[str, bool] = "auto",
+        backbone: Union[UNet, SwinIR, Identity] = Identity(),
+        head: Union[RegressionHead, Identity] = Identity(),
         **kwargs: Any,
     ):
         """
@@ -95,7 +106,6 @@ class Noise2Same(nn.Module):
         """
         super(Noise2Same, self).__init__()
         assert masking in ("gaussian", "donut")
-        assert arch in ("unet", "identity")
         assert regularization_key in ("image", "deconv")
         if psf is None:
             # we don't have a psf, so we can't use deconv
@@ -114,29 +124,14 @@ class Noise2Same(nn.Module):
         self.noise_mean = noise_mean
         self.noise_std = noise_std
         self.residual = residual
-        self.arch = arch
         self.regularization_key = regularization_key
         self.lambda_bound = lambda_bound
         self.lambda_sharp = lambda_sharp
-        self.only_masked = only_masked
+        self.mode = ModelMode[mode.upper()]
 
         # TODO customize with segmentation_models
-        if self.arch == "unet":
-            self.net = network.UNet(
-                in_channels=in_channels,
-                n_dim=n_dim,
-                base_channels=base_channels,
-                skip_method=skip_method,
-                **kwargs,
-            )
-            self.head = network.RegressionHead(
-                in_channels=base_channels,
-                out_channels=in_channels,
-                n_dim=n_dim,
-            )
-        else:
-            self.net = nn.Identity()
-            self.head = nn.Identity()
+        self.net = backbone
+        self.head = head
 
         # todo parametrize
         self.blur = GaussianBlur(5, sigma=0.2) if residual else None
@@ -144,7 +139,7 @@ class Noise2Same(nn.Module):
         # TODO parametrize project head
         self.project_head = None
         if self.lambda_proj > 0:
-            self.project_head = network.ProjectHead(
+            self.project_head = ProjectHead(
                 in_channels=base_channels, n_dim=n_dim, out_channels=256, kernel_size=1
             )
 
@@ -161,16 +156,16 @@ class Noise2Same(nn.Module):
             for param in self.psf.parameters():
                 param.requires_grad = False
 
-    def forward_full(
+    def forward(
         self,
         x: T,
-        mask: T,
+        mask: T = None,
         convolve: bool = True,
         crops: Optional[T] = None,
         full_size_image: Optional[T] = None,
         *args: Any,
         **kwargs: Any,
-    ) -> Tuple[Dict[str, T], Union[Dict[str, T], None]]:
+    ) -> Tuple[Union[Dict[str, T], None], Union[Dict[str, T], None]]:
         """
         Make two forward passes: with mask and without mask
         :param x:
@@ -183,10 +178,11 @@ class Noise2Same(nn.Module):
                     deconv - output before PSF if PSF is provided and `convolve` is True
                     proj - output features of projection head if `lambda_proj` > 0
         """
-        out_mask = self.forward_masked(x, mask, convolve, crops, full_size_image)
-        if self.only_masked:
-            return out_mask, None
-        out_raw = self.forward(x, convolve, crops, full_size_image)
+        out_raw, out_mask = None, None
+        if self.mode != ModelMode.NOISE2SELF or mask is None:
+            out_raw = self.forward_whole(x, convolve, crops, full_size_image)
+        if mask is not None:
+            out_mask = self.forward_masked(x, mask, convolve, crops, full_size_image)
         return out_mask, out_raw
 
     def forward_masked(
@@ -213,14 +209,19 @@ class Noise2Same(nn.Module):
         noise = (
             torch.randn(*x.shape, device=x.device, requires_grad=False) * self.noise_std
             + self.noise_mean
-            # np.random.normal(self.noise_mean, self.noise_std, x.shape)
             if self.masking == "gaussian"
             else self.mask_kernel(x)
         )
-        x = (1 - mask) * x + mask * noise
-        return self.forward(x, convolve, crops, full_size_image)
 
-    def forward(
+        if isinstance(self.net, SwinIA):
+            return self.forward_whole(x, convolve, crops, full_size_image)
+        else:
+            x = (1 - mask) * x + mask * noise
+            if isinstance(self.net, BSpSwinIR):
+                return self.forward_whole(x, convolve, crops, full_size_image, mask=mask)
+            return self.forward_whole(x, convolve, crops, full_size_image)
+
+    def forward_whole(
         self,
         x: T,
         convolve: bool = True,
@@ -241,7 +242,7 @@ class Noise2Same(nn.Module):
                     proj - output features of projection head if `lambda_proj` > 0
         """
         out = {}
-        features = self.net(x)
+        features = self.net(x, **kwargs)
         out["image"] = self.head(features)
 
         if self.residual:
@@ -281,17 +282,22 @@ class Noise2Same(nn.Module):
         self,
         x: T,
         mask: T,
-        out_mask: Dict[str, T],
+        out_mask: Optional[Dict[str, T]] = None,
         out_raw: Optional[Dict[str, T]] = None,
+        ground_truth: Optional[T] = None,
     ) -> Tuple[T, Dict[str, float]]:
 
-        # default Noise2Self blind-spot MSE loss
-        bsp_mse = self.compute_mse(x, out_mask["image"], mask)
-        loss_log = {"bsp_mse": bsp_mse.item()}
+        loss_log = dict()
 
-        # Noise2Same losses
-        loss = torch.tensor(0.0, device=x.device)
-        if out_raw is not None:
+        if self.mode in (ModelMode.NOISE2SELF, ModelMode.NOISE2SAME):
+            # default Noise2Self blind-spot MSE loss
+            bsp_mse = self.compute_mse(x, out_mask["image"], mask=None if isinstance(self.net, SwinIA) else mask)
+            loss_log["bsp_mse"] = bsp_mse.item()
+
+        if self.mode == ModelMode.NOISE2SAME:
+
+            # Noise2Same losses
+            loss = torch.tensor(0.0, device=x.device)
 
             # Blind spot MSE
             if self.lambda_bsp > 0:
@@ -306,7 +312,7 @@ class Noise2Same(nn.Module):
             # Invariance loss for image
             if self.lambda_inv > 0:
                 inv_mse = self.compute_mse(
-                    out_raw["image"], out_mask["image"], mask
+                    out_raw["image"], out_mask["image"], mask=None if isinstance(self.net, SwinIA) else mask
                 )
                 loss_log["inv_mse"] = inv_mse.item()
                 loss = loss + self.lambda_inv * torch.sqrt(inv_mse)
@@ -328,8 +334,10 @@ class Noise2Same(nn.Module):
                 loss_log["proj_loss"] = proj_loss.item()
                 loss = loss + self.lambda_proj * proj_loss
 
-        else:
+        elif self.mode == ModelMode.NOISE2SELF:
             loss = bsp_mse
+        elif self.mode == ModelMode.NOISE2TRUE:
+            loss = self.compute_mse(out_raw["image"], ground_truth)
 
         loss_log["loss"] = loss.item()
         return loss, loss_log
@@ -337,7 +345,7 @@ class Noise2Same(nn.Module):
     def compute_losses(
         self, x: T, mask: T, convolve: bool = True
     ) -> Tuple[T, Dict[str, float]]:
-        out_mask, out_raw = self.forward_full(x, mask, convolve)
+        out_mask, out_raw = self.forward(x, mask, convolve)
         return self.compute_losses_from_output(x, mask, out_mask, out_raw)
 
     def compute_regularization_loss(

@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 from pathlib import Path
-from typing import List, Union
+from typing import List, Union, Dict
 
 import numpy as np
 
@@ -20,10 +20,12 @@ class HanziDatasetPrepared(AbstractNoiseDataset2D):
         assert self.version in (0, 1)
         return True
 
-    def _get_images(self) -> Union[List[str], np.ndarray]:
-        return np.load(self.path / f"{self.mode}.npy")[
-            :, self.version * 4 + self.noise_level
-        ]
+    def _get_images(self) -> Dict[str, Union[List[str], np.ndarray]]:
+        data = np.load(self.path / f"{self.mode}.npy")
+        return {
+            "noisy_input": data[:, self.version * 4 + self.noise_level],
+            "ground_truth": data[:, 0]
+        }
 
     def _read_image(self, image_or_path: Union[str, np.ndarray]) -> np.ndarray:
         return image_or_path

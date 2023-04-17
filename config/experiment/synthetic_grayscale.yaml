@@ -1,0 +1,13 @@
+# @package _global_
+experiment: synthetic_grayscale
+data:
+  n_dim: 2
+  n_channels: 1
+  noise_type: gaussian
+  noise_param: 25
+
+training:
+  crop: 64
+  steps: 50000
+  batch_size: 64
+  validate: True

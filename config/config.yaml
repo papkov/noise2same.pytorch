@@ -1,21 +1,12 @@
 hydra:
   run:
-    dir: results/${name}/${hydra.job.name}/${now:%Y-%m-%d_%H-%M-%S}
+    dir: results/${experiment}/${backbone_name}/${hydra.job.name}/${now:%Y-%m-%d_%H-%M-%S}
 
 project: noise2same
 device: 0
 seed: 56
 check: False
-evaluate: False
-
-network:
-  base_channels: 96
-  kernel_size: 3
-  depth: 3
-  encoding_block_sizes: [ 1, 1, 0 ]
-  decoding_block_sizes: [ 1, 1 ]
-  downsampling: [ conv, conv ]
-  skip_method: concat
+evaluate: True
 
 model:
   lambda_rec: 1
@@ -32,7 +23,7 @@ model:
   noise_std: 0.2
   residual: False
   regularization_key: image
-  only_masked: False
+  mode: "noise2same"
 
 training:
   steps_per_epoch: 1000
@@ -41,17 +32,23 @@ training:
   num_workers: 8
   crop: 64
   validate: True
-  monitor: val_rec_mse
+  val_partition: 1.0
+  val_batch_size: 4
+  monitor: bsp_mse
   amp: True
   info_padding: False
 
 data:
   n_dim: 2
   n_channels: 1
+  standardize: True  # subtract mean and divide by std for each image separately
+  add_blur_and_noise: False
 
 optim:
   optimizer: adam
   lr: 0.0004
+  weight_decay: 0
+  scheduler: lambda
   decay_rate: 0.5
   decay_steps: 5e3  # how many steps to decrease by decay rate
   staircase: True  # integer division

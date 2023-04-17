@@ -1,4 +1,3 @@
-from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
 import numpy as np
@@ -6,12 +5,13 @@ import torch
 from pytorch_toolbelt.inference.tiles import TileMerger
 from torch.cuda.amp import autocast
 from torch.utils.data import DataLoader, Dataset
-from tqdm import tqdm, trange
+from tqdm import tqdm
 import time
 
 from noise2same.dataset.util import PadAndCropResizer
 from noise2same.model import Noise2Same
-from noise2same.util import load_checkpoint_to_module
+from noise2same.backbone.unet import UNet
+from noise2same.backbone.swinir import SwinIR
 
 
 class Evaluator(object):
@@ -29,7 +29,6 @@ class Evaluator(object):
         :param checkpoint_path: optional str, path to the model checkpoint
         :param masked: if perform forward pass masked
         """
-
         self.model = model
         self.device = device
         self.checkpoint_path = checkpoint_path
@@ -39,9 +38,16 @@ class Evaluator(object):
 
         self.model.to(device)
 
-        self.resizer = PadAndCropResizer(
-            mode="reflect", div_n=2 ** self.model.net.depth
-        )
+        if isinstance(self.model.net, UNet):
+            self.resizer = PadAndCropResizer(
+                mode="reflect", div_n=2 ** self.model.net.depth
+            )
+        elif isinstance(self.model.net, SwinIR):
+            self.resizer = PadAndCropResizer(
+                mode="reflect", div_n=self.model.net.window_size
+            )
+        else:
+            self.resizer = PadAndCropResizer(div_n=1)
 
     @torch.no_grad()
     def inference(
@@ -51,7 +57,7 @@ class Evaluator(object):
         empty_cache: bool = False,
         convolve: bool = False,
         key: str = "image",
-    ) -> List[Dict[str, np.ndarray]]:
+    ) -> Tuple[List[Dict[str, np.ndarray]], List[int]]:
         """
         Run inference for a given dataloader
         :param loader: DataLoader
@@ -66,43 +72,53 @@ class Evaluator(object):
         outputs = []
         iterator = tqdm(loader, desc="inference", position=0, leave=True)
         times = []
+        errors_num = 0
+        indices = []
         for i, batch in enumerate(iterator):
-            batch = {k: v.to(self.device) for k, v in batch.items()}
-            start = time.time()
-            with autocast(enabled=half):
-                if self.masked:
-                    # TODO remove randomness
-                    # idea: use the same mask for all images? mask as tta?
-                    out = self.model.forward_masked(
-                        batch["image"], batch["mask"], convolve=convolve
-                    )
-                else:
-                    out = self.model.forward(batch["image"], convolve=convolve)
-                out_raw = out[key] * batch["std"] + batch["mean"]
+            try:
+                batch = {k: v.to(self.device) for k, v in batch.items()}
+                start = time.time()
+                with autocast(enabled=half):
+                    if self.masked:
+                        # TODO remove randomness
+                        # idea: use the same mask for all images? mask as tta?
+                        out, _ = self.model.forward(
+                            batch["image"], mask=batch["mask"], convolve=convolve
+                        )
+                    else:
+                        _, out = self.model.forward(batch["image"], convolve=convolve)
+                    out_raw = out[key] * batch["std"] + batch["mean"]
 
-            out_raw = {"image": np.moveaxis(out_raw.detach().cpu().numpy(), 1, -1)}
-            if self.model.lambda_proj > 0:
-                out_raw.update(
-                    {"proj": np.moveaxis(out["proj"].detach().cpu().numpy(), 1, -1)}
+                out_raw = {"image": np.moveaxis(out_raw.detach().cpu().numpy(), 1, -1)}
+                if self.model.lambda_proj > 0:
+                    out_raw.update(
+                        {"proj": np.moveaxis(out["proj"].detach().cpu().numpy(), 1, -1)}
+                    )
+
+                end = time.time()
+                times.append(end - start)
+
+                outputs.append(out_raw)
+                iterator.set_postfix(
+                    {
+                        "shape": out_raw["image"].shape,
+                        "reserved": torch.cuda.memory_reserved(0) / (1024 ** 2),
+                        "allocated": torch.cuda.memory_allocated(0) / (1024 ** 2),
+                    }
                 )
 
-            end = time.time()
-            times.append(end - start)
-
-            outputs.append(out_raw)
-            iterator.set_postfix(
-                {
-                    "shape": out_raw["image"].shape,
-                    "reserved": torch.cuda.memory_reserved(0) / (1024 ** 2),
-                    "allocated": torch.cuda.memory_allocated(0) / (1024 ** 2),
-                }
-            )
-
-            if empty_cache:
-                torch.cuda.empty_cache()
+                if empty_cache:
+                    torch.cuda.empty_cache()
+            except RuntimeError:
+                errors_num += 1
+                print('Skipping image ', i)
+                pass
+            else:
+                indices.append(i)
 
         print(f"Average inference time: {np.mean(times) * 1000:.2f} ms")
-        return outputs
+        print(f'Dropped images rate: {errors_num / len(loader)}')
+        return outputs, indices  # СТЫД
 
     @torch.no_grad()
     def inference_single_image_dataset(
@@ -170,7 +186,7 @@ class Evaluator(object):
             }
             with autocast(enabled=half):
                 pred_batch = (
-                    self.model.forward(batch["image"], convolve=convolve)[key]
+                    self.model.forward(batch["image"], convolve=convolve)[1][key]
                     * batch["std"]
                     + batch["mean"]
                 )

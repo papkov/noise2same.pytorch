@@ -3,7 +3,6 @@ from typing import Any, List, Optional, Tuple, Union
 
 import albumentations as albu
 import numpy as np
-from albumentations import Compose
 from numpy.random.mtrand import normal, uniform
 from scipy.signal import convolve, convolve2d
 from skimage.exposure import rescale_intensity
@@ -73,13 +72,17 @@ def mask_like_image(
 
 
 def training_augmentations_2d(crop: int = 64):
-    return Compose(
-        [
+    return [
             albu.RandomCrop(width=crop, height=crop, p=1),
             albu.RandomRotate90(p=0.5),
             albu.Flip(p=0.5),
         ]
-    )
+
+
+def validation_transforms_2d(crop: int = 64):
+    return [
+            albu.CenterCrop(width=crop, height=crop, p=1)
+        ]
 
 
 def training_augmentations_3d():

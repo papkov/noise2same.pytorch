@@ -1,0 +1,29 @@
+# @package _global_
+experiment: fmd
+data:
+  n_dim: 2
+  n_channels: 1
+  part: cf_fish
+  add_blur_and_noise: True
+
+training:
+  crop: 128
+  steps: 10000
+  steps_per_epoch: 200
+  batch_size: 16
+  val_batch_size: 1
+  monitor: val_mse
+
+optim:
+  optimizer: adam
+  lr: 0.0004
+  weight_decay: 1e-8
+  decay_rate: 0.5
+  decay_steps: 1e3  # how many steps to decrease by decay rate
+  staircase: True  # integer division
+
+psf:
+  path: null
+  psf_size: null
+  psf_pad_mode: replicate  # check if reflect affected anything
+  psf_fft: auto

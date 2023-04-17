@@ -1,13 +1,11 @@
 # translated from
 # https://github.com/divelab/Noise2Same/blob/main/network.py
 # https://github.com/divelab/Noise2Same/blob/main/resnet_module.py
-from functools import partial
 from typing import Tuple
 
 import torch
 from torch import Tensor as T
 from torch import nn
-from torch.nn.functional import normalize
 
 
 class ProjectHead(nn.Sequential):

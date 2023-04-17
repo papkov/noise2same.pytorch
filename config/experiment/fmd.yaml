@@ -1,0 +1,15 @@
+# @package _global_
+experiment: fmd
+data:
+  n_dim: 2
+  n_channels: 1
+  part: cf_fish
+
+training:
+  crop: 64
+  steps: 20000
+  batch_size: 64
+  monitor: val_mse
+
+optim:
+  weight_decay: 1e-8

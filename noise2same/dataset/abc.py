@@ -32,6 +32,8 @@ class AbstractNoiseDataset(Dataset, ABC):
     standardize: bool = True
     standardize_by_channel: bool = False
     n_dim: int = 2
+    mean: Optional[Union[float, np.ndarray]] = None
+    std: Optional[Union[float, np.ndarray]] = None
     transforms: Optional[
         Union[
             List[BasicTransform],
@@ -67,11 +69,14 @@ class AbstractNoiseDataset(Dataset, ABC):
                 f"Incorrect path, {self.path} not a dir and {self.path.suffix} is not TIF "
             )
 
-        self.images = self._get_images()
+        images = self._get_images()
+        self.images = images['noisy_input']
+        self.ground_truth = images.get('ground_truth', None)
         if not isinstance(self.transforms, list):
             self.transforms = [self.transforms]
         self.transforms = self._compose_transforms(
-            self.transforms + self._get_post_transforms()
+            self.transforms + self._get_post_transforms(),
+            additional_targets={"ground_truth": "image"} if self.ground_truth is not None else None
         )
 
     def __len__(self) -> int:
@@ -88,7 +93,7 @@ class AbstractNoiseDataset(Dataset, ABC):
         raise NotImplementedError
 
     @abstractmethod
-    def _apply_transforms(self, image: np.ndarray, mask: np.ndarray) -> Dict[str, T]:
+    def _apply_transforms(self, image: np.ndarray, mask: np.ndarray, ground_truth: np.ndarray = None) -> Dict[str, T]:
         """
         Apply transforms to both image and mask
         :param image:
@@ -108,7 +113,7 @@ class AbstractNoiseDataset(Dataset, ABC):
         raise NotImplementedError
 
     @abstractmethod
-    def _get_images(self) -> Union[List[str], np.ndarray]:
+    def _get_images(self) -> Dict[str, Union[List[str], np.ndarray]]:
         """
         Obtain images or their paths from file system
         :return: list of images of paths to them
@@ -133,17 +138,29 @@ class AbstractNoiseDataset(Dataset, ABC):
         if image.ndim == self.n_dim:
             image = np.expand_dims(image, axis=-1 if self.channel_last else 0)
 
+        ground_truth = None
+        if self.ground_truth is not None:
+            ground_truth = self._read_image(self.ground_truth[i]).astype(np.float32)
+            if ground_truth.ndim == self.n_dim:
+                ground_truth = np.expand_dims(ground_truth, axis=-1 if self.channel_last else 0)
+
         mask = self._mask_like_image(image)
         # this was noise_patch in the original code, concatenation does not make any sense
         # https://github.com/divelab/Noise2Same/blob/main/models.py#L154
         # noise_mask = np.concatenate([noise, mask], axis=-1)
-        ret = self._apply_transforms(image, mask)
+        ret = self._apply_transforms(image, mask, ground_truth=ground_truth)
         if self.standardize:
-            ret["image"], ret["mean"], ret["std"] = self._standardize(ret["image"])
+            # by default, self.mean and self.std are None, and normalization is done by patch
+            ret["image"], ret["mean"], ret["std"] = self._standardize(ret["image"],
+                                                                      self.mean or torch.from_numpy(self.mean),
+                                                                      self.std or torch.from_numpy(self.std))
+            if self.ground_truth is not None:
+                ret["ground_truth"], _, _ = self._standardize(ret["ground_truth"], ret["mean"], ret["std"])
         else:
             # in case the data was normalized or standardized before
             ret["mean"] = torch.tensor(0).view((1,) * ret["image"].ndim)
             ret["std"] = torch.tensor(1).view((1,) * ret["image"].ndim)
+
         return ret
 
     def _mask_like_image(self, image: np.ndarray) -> np.ndarray:
@@ -151,7 +168,7 @@ class AbstractNoiseDataset(Dataset, ABC):
             image, mask_percentage=self.mask_percentage, channels_last=self.channel_last
         )
 
-    def _standardize(self, image: T) -> Tuple[T, T, T]:
+    def _standardize(self, image: T, mean: T = None, std: T = None) -> Tuple[T, T, T]:
         """
         Normalize an image by mean and std
         :param image: tensor
@@ -163,8 +180,8 @@ class AbstractNoiseDataset(Dataset, ABC):
             dim = (0,) + dim
         # normalize as per the paper
         # TODO in the paper channels are not specified. do they matter? try with dim=(1, 2)
-        mean = torch.mean(image, dim=dim, keepdim=True)
-        std = torch.std(image, dim=dim, keepdim=True)
+        mean = torch.mean(image, dim=dim, keepdim=True) if mean is None else mean
+        std = torch.std(image, dim=dim, keepdim=True) if std is None else std
         image = (image - mean) / std
         return image, mean, std
 
@@ -182,11 +199,13 @@ class AbstractNoiseDataset2D(AbstractNoiseDataset, ABC):
                 pad_height_divisor=self.pad_divisor,
                 pad_width_divisor=self.pad_divisor,
             ),
-            ToTensorV2(transpose_mask=True),
+            ToTensorV2(transpose_mask=True)
         ]
 
-    def _apply_transforms(self, image: np.ndarray, mask: np.ndarray) -> Dict[str, T]:
-        return self.transforms(image=image, mask=mask)
+    def _apply_transforms(self, image, mask, ground_truth=None) -> Dict[str, T]:
+        if ground_truth is None:
+            return self.transforms(image=image, mask=mask)
+        return self.transforms(image=image, mask=mask, ground_truth=ground_truth)
 
 
 @dataclass
