@@ -106,14 +106,16 @@ def get_dataset(cfg: DictConfig, cwd: Path) -> Tuple[Dataset, Dataset]:
             mode="train",
             transforms=transforms,
             pad_divisor=pad_divisor,
-            part=cfg.data.part
+            part=cfg.data.part,
+            add_blur_and_noise=cfg.data.add_blur_and_noise,
         )
         if cfg.training.validate:
             dataset_valid = fmd.FMDDatasetPrepared(
                 path=cwd / "data/FMD",
                 mode="val",
                 pad_divisor=pad_divisor,
-                part=cfg.data.part
+                part=cfg.data.part,
+                add_blur_and_noise=cfg.data.add_blur_and_noise,
             )
 
     elif cfg.experiment.lower() == "hanzi":
@@ -228,7 +230,8 @@ def get_test_dataset_and_gt(cfg: DictConfig, cwd: Path) -> Tuple[Dataset, np.nda
             path=cwd / "data/FMD",
             mode="test",
             pad_divisor=pad_divisor,
-            part=cfg.data.part
+            part=cfg.data.part,
+            add_blur_and_noise=cfg.data.add_blur_and_noise,
         )
         gt = dataset.ground_truth
 

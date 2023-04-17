@@ -56,6 +56,9 @@ def get_ground_truth_and_predictions(
     half: bool = False
 ):
     if experiment in ("bsd68", "fmd", "hanzi", "sidd", "synthetic", "synthetic_grayscale"):
+        add_blur_and_noise = getattr(dataset, "add_blur_and_noise", False)
+        if add_blur_and_noise:
+            print("Validate for deconvolution")
         predictions, _ = evaluator.inference(loader, half=half)
     elif experiment in ("imagenet",):
         predictions, indices = evaluator.inference(loader, half=half, empty_cache=True)

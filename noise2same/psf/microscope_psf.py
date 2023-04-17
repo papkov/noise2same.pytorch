@@ -554,6 +554,6 @@ class SimpleMicroscopePSF(MicroscopePSF):
         psf_xyz_array = self.gLXYZParticleScan(
             dxy=dxy, xy_size=xy_size, pz=pz, zv=z_offset
         )
-        print(psf_xyz_array.shape)
+        # print(psf_xyz_array.shape)
 
         return psf_xyz_array
