@@ -32,6 +32,8 @@ class AbstractNoiseDataset(Dataset, ABC):
     standardize: bool = True
     standardize_by_channel: bool = False
     n_dim: int = 2
+    mean: Optional[Union[float, np.ndarray]] = None
+    std: Optional[Union[float, np.ndarray]] = None
     transforms: Optional[
         Union[
             List[BasicTransform],
@@ -148,7 +150,10 @@ class AbstractNoiseDataset(Dataset, ABC):
         # noise_mask = np.concatenate([noise, mask], axis=-1)
         ret = self._apply_transforms(image, mask, ground_truth=ground_truth)
         if self.standardize:
-            ret["image"], ret["mean"], ret["std"] = self._standardize(ret["image"])
+            # by default, self.mean and self.std are None, and normalization is done by patch
+            ret["image"], ret["mean"], ret["std"] = self._standardize(ret["image"],
+                                                                      self.mean or torch.from_numpy(self.mean),
+                                                                      self.std or torch.from_numpy(self.std))
             if self.ground_truth is not None:
                 ret["ground_truth"], _, _ = self._standardize(ret["ground_truth"], ret["mean"], ret["std"])
         else:
