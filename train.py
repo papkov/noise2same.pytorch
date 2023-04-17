@@ -1,6 +1,9 @@
 import os
 import traceback
 from pathlib import Path
+from random import randint
+from time import sleep
+
 import hydra
 import torch
 import wandb
@@ -44,6 +47,9 @@ def main(cfg: DictConfig) -> None:
 
     # trying to fix: unable to open shared memory object </torch_197398_0> in read-write mode
     # torch.multiprocessing.set_sharing_strategy("file_system")
+
+    # Prevent from writing from the same log folder
+    sleep(randint(1, 5))
 
     if "backbone_name" not in cfg.keys():
         print("Please specify a backbone with `+backbone=name`")
@@ -97,7 +103,7 @@ def main(cfg: DictConfig) -> None:
             num_workers=cfg.training.num_workers,
             shuffle=False,
             pin_memory=True,
-            drop_last=True,
+            drop_last=False,
         )
 
     # Read PSF from dataset if available or by path
