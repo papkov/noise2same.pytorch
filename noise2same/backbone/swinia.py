@@ -73,7 +73,9 @@ class DiagonalWindowAttention(nn.Module):
         self.scale = head_dim ** -0.5 / shuffle
         self.proj = nn.Linear(embed_dim, embed_dim)
         self.proj_drop = nn.Dropout(proj_drop)
-        self.norm1 = nn.LayerNorm([shuffle ** 2, head_dim])
+        self.norm_q = nn.LayerNorm([shuffle ** 2, head_dim])
+        self.norm_k = nn.LayerNorm([shuffle ** 2, head_dim])
+        self.norm_v = nn.LayerNorm([shuffle ** 2, head_dim])
         self.norm2 = nn.LayerNorm(embed_dim)
 
         window_bias_shape = [2 * s - 1 for s in window_size]
@@ -111,7 +113,9 @@ class DiagonalWindowAttention(nn.Module):
     ) -> T:
         shortcut = query
         query, key, value = map(self.head_partition, (query, key, value))
-        query = self.norm1(query)
+        query = self.norm_q(query)
+        key = self.norm_k(key)
+        value = self.norm_v(value)
         query = query * self.scale
         attn = torch.einsum("...qsc,...ksc->...qk", query, key)
         relative_position_bias = einops.rearrange(
@@ -219,7 +223,7 @@ class TransformerBlock(nn.Module):
         query = self.attn(query, key, value, mask=mask)
         query, key, value = map(self.window_partition_reversed, (query, key, value), [image_size] * 3)
         query, key, value = map(self.shift_image_reversed, (query, key, value))
-        query = self.norm2(query + self.mlp(query))
+        query = query + self.mlp(query)
         query = connect_shortcut(self.shortcut, query, shortcut)
         return query
 
