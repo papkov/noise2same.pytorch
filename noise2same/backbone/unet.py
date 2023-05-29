@@ -8,43 +8,6 @@ from torch import Tensor as T
 from torch import nn
 
 
-class ProjectHead(nn.Sequential):
-    """
-    Implements projection head for contrastive learning as per
-    "Exploring Cross-Image Pixel Contrast for Semantic Segmentation"
-    https://arxiv.org/abs/2101.11939
-    https://github.com/tfzhou/ContrastiveSeg
-
-    Provides high-dimensional L2-normalized pixel embeddings (256-d from 1x1 conv by default)
-    """
-
-    def __init__(
-        self,
-        in_channels: int,
-        out_channels: int = 256,
-        n_dim: int = 2,
-        kernel_size: int = 1,
-    ):
-        assert n_dim in (2, 3)
-        conv = nn.Conv2d if n_dim == 2 else nn.Conv3d
-        conv_1 = conv(
-            in_channels, out_channels, kernel_size=kernel_size, padding=kernel_size // 2
-        )
-        relu = nn.ReLU(inplace=True)
-        conv_2 = conv(
-            out_channels,
-            out_channels,
-            kernel_size=kernel_size,
-            padding=kernel_size // 2,
-        )
-        super().__init__(conv_1, relu, conv_2, relu)
-
-    def forward(self, x):
-        x = super().forward(x)
-        x = nn.functional.normalize(x, p=2, dim=1)
-        return x
-
-
 class RegressionHead(nn.Sequential):
     def __init__(
         self, in_channels: int, out_channels: int, n_dim: int = 2, kernel_size: int = 1

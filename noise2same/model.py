@@ -11,10 +11,9 @@ from torch.nn.functional import conv2d, conv3d
 from torchvision.transforms import GaussianBlur
 
 from noise2same.backbone.swinia import SwinIA
-from noise2same.backbone.unet import UNet, ProjectHead, RegressionHead
+from noise2same.backbone.unet import UNet, RegressionHead
 from noise2same.backbone.swinir import SwinIR
 from noise2same.backbone.bsp_swinir import BSpSwinIR
-from noise2same.contrast import PixelContrastLoss
 from noise2same.psf.psf_convolution import PSFParameter, read_psf
 
 
@@ -77,7 +76,6 @@ class Noise2Same(nn.Module):
         masking: str = "gaussian",
         noise_mean: float = 0,
         noise_std: float = 0.2,
-        lambda_proj: float = 0,
         lambda_bound: float = 0,
         lambda_sharp: float = 0,
         psf: Optional[Union[str, np.ndarray]] = None,
@@ -101,7 +99,6 @@ class Noise2Same(nn.Module):
         :param masking:
         :param noise_mean:
         :param noise_std:
-        :param lambda_proj:
         :param psf:
         """
         super(Noise2Same, self).__init__()
@@ -117,7 +114,6 @@ class Noise2Same(nn.Module):
         self.lambda_rec = lambda_rec
         self.lambda_inv = lambda_inv
         self.lambda_inv_deconv = lambda_inv_deconv
-        self.lambda_proj = lambda_proj
         self.masked_inv_deconv = masked_inv_deconv
         self.mask_percentage = mask_percentage
         self.masking = masking
@@ -135,13 +131,6 @@ class Noise2Same(nn.Module):
 
         # todo parametrize
         self.blur = GaussianBlur(5, sigma=0.2) if residual else None
-
-        # TODO parametrize project head
-        self.project_head = None
-        if self.lambda_proj > 0:
-            self.project_head = ProjectHead(
-                in_channels=base_channels, n_dim=n_dim, out_channels=256, kernel_size=1
-            )
 
         self.mask_kernel = DonutMask(n_dim=n_dim, in_channels=in_channels)
 
@@ -176,7 +165,6 @@ class Noise2Same(nn.Module):
         :return: tuple of dictionaries of tensors (output for masked input, output for raw input):
                     image - final output, always present
                     deconv - output before PSF if PSF is provided and `convolve` is True
-                    proj - output features of projection head if `lambda_proj` > 0
         """
         out_raw, out_mask = None, None
         if self.mode != ModelMode.NOISE2SELF or mask is None:
@@ -204,7 +192,6 @@ class Noise2Same(nn.Module):
         :return: dictionary of outputs:
                     image - final output, always present
                     deconv - output before PSF if PSF is provided and `convolve` is True
-                    proj - output features of projection head if `lambda_proj` > 0
         """
         noise = (
             torch.randn(*x.shape, device=x.device, requires_grad=False) * self.noise_std
@@ -239,7 +226,6 @@ class Noise2Same(nn.Module):
         :return: dictionary of outputs:
                     image - final output, always present
                     deconv - output before PSF if PSF is provided and `convolve` is True
-                    proj - output features of projection head if `lambda_proj` > 0
         """
         out = {}
         features = self.net(x, **kwargs)
@@ -274,8 +260,6 @@ class Noise2Same(nn.Module):
             else:
                 # just convolve
                 out["image"] = self.psf(out["image"])
-        if self.project_head is not None:
-            out["proj"] = self.project_head(features)
         return out
 
     def compute_losses_from_output(
@@ -324,15 +308,6 @@ class Noise2Same(nn.Module):
                 )
                 loss_log["inv_deconv_mse"] = inv_deconv_mse.item()
                 loss = loss + self.lambda_inv_deconv * torch.sqrt(inv_deconv_mse)
-
-            # Projection loss
-            if self.lambda_proj > 0 and "proj" in out_raw:
-                contrastive_loss = PixelContrastLoss(temperature=0.1)
-                proj_loss = contrastive_loss(
-                    out_raw["proj"], out_mask["proj"], mask
-                ).mean()
-                loss_log["proj_loss"] = proj_loss.item()
-                loss = loss + self.lambda_proj * proj_loss
 
         elif self.mode == ModelMode.NOISE2SELF:
             loss = bsp_mse
