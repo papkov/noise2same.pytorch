@@ -31,7 +31,8 @@ class Noise2Same(Noise2Self):
 
     def forward(self, x: T, mask: Optional[T] = None) -> Dict[str, T]:
         out = super().forward(x)
-        out["image/masked"] = super().forward(x, mask)["image"]
+        if mask is not None:
+            out["image/masked"] = super().forward(x, mask)["image"]
         return out
 
     def compute_loss(self, x_in: Dict[str, T], x_out: Dict[str, T]) -> Tuple[T, Dict[str, float]]:
