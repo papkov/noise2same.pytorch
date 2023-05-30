@@ -1,8 +1,9 @@
-from typing import Optional, Dict, Tuple
+from typing import Any, Optional, Dict, Tuple
 
 import torch
 from torch import Tensor as T
 from torch import nn
+from torch.nn import functional as F
 
 
 class Denoiser(nn.Module):
@@ -59,3 +60,71 @@ class Denoiser(nn.Module):
             return torch.mean(torch.square(x - y))
         masked = torch.sum(mask)
         return torch.sum(torch.square(x - y) * mask) / masked
+
+
+class DeconvolutionMixin:
+    """
+    Mixin for deconvolutional networks.
+    Convolves outputs of the backbone with a fixed PSF kernel.
+    """
+    def __init__(
+        self,
+        psf: nn.Module,
+        lambda_bound: float = 0.0,
+        lambda_sharp: float = 0.0,
+        regularization_key: str = "image",
+        **kwargs: Any,
+    ):
+        super().__init__(**kwargs)
+        self.psf = psf
+        self.lambda_bound = lambda_bound
+        self.lambda_sharp = lambda_sharp
+        self.regularization_key = regularization_key
+
+    def forward(self, x: T, mask: Optional[T] = None) -> Dict[str, T]:
+        """
+        Pass all network's outputs through the PSF convolution
+        :param x: input tensor
+        :param mask: binary mask tensor
+        :return: dict of outputs before and after convolution (with and without '/deconv' suffix')
+        """
+        out = super().forward(x, mask)
+        out_convolved = {k: self.psf(v) for k, v in out.items()}
+        out = {f'{k}/deconv': v for k, v in out.items()}
+        out.update(out_convolved)
+        return out
+
+    def compute_regularization_loss(
+        self,
+        x_in: Dict[str, T],
+        x_out: Dict[str, T],
+    ) -> Tuple[T, Dict[str, float]]:
+
+        x = x_out[self.regularization_key] * x_in['std'] + x_in['mean']
+        x = x / x.max()
+
+        loss = torch.tensor(0).to(x.device)
+        loss_log = {}
+        if self.lambda_bound > 0:
+            bound_loss = self.lambda_bound * self.compute_boundary_loss(x) ** 2
+            loss = bound_loss
+            loss_log["bound_loss"] = bound_loss.item()
+        if self.lambda_sharp > 0:
+            sharp_loss = self.lambda_sharp * self.compute_sharpening_loss(x)
+            loss = sharp_loss + loss
+            loss_log["sharp_loss"] = sharp_loss.item()
+
+        return loss, loss_log
+
+    @staticmethod
+    def compute_boundary_loss(x: T, epsilon: float = 1e-8) -> T:
+        bounds_loss = F.relu(-x - epsilon)
+        bounds_loss = bounds_loss + F.relu(x - 1 - epsilon)
+        return bounds_loss.mean()
+
+    @staticmethod
+    def compute_sharpening_loss(x: T) -> T:
+        n_elements_sq = x[0, 0].nelement() ** 2
+        dim = (2, 3) if x.ndim == 4 else (2, 3, 4)
+        sharpening_loss = -torch.norm(x, dim=dim, keepdim=True, p=2) / n_elements_sq
+        return sharpening_loss.mean()
