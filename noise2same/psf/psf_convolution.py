@@ -9,7 +9,7 @@ import torch.nn.functional as f
 from skimage import io
 from torch import nn
 
-from noise2same.fft_conv import FFTConv2d, FFTConv3d, fft_conv
+from noise2same.psf.fft_conv import FFTConv2d, FFTConv3d, fft_conv
 from noise2same.util import center_crop
 
 
