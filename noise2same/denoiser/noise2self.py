@@ -6,7 +6,7 @@ from torch import Tensor as T
 from torch import nn
 from torch.nn.functional import conv2d, conv3d
 
-from noise2same.denoiser.abc import Denoiser
+from noise2same.denoiser.abc import Denoiser, DeconvolutionMixin
 
 
 # TODO factor out
@@ -91,3 +91,18 @@ class Noise2Self(Denoiser):
     def compute_loss(self, x_in: Dict[str, T], x_out: Dict[str, T]) -> Tuple[T, Dict[str, float]]:
         loss = self.compute_mse(x_in['image'], x_out['image'], mask=x_in['mask'])
         return loss, {'loss': loss.item()}
+
+
+class Noise2SelfDeconvolution(DeconvolutionMixin, Noise2Self):
+    """
+    Noise2Self denoiser implementation with deconvolution.
+    """
+    def __init__(self, **kwargs: Any):
+        super().__init__(**kwargs)
+
+    def compute_loss(self, x_in: Dict[str, T], x_out: Dict[str, T]) -> Tuple[T, Dict[str, float]]:
+        loss, loss_dict = super().compute_loss(x_in, x_out)
+        regularization_loss, regularization_loss_dict = super().compute_regularization_loss(x_in, x_out)
+        loss += regularization_loss
+        loss_dict.update(regularization_loss_dict)
+        return loss, loss_dict
