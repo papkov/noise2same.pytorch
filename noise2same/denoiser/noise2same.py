@@ -1,5 +1,6 @@
 from typing import Any, Dict, Optional, Tuple
 
+import torch
 from torch import Tensor as T
 
 from noise2same.denoiser import Noise2Self
@@ -40,7 +41,7 @@ class Noise2Same(Noise2Self):
         inv_mse = self.compute_mse(x_out['image'], x_out['image/masked'])
         rec_mse = self.compute_mse(x_in['image'], x_out['image'])
 
-        loss = self.lambda_bsp * bsp_mse + self.lambda_inv * inv_mse + self.lambda_rec * rec_mse
+        loss = self.lambda_bsp * bsp_mse + self.lambda_inv * torch.sqrt(inv_mse) + self.lambda_rec * rec_mse
         loss_dict = {'loss': loss.item(),
                      'bsp_mse': bsp_mse.item(),
                      'inv_mse': inv_mse.item(),
