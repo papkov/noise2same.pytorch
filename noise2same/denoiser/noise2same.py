@@ -72,7 +72,7 @@ class Noise2SameDeconvolution(DeconvolutionMixin, Noise2Same):
         loss = loss + self.lambda_inv_deconv * torch.sqrt(inv_deconv_mse)
 
         regularization_loss, regularization_loss_dict = super().compute_regularization_loss(x_in, x_out)
-        loss += regularization_loss
+        loss = loss + regularization_loss
         loss_dict.update(regularization_loss_dict)
         loss_dict['loss'] = loss.item()
         return loss, loss_dict
