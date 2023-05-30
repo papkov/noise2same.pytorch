@@ -4,6 +4,7 @@ import torch
 from torch import Tensor as T
 
 from noise2same.denoiser import Noise2Self
+from noise2same.denoiser.abc import DeconvolutionMixin
 
 
 class Noise2Same(Noise2Self):
@@ -47,4 +48,31 @@ class Noise2Same(Noise2Self):
                      'inv_mse': inv_mse.item(),
                      'rec_mse': rec_mse.item()}
 
+        return loss, loss_dict
+
+
+class Noise2SameDeconvolution(DeconvolutionMixin, Noise2Same):
+    def __init__(self, lambda_inv_deconv: float = 0.0, **kwargs: Any):
+        super().__init__(**kwargs)
+        self.lambda_inv_deconv = lambda_inv_deconv
+
+    def compute_loss(self, x_in: Dict[str, T], x_out: Dict[str, T]) -> Tuple[T, Dict[str, float]]:
+        """
+        Computes loss for Noise2SameDeconvolution.
+        In addition to Noise2Same loss, it also calculates invariance loss for deconvolved representations before PSF
+        and regularization losses.
+        :param x_in: input tensor dict, should contain 'image', 'mask', 'mean' and 'std' keys
+        :param x_out: output tensor dict, should contain 'image', 'image/deconv',
+                      'image/masked' and 'image/masked/deconv' keys
+        :return:
+        """
+        loss, loss_dict = super().compute_loss(x_in, x_out)
+        inv_deconv_mse = self.compute_mse(x_out['image/deconv'], x_out['image/masked/deconv'])
+        loss_dict['inv_deconv_mse'] = inv_deconv_mse.item()
+        loss = loss + self.lambda_inv_deconv * torch.sqrt(inv_deconv_mse)
+
+        regularization_loss, regularization_loss_dict = super().compute_regularization_loss(x_in, x_out)
+        loss += regularization_loss
+        loss_dict.update(regularization_loss_dict)
+        loss_dict['loss'] = loss.item()
         return loss, loss_dict
