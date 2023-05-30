@@ -103,6 +103,7 @@ class Noise2SelfDeconvolution(DeconvolutionMixin, Noise2Self):
     def compute_loss(self, x_in: Dict[str, T], x_out: Dict[str, T]) -> Tuple[T, Dict[str, float]]:
         loss, loss_dict = super().compute_loss(x_in, x_out)
         regularization_loss, regularization_loss_dict = super().compute_regularization_loss(x_in, x_out)
-        loss += regularization_loss
+        loss = loss + regularization_loss
         loss_dict.update(regularization_loss_dict)
+        loss_dict['loss'] = loss.item()
         return loss, loss_dict
