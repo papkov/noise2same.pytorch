@@ -16,7 +16,6 @@ from noise2same.util import (
     load_checkpoint_to_module,
     normalize_zero_one_dict,
 )
-from evaluate import get_scores
 
 
 class Trainer(object):
@@ -32,7 +31,6 @@ class Trainer(object):
         check: bool = False,
         wandb_log: bool = True,
         amp: bool = False,
-        info_padding: bool = False,
     ):
 
         self.model = model
@@ -47,7 +45,6 @@ class Trainer(object):
         if check:
             wandb_log = False
         self.wandb_log = wandb_log
-        self.info_padding = info_padding
 
         self.model.to(device)
         self.checkpoint_path.mkdir(parents=True, exist_ok=False)
@@ -88,27 +85,10 @@ class Trainer(object):
 
             # todo gradient accumulation
             with autocast(enabled=self.amp):
-                if self.info_padding:
-                    # provide full size image to avoid zero padding
-                    padding = [
-                        (b, a)
-                        for b, a in zip(
-                            loader.dataset.tiler.margin_start,
-                            loader.dataset.tiler.margin_end,
-                        )
-                    ] + [(0, 0)]
-                    full_size_image = np.pad(loader.dataset.image, padding)
-                    full_size_image = torch.from_numpy(
-                        np.moveaxis(full_size_image, -1, 0)
-                    ).to(self.device)
-                    out_mask, out_raw = self.model.forward(
-                        x, mask=mask, crops=batch["crop"], full_size_image=full_size_image
-                    )
-                else:
-                    try:
-                        out_mask, out_raw = self.model.forward(x, mask=mask)
-                    except RuntimeError as e:
-                        raise RuntimeError(f"Batch {x.shape} failed on device {x.device}") from e
+                try:
+                    out_mask, out_raw = self.model.forward(x, mask=mask)
+                except RuntimeError as e:
+                    raise RuntimeError(f"Batch {x.shape} failed on device {x.device}") from e
 
                 loss, loss_log = self.inner_model.compute_losses_from_output(
                     x, mask, out_mask, out_raw, ground_truth
