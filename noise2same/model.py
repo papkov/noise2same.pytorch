@@ -13,7 +13,6 @@ from torchvision.transforms import GaussianBlur
 from noise2same.backbone.swinia import SwinIA
 from noise2same.backbone.unet import UNet, RegressionHead
 from noise2same.backbone.swinir import SwinIR
-from noise2same.backbone.bsp_swinir import BSpSwinIR
 from noise2same.psf.psf_convolution import PSFParameter, read_psf
 
 
@@ -204,8 +203,6 @@ class Noise2Same(nn.Module):
             return self.forward_whole(x, convolve, crops, full_size_image)
         else:
             x = (1 - mask) * x + mask * noise
-            if isinstance(self.net, BSpSwinIR):
-                return self.forward_whole(x, convolve, crops, full_size_image, mask=mask)
             return self.forward_whole(x, convolve, crops, full_size_image)
 
     def forward_whole(
