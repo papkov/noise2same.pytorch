@@ -18,7 +18,7 @@ class PSF(nn.Module):
         self,
         kernel_psf: np.ndarray,
         in_channels: int = 1,
-        pad_mode="replicate",
+        pad_mode: str = "replicate",
         fft: Union[str, bool] = "auto",
     ):
         """
@@ -27,6 +27,7 @@ class PSF(nn.Module):
         :param kernel_psf: 2D or 3D np.ndarray
         :param pad_mode: {"reflect", "replicate"}
         :param in_channels: int, number of channels to convolve
+        :param fft: bool, whether to use FFT convolution
         """
         super().__init__()
         self.kernel_size = kernel_psf.shape[0]
@@ -81,8 +82,8 @@ class PSFParameter(nn.Module):
         self,
         kernel_psf: np.ndarray,
         in_channels: int = 1,
-        pad_mode="replicate",
-        trainable=False,
+        pad_mode: str = "replicate",
+        trainable: bool = False,
         fft: Union[str, bool] = "auto",
         auto_padding: bool = False,
     ):
