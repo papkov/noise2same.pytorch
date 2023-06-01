@@ -17,29 +17,7 @@ from noise2same import model, util
 from noise2same.dataset.getter import get_dataset, get_test_dataset_and_gt
 from noise2same.optimizer.esadam import ESAdam
 from utils import parametrize_backbone_and_head
-
-
-def exponential_decay(
-    decay_rate: float = 0.5, decay_steps: int = 5e3, staircase: bool = True
-):
-    """
-    Lambda for torch.optimizers.lr_scheduler.LambdaLR mimicking tf.train.exponential_decay:
-    decayed_learning_rate = learning_rate *
-                            decay_rate ^ (global_step / decay_steps)
-
-    :param decay_rate: float, multiplication factor
-    :param decay_steps: int, how many steps to make to multiply by decay_rate
-    :param staircase: bool, integer division global_step / decay_steps
-    :return: lambda(epoch)
-    """
-
-    def _lambda(epoch: int):
-        exp = epoch / decay_steps
-        if staircase:
-            exp = int(exp)
-        return decay_rate ** exp
-
-    return _lambda
+from noise2same.scheduler import ExponentialDecayScheduler
 
 
 @hydra.main(config_path="config", config_name="config", version_base="1.1")
@@ -147,13 +125,11 @@ def main(cfg: DictConfig) -> None:
             eta_min=cfg.optim.eta_min,
         )
     else:
-        scheduler = torch.optim.lr_scheduler.LambdaLR(
+        scheduler = ExponentialDecayScheduler(
             optimizer,
-            lr_lambda=exponential_decay(
-                decay_rate=cfg.optim.decay_rate,
-                decay_steps=cfg.optim.decay_steps,
-                staircase=cfg.optim.staircase,
-            ),
+            decay_rate=cfg.optim.decay_rate,
+            decay_steps=cfg.optim.decay_steps,
+            staircase=cfg.optim.staircase,
         )
 
     # Trainer
