@@ -15,7 +15,7 @@ import evaluate
 import noise2same.trainer
 from noise2same import model, util
 from noise2same.dataset.getter import get_dataset, get_test_dataset_and_gt
-from noise2same.optimizers.esadam import ESAdam
+from noise2same.optimizer.esadam import ESAdam
 from utils import parametrize_backbone_and_head
 
 
@@ -165,7 +165,6 @@ def main(cfg: DictConfig) -> None:
         monitor=cfg.training.monitor,
         experiment=cfg.experiment,
         amp=cfg.training.amp,
-        info_padding=cfg.training.info_padding
     )
 
     n_epochs = cfg.training.steps // cfg.training.steps_per_epoch
