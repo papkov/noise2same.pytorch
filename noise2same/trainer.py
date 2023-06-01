@@ -204,6 +204,18 @@ class Trainer(object):
     def inference_single_image_tensor(self, *args: Any, **kwargs: Any):
         return self.evaluator.inference_single_image_tensor(*args, **kwargs)
 
+    def log_to_wandb(self, loss: Dict[str, float], images: Dict[str, np.ndarray]):
+        images_wandb = {
+            # limit the number of uploaded images
+            # if image is 3d, reduce it
+            k: [
+                wandb.Image(im.max(0) if self.inner_model.n_dim == 3 else im)
+                for im in v[:4]
+            ]
+            for k, v in images.items()
+        }
+        wandb.log({**images_wandb, **loss})
+
     def fit(
         self,
         n_epochs: int,
@@ -228,16 +240,7 @@ class Trainer(object):
 
                 # Log training
                 if self.wandb_log:
-                    images_wandb = {
-                        # limit the number of uploaded images
-                        # if image is 3d, reduce it
-                        k: [
-                            wandb.Image(im.max(0) if self.inner_model.n_dim == 3 else im)
-                            for im in v[:4]
-                        ]
-                        for k, v in images.items()
-                    }
-                    wandb.log({**images_wandb, **loss})
+                    self.log_to_wandb(loss, images)
 
                 # Show progress
                 iterator.set_postfix(loss)
@@ -246,6 +249,7 @@ class Trainer(object):
                 # Save last model
                 self.save_model("model_last")
 
+                # Interrupt if doing a smoke test
                 if self.check and i > 3:
                     break
 
