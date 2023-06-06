@@ -9,77 +9,78 @@ from noise2same.dataset.util import mask_like_image
 from noise2same.psf.psf_convolution import PSFParameter
 
 
-class TestNoise2Self(unittest.TestCase):
-    def test_masked_loss(self):
-        dnsr = denoiser.Noise2Self(
-            backbone=unet.UNet(in_channels=1, base_channels=4),
-            head=unet.RegressionHead(in_channels=4, out_channels=1),
-        )
+def test_masked_loss():
+    dnsr = denoiser.Noise2Self(
+        backbone=unet.UNet(in_channels=1, base_channels=4),
+        head=unet.RegressionHead(in_channels=4, out_channels=1),
+    )
 
-        image = np.random.uniform(size=(64, 64, 1)).astype(np.float32)
-        mask_1 = mask_like_image(image, mask_percentage=0.5)
-        mask_2 = mask_like_image(image, mask_percentage=0.5)
+    image = np.random.uniform(size=(64, 64, 1)).astype(np.float32)
+    mask_1 = mask_like_image(image, mask_percentage=0.5)
+    mask_2 = mask_like_image(image, mask_percentage=0.5)
 
-        x = torch.from_numpy(np.rollaxis(image, -1, 0)).float()[None, ...]
-        mask_1 = torch.from_numpy(np.rollaxis(mask_1, -1, 0)).float()[None, ...]
-        mask_2 = torch.from_numpy(np.rollaxis(mask_2, -1, 0)).float()[None, ...]
+    x = torch.from_numpy(np.rollaxis(image, -1, 0)).float()[None, ...]
+    mask_1 = torch.from_numpy(np.rollaxis(mask_1, -1, 0)).float()[None, ...]
+    mask_2 = torch.from_numpy(np.rollaxis(mask_2, -1, 0)).float()[None, ...]
 
-        out_1 = dnsr(x, mask_1)
-        out_2 = dnsr(x, mask_2)
+    out_1 = dnsr(x, mask_1)
+    out_2 = dnsr(x, mask_2)
 
-        loss_1, loss_dict_1 = dnsr.compute_loss({'image': x, 'mask': mask_1}, out_1)
-        loss_2, loss_dict_2 = dnsr.compute_loss({'image': x, 'mask': mask_2}, out_2)
+    loss_1, loss_dict_1 = dnsr.compute_loss({'image': x, 'mask': mask_1}, out_1)
+    loss_2, loss_dict_2 = dnsr.compute_loss({'image': x, 'mask': mask_2}, out_2)
 
-        self.assertNotEqual(loss_dict_1['loss'], loss_dict_2['loss'])
+    assert loss_dict_1['loss'] != loss_dict_2['loss']
 
-    def test_masked_loss_same(self):
-        dnsr = denoiser.Noise2Self(
-            masking='donut',  # otherwise random noise in masking produces different loss
-            backbone=unet.UNet(in_channels=1, base_channels=4),
-            head=unet.RegressionHead(in_channels=4, out_channels=1),
-        )
 
-        image = np.random.uniform(size=(64, 64, 1)).astype(np.float32)
-        mask = mask_like_image(image, mask_percentage=0.5)
+def test_masked_loss_same():
+    dnsr = denoiser.Noise2Self(
+        masking='donut',  # otherwise random noise in masking produces different loss
+        backbone=unet.UNet(in_channels=1, base_channels=4),
+        head=unet.RegressionHead(in_channels=4, out_channels=1),
+    )
 
-        x = torch.from_numpy(np.rollaxis(image, -1, 0)).float()[None, ...]
-        mask_1 = torch.from_numpy(np.rollaxis(mask, -1, 0)).float()[None, ...]
-        mask_2 = torch.from_numpy(np.rollaxis(mask, -1, 0)).float()[None, ...]
+    image = np.random.uniform(size=(64, 64, 1)).astype(np.float32)
+    mask = mask_like_image(image, mask_percentage=0.5)
 
-        out_1 = dnsr(x, mask_1)
-        out_2 = dnsr(x, mask_2)
+    x = torch.from_numpy(np.rollaxis(image, -1, 0)).float()[None, ...]
+    mask_1 = torch.from_numpy(np.rollaxis(mask, -1, 0)).float()[None, ...]
+    mask_2 = torch.from_numpy(np.rollaxis(mask, -1, 0)).float()[None, ...]
 
-        loss_1, loss_dict_1 = dnsr.compute_loss({'image': x, 'mask': mask_1}, out_1)
-        loss_2, loss_dict_2 = dnsr.compute_loss({'image': x, 'mask': mask_2}, out_2)
+    out_1 = dnsr(x, mask_1)
+    out_2 = dnsr(x, mask_2)
 
-        self.assertEqual(loss_dict_1['loss'], loss_dict_2['loss'])
+    loss_1, loss_dict_1 = dnsr.compute_loss({'image': x, 'mask': mask_1}, out_1)
+    loss_2, loss_dict_2 = dnsr.compute_loss({'image': x, 'mask': mask_2}, out_2)
 
-    def test_deconvolution(self):
-        psf = PSFParameter(np.ones((3, 3)) / 9)
-        dnsr = denoiser.Noise2SelfDeconvolution(
-            backbone=unet.UNet(in_channels=1, base_channels=4),
-            head=unet.RegressionHead(in_channels=4, out_channels=1),
-            psf=psf,
-            lambda_bound=0.1,
-            lambda_sharp=0.1,
-            regularization_key='image',
-        )
+    assert loss_dict_1['loss'] == loss_dict_2['loss']
 
-        image = np.random.uniform(size=(64, 64, 1)).astype(np.float32)
-        mask = mask_like_image(image, mask_percentage=0.5)
 
-        x = torch.from_numpy(np.rollaxis(image, -1, 0)).float()[None, ...]
-        mask = torch.from_numpy(np.rollaxis(mask, -1, 0)).float()[None, ...]
+def test_deconvolution():
+    psf = PSFParameter(np.ones((3, 3)) / 9)
+    dnsr = denoiser.Noise2SelfDeconvolution(
+        backbone=unet.UNet(in_channels=1, base_channels=4),
+        head=unet.RegressionHead(in_channels=4, out_channels=1),
+        psf=psf,
+        lambda_bound=0.1,
+        lambda_sharp=0.1,
+        regularization_key='image',
+    )
 
-        out = dnsr(x, mask)
+    image = np.random.uniform(size=(64, 64, 1)).astype(np.float32)
+    mask = mask_like_image(image, mask_percentage=0.5)
 
-        for k in ['image', 'image/deconv']:
-            self.assertIn(k, out)
+    x = torch.from_numpy(np.rollaxis(image, -1, 0)).float()[None, ...]
+    mask = torch.from_numpy(np.rollaxis(mask, -1, 0)).float()[None, ...]
 
-        loss, loss_dict = dnsr.compute_loss({'image': x, 'mask': mask, 'mean': 0, 'std': 1}, out)
+    out = dnsr(x, mask)
 
-        for k in ['loss', 'bound_loss', 'sharp_loss']:
-            self.assertIn(k, loss_dict)
+    for k in ['image', 'image/deconv']:
+        assert k in out
+
+    loss, loss_dict = dnsr.compute_loss({'image': x, 'mask': mask, 'mean': 0, 'std': 1}, out)
+
+    for k in ['loss', 'bound_loss', 'sharp_loss']:
+        assert k in loss_dict
 
 
 
