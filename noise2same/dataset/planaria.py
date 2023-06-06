@@ -11,7 +11,7 @@ from noise2same.util import normalize_percentile
 
 
 @dataclass
-class PlanariaDatasetPrepared(AbstractNoiseDataset3D):
+class PlanariaDataset(AbstractNoiseDataset3D):
     path: Union[Path, str] = "data/Denoising_Planaria"
     mode: str = "train"
     train_size: float = 0.9
@@ -30,7 +30,7 @@ class PlanariaDatasetPrepared(AbstractNoiseDataset3D):
 
 
 @dataclass
-class PlanariaDatasetTiff(AbstractNoiseDataset3DLarge):
+class PlanariaTiffDataset(AbstractNoiseDataset3DLarge):
     tile_size: int = 256
     tile_step: int = 192
     crop_border: int = 32

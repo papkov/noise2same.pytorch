@@ -8,7 +8,7 @@ from noise2same.dataset.abc import AbstractNoiseDataset2D
 
 
 @dataclass
-class ImagenetDatasetPrepared(AbstractNoiseDataset2D):
+class ImagenetDataset(AbstractNoiseDataset2D):
     path: Union[Path, str] = "data/ImageNet"
     mode: str = "train"
     version: int = 0  # two noisy copies exist (0, 1)
@@ -31,7 +31,7 @@ class ImagenetDatasetPrepared(AbstractNoiseDataset2D):
 
 
 @dataclass
-class ImagenetDatasetTest(AbstractNoiseDataset2D):
+class ImagenetTestDataset(AbstractNoiseDataset2D):
     path: Union[Path, str] = "data/ImageNet"
     standardize_by_channel: bool = True
 

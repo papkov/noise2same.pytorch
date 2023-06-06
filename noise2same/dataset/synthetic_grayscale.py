@@ -9,7 +9,7 @@ from noise2same.dataset.synthetic import SyntheticDataset
 
 
 @dataclass
-class SyntheticDatasetPrepared(SyntheticDataset):
+class SyntheticPreparedDataset(SyntheticDataset):
     fixed: bool = False  # if True, read prepared noisy images from disk
 
     def _get_images(self) -> Dict[str, Union[List[str], np.ndarray]]:
@@ -37,7 +37,7 @@ class BSD400SyntheticDataset(SyntheticDataset):
 
 
 @dataclass
-class BSD68SyntheticDataset(SyntheticDatasetPrepared):
+class BSD68SyntheticDataset(SyntheticPreparedDataset):
     path: Union[Path, str] = "data/BSD68-test/"
     extension: str = "png"
     name: str = "bsd68"

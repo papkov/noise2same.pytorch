@@ -8,7 +8,7 @@ from noise2same.dataset.abc import AbstractNoiseDataset2D
 
 
 @dataclass
-class HanziDatasetPrepared(AbstractNoiseDataset2D):
+class HanziDataset(AbstractNoiseDataset2D):
     path: Union[Path, str] = "data//Hanzi/tiles/"
     mode: str = "training"
     version: int = 0  # two noisy copies exist (0, 1)

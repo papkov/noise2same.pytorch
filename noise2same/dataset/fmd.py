@@ -17,7 +17,7 @@ from tqdm import tqdm
 
 
 @dataclass
-class FMDDatasetPrepared(AbstractNoiseDataset2D):
+class FMDDataset(AbstractNoiseDataset2D):
     path: Union[Path, str] = "data/FMD"
     mode: str = "train"
     part: str = "cf_fish"

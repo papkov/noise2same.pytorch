@@ -49,14 +49,14 @@ def get_dataset(cfg: DictConfig, cwd: Path) -> Tuple[Dataset, Dataset]:
         transforms_valid = validation_transforms_2d(crop=cfg.training.crop)
 
     if cfg.experiment.lower() == "bsd68":
-        dataset_train = bsd68.BSD68DatasetPrepared(
+        dataset_train = bsd68.BSD68Dataset(
             path=cwd / "data/BSD68/",
             mode="train",
             transforms=transforms,
             pad_divisor=pad_divisor,
         )
         if cfg.training.validate:
-            dataset_valid = bsd68.BSD68DatasetPrepared(
+            dataset_valid = bsd68.BSD68Dataset(
                 path=cwd / "data/BSD68/", mode="val",
                 pad_divisor=pad_divisor,
             )
@@ -101,7 +101,7 @@ def get_dataset(cfg: DictConfig, cwd: Path) -> Tuple[Dataset, Dataset]:
             )
 
     elif cfg.experiment.lower() == "fmd":
-        dataset_train = fmd.FMDDatasetPrepared(
+        dataset_train = fmd.FMDDataset(
             path=cwd / "data/FMD",
             mode="train",
             transforms=transforms,
@@ -110,7 +110,7 @@ def get_dataset(cfg: DictConfig, cwd: Path) -> Tuple[Dataset, Dataset]:
             add_blur_and_noise=cfg.data.add_blur_and_noise,
         )
         if cfg.training.validate:
-            dataset_valid = fmd.FMDDatasetPrepared(
+            dataset_valid = fmd.FMDDataset(
                 path=cwd / "data/FMD",
                 mode="val",
                 pad_divisor=pad_divisor,
@@ -119,7 +119,7 @@ def get_dataset(cfg: DictConfig, cwd: Path) -> Tuple[Dataset, Dataset]:
             )
 
     elif cfg.experiment.lower() == "hanzi":
-        dataset_train = hanzi.HanziDatasetPrepared(
+        dataset_train = hanzi.HanziDataset(
             path=cwd / "data/Hanzi/tiles",
             mode="training",
             transforms=transforms,
@@ -128,7 +128,7 @@ def get_dataset(cfg: DictConfig, cwd: Path) -> Tuple[Dataset, Dataset]:
             pad_divisor=pad_divisor,
         )
         if cfg.training.validate:
-            dataset_valid = hanzi.HanziDatasetPrepared(
+            dataset_valid = hanzi.HanziDataset(
                 path=cwd / "data/Hanzi/tiles",
                 mode="validation",
                 version=cfg.data.version,
@@ -137,7 +137,7 @@ def get_dataset(cfg: DictConfig, cwd: Path) -> Tuple[Dataset, Dataset]:
             )
 
     elif cfg.experiment.lower() == "imagenet":
-        dataset_train = imagenet.ImagenetDatasetPrepared(
+        dataset_train = imagenet.ImagenetDataset(
             path=cwd / "data/ImageNet",
             mode="train",
             transforms=transforms,
@@ -145,7 +145,7 @@ def get_dataset(cfg: DictConfig, cwd: Path) -> Tuple[Dataset, Dataset]:
             pad_divisor=pad_divisor,
         )
         if cfg.training.validate:
-            dataset_valid = imagenet.ImagenetDatasetPrepared(
+            dataset_valid = imagenet.ImagenetDataset(
                 path=cwd / "data/ImageNet",
                 mode="val",
                 version=cfg.data.version,
@@ -153,28 +153,28 @@ def get_dataset(cfg: DictConfig, cwd: Path) -> Tuple[Dataset, Dataset]:
             )
 
     elif cfg.experiment.lower() == "sidd":
-        dataset_train = sidd.SIDDDatasetPrepared(
+        dataset_train = sidd.SIDDDataset(
             path=cwd / "data/SIDD-NAFNet",
             mode="train",
             transforms=transforms,
             pad_divisor=pad_divisor,
         )
         if cfg.training.validate:
-            dataset_valid = sidd.SIDDDatasetPrepared(
+            dataset_valid = sidd.SIDDDataset(
                 path=cwd / "data/SIDD-NAFNet",
                 mode="val",
                 pad_divisor=pad_divisor,
             )
 
     elif cfg.experiment.lower() == "planaria":
-        dataset_train = planaria.PlanariaDatasetPrepared(
+        dataset_train = planaria.PlanariaDataset(
             path=cwd / "data/Denoising_Planaria",
             mode="train",
             transforms=training_augmentations_3d(),
             pad_divisor=pad_divisor,
         )
         if cfg.training.validate:
-            dataset_valid = planaria.PlanariaDatasetPrepared(
+            dataset_valid = planaria.PlanariaDataset(
                 path=cwd / "data/Denoising_Planaria",
                 mode="val",
                 pad_divisor=pad_divisor,
@@ -216,7 +216,7 @@ def get_test_dataset_and_gt(cfg: DictConfig, cwd: Path) -> Tuple[Dataset, np.nda
     pad_divisor = compute_pad_divisor(cfg)
 
     if cfg.experiment.lower() == "bsd68":
-        dataset = bsd68.BSD68DatasetPrepared(
+        dataset = bsd68.BSD68Dataset(
             path=cwd / "data/BSD68/",
             mode="test",
             pad_divisor=pad_divisor,
@@ -226,7 +226,7 @@ def get_test_dataset_and_gt(cfg: DictConfig, cwd: Path) -> Tuple[Dataset, np.nda
         )
 
     elif cfg.experiment.lower() == "fmd":
-        dataset = fmd.FMDDatasetPrepared(
+        dataset = fmd.FMDDataset(
             path=cwd / "data/FMD",
             mode="test",
             pad_divisor=pad_divisor,
@@ -289,7 +289,7 @@ def get_test_dataset_and_gt(cfg: DictConfig, cwd: Path) -> Tuple[Dataset, np.nda
         assert len(dataset) == len(gt)
 
     elif cfg.experiment.lower() == "hanzi":
-        dataset = hanzi.HanziDatasetPrepared(
+        dataset = hanzi.HanziDataset(
             path=cwd / "data/Hanzi/tiles",
             mode="testing",
             pad_divisor=pad_divisor,
@@ -298,7 +298,7 @@ def get_test_dataset_and_gt(cfg: DictConfig, cwd: Path) -> Tuple[Dataset, np.nda
         gt = np.load(str(cwd / "data/Hanzi/tiles/testing.npy"))[:, 0]
 
     elif cfg.experiment.lower() == "imagenet":
-        dataset = imagenet.ImagenetDatasetTest(
+        dataset = imagenet.ImagenetTestDataset(
             path=cwd / "data/ImageNet/",
             pad_divisor=pad_divisor,
         )
@@ -307,7 +307,7 @@ def get_test_dataset_and_gt(cfg: DictConfig, cwd: Path) -> Tuple[Dataset, np.nda
         ]
 
     elif cfg.experiment.lower() == "sidd":
-        dataset = sidd.SIDDDatasetPrepared(
+        dataset = sidd.SIDDDataset(
             path=cwd / "data/SIDD-NAFNet/",
             mode='test',
             pad_divisor=pad_divisor,
@@ -317,7 +317,7 @@ def get_test_dataset_and_gt(cfg: DictConfig, cwd: Path) -> Tuple[Dataset, np.nda
     elif cfg.experiment.lower() == "planaria":
         # This returns just a single image!
         # Use get_planaria_dataset_and_gt() instead
-        dataset = planaria.PlanariaDatasetTiff(
+        dataset = planaria.PlanariaTiffDataset(
             cwd
             / "data/Denoising_Planaria/test_data/condition_1/EXP278_Smed_fixed_RedDot1_sub_5_N7_m0012.tif",
             standardize=True,
@@ -369,7 +369,7 @@ def get_planaria_dataset_and_gt(filename_gt: str) -> Tuple[Dict[str, Dataset], n
     gt = normalize_percentile(gt, 0.1, 99.9)
     datasets = {}
     for c in range(1, 4):
-        datasets[f"c{c}"] = planaria.PlanariaDatasetTiff(
+        datasets[f"c{c}"] = planaria.PlanariaTiffDataset(
             filename_gt.replace("GT", f"condition_{c}"),
             standardize=True,
         )

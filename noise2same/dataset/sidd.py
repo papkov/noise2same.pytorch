@@ -69,7 +69,7 @@ def paired_paths_from_lmdb(folders, keys) -> List[Dict[str, str]]:
 
 
 @dataclass
-class SIDDDatasetPrepared(AbstractNoiseDataset2D):
+class SIDDDataset(AbstractNoiseDataset2D):
     path: Union[Path, str] = Path("data/SIDD-NAFNet")
     mode: str = "train"
     standardize_by_channel: bool = True

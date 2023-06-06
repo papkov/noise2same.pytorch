@@ -8,7 +8,7 @@ from noise2same.dataset.abc import AbstractNoiseDataset2D
 
 
 @dataclass
-class BSD68DatasetPrepared(AbstractNoiseDataset2D):
+class BSD68Dataset(AbstractNoiseDataset2D):
     path: Union[Path, str] = "data/BSD68"
     mode: str = "train"
 
