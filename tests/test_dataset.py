@@ -51,8 +51,10 @@ def test_mask_3d(mask_percentage: float):
                           # ('hanzi', HanziDataset), # TODO fix memory issue
                           ('imagenet', ImagenetDataset),
                           ('microtubules', MicrotubulesDataset),
+                          ('microtubules_generated', MicrotubulesDataset),
                           ('fmd', FMDDataset),
-                          ('planaria', PlanariaDataset),
+                          ('fmd_deconvolution', FMDDataset),
+                          # ('planaria', PlanariaDataset), # TODO fix memory issue
                           # ('sidd', SIDDDataset), # TODO move dataset
                           ('synthetic', ImagenetSyntheticDataset),
                           ('synthetic_grayscale', BSD400SyntheticDataset),
