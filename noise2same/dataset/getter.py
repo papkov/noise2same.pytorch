@@ -8,7 +8,7 @@ from omegaconf import DictConfig
 from omegaconf import OmegaConf
 from skimage import io
 from torch.utils.data import Dataset, ConcatDataset
-from tqdm.auto import tqdm
+from tqdm.auto import tqdm, trange
 
 from noise2same.util import normalize_percentile
 from . import bsd68, fmd, hanzi, imagenet, sidd, microtubules, planaria, ssi, synthetic, synthetic_grayscale
@@ -93,13 +93,8 @@ def get_test_dataset_and_gt(cfg: DictConfig, cwd: Path) -> Tuple[Dataset, np.nda
             "bsd300": synthetic.BSD300SyntheticDataset(path=cwd / "data/BSD300/test", **params),
             "set14": synthetic.Set14SyntheticDataset(path=cwd / "data/Set14", **params),
         }
-        gt = {name: [synthetic.read_image(p) for p in tqdm(ds.images, desc=name)] for name, ds in dataset.items()}
-
-        # Repeat datasets for stable validation
-        # https://github.com/TaoHuang2018/Neighbor2Neighbor/blob/2fff2978/train.py#L412
-        repeats = {"kodak": 10, "bsd300": 3, "set14": 20}
-        dataset = {name: ConcatDataset([ds] * repeats[name]) for name, ds in dataset.items()}
-        gt = {name: ds * repeats[name] for name, ds in gt.items()}
+        gt = {name: [synthetic.read_image(ds.images[i % len(ds.images)]) for i in trange(len(ds), desc=name)]
+              for name, ds in dataset.items()}
 
         # Concatenate datasets together
         dataset = ConcatDataset(list(dataset.values()))
@@ -118,16 +113,11 @@ def get_test_dataset_and_gt(cfg: DictConfig, cwd: Path) -> Tuple[Dataset, np.nda
             # Fixed noise is lower intensity, because it was quantized to 8-bit
             "bsd68": synthetic_grayscale.BSD68SyntheticDataset(path=cwd / "data/BSD68-test", fixed=False, **params),
         }
-        gt = {name: [synthetic.read_image(p) for p in
-                     tqdm(ds.ground_truth if ds.ground_truth is not None else ds.images, desc=name)]
-              for name, ds in dataset.items()}
-
-        # Repeat datasets for stable validation
-        # https://github.com/TaoHuang2018/Neighbor2Neighbor/blob/2fff2978/train.py#L412
-        # repeats = {"set12": 10, "bsd68": 10}
-        repeats = {"set12": 20, "bsd68": 4}  # 240 and 272 images respectively
-        dataset = {name: ConcatDataset([ds] * repeats[name]) for name, ds in dataset.items()}
-        gt = {name: ds * repeats[name] for name, ds in gt.items()}
+        # TODO rewrite in a readable way
+        gt = {name: [
+            synthetic.read_image((ds.ground_truth if ds.ground_truth is not None else ds.images)[i % len(ds.images)])
+            for i in trange(len(ds), desc=name)]
+            for name, ds in dataset.items()}
 
         # Concatenate datasets together
         dataset = ConcatDataset(list(dataset.values()))
