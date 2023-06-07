@@ -1,12 +1,14 @@
+from typing import Optional
+
 import numpy as np
 import pytest
 from albumentations import PadIfNeeded
-
 from hydra.utils import instantiate
 from omegaconf import OmegaConf
+
+from noise2same.dataset import *
 from noise2same.dataset.util import mask_like_image
 from noise2same.util import crop_as
-from noise2same.dataset import *
 
 
 @pytest.mark.parametrize("divisor", (2, 4, 8, 16, 32, 64))
@@ -46,25 +48,33 @@ def test_mask_3d(mask_percentage: float):
     assert np.isclose(mask_percentage, result, atol=0.1)
 
 
-@pytest.mark.parametrize('dataset_name,expected_class',
-                         [('bsd68', BSD68Dataset),
-                          # ('hanzi', HanziDataset), # TODO fix memory issue
-                          ('imagenet', ImagenetDataset),
-                          ('microtubules', MicrotubulesDataset),
-                          ('microtubules_generated', MicrotubulesDataset),
-                          ('fmd', FMDDataset),
-                          ('fmd_deconvolution', FMDDataset),
-                          # ('planaria', PlanariaDataset), # TODO fix memory issue
-                          # ('sidd', SIDDDataset), # TODO move dataset
-                          ('synthetic', ImagenetSyntheticDataset),
-                          ('synthetic_grayscale', BSD400SyntheticDataset),
-                          ('ssi', SSIDataset),
+@pytest.mark.parametrize('dataset_name,expected_dataclass,expected_dataclass_valid',
+                         [('bsd68', BSD68Dataset, BSD68Dataset),
+                          # ('hanzi', HanziDataset, HanziDataset), # TODO fix memory issue
+                          ('imagenet', ImagenetDataset, ImagenetDataset),
+                          ('microtubules', MicrotubulesDataset, None),
+                          ('microtubules_generated', MicrotubulesDataset, None),
+                          ('fmd', FMDDataset, FMDDataset),
+                          ('fmd_deconvolution', FMDDataset, FMDDataset),
+                          # ('planaria', PlanariaDataset, PlanariaDataset), # TODO fix memory issue
+                          # ('sidd', SIDDDataset, SIDDDataset), # TODO move dataset
+                          ('synthetic', ImagenetSyntheticDataset, Set14SyntheticDataset),
+                          ('synthetic_grayscale', BSD400SyntheticDataset, BSD68SyntheticDataset),
+                          ('ssi', SSIDataset, None),
                           ])
-def test_dataset_instantiation(dataset_name: str, expected_class: type):
+def test_dataset_instantiation(dataset_name: str, expected_dataclass: type, expected_dataclass_valid: Optional[type]):
     cfg = OmegaConf.load(f'../config/experiment/{dataset_name}.yaml')
+
+    if 'dataset_valid' in cfg:
+        # Validation dataset config updates fields of the training dataset config
+        cfg.dataset_valid = OmegaConf.merge(cfg.dataset, cfg.dataset_valid)
+        cfg.dataset_valid.path = '../' + cfg.dataset_valid.path
+        dataset_valid = instantiate(cfg.dataset_valid)
+        assert isinstance(dataset_valid, expected_dataclass_valid)
+
     cfg.dataset.path = '../' + cfg.dataset.path
     if 'cached' in cfg.dataset:
         # Do not use cache for testing because of memory issues
         cfg.dataset.cached = ''
     dataset = instantiate(cfg.dataset)
-    assert isinstance(dataset, expected_class)
+    assert isinstance(dataset, expected_dataclass)
