@@ -1,3 +1,4 @@
+from functools import partial
 from pathlib import Path
 from typing import Tuple, Optional, Dict
 
@@ -6,9 +7,7 @@ import tifffile
 from hydra.utils import instantiate
 from omegaconf import DictConfig
 from omegaconf import OmegaConf
-from skimage import io
-from torch.utils.data import Dataset, ConcatDataset
-from tqdm.auto import tqdm, trange
+from torch.utils.data import Dataset
 
 from noise2same.util import normalize_percentile
 from . import bsd68, fmd, hanzi, imagenet, sidd, microtubules, planaria, ssi, synthetic, synthetic_grayscale
@@ -69,7 +68,6 @@ def get_test_dataset_and_gt(cfg: DictConfig, cwd: Path) -> Tuple[Dataset, np.nda
             mode="test",
             pad_divisor=pad_divisor,
         )
-        gt = dataset.ground_truth
 
     elif cfg.experiment.lower() == "fmd":
         dataset = fmd.FMDDataset(
@@ -79,7 +77,6 @@ def get_test_dataset_and_gt(cfg: DictConfig, cwd: Path) -> Tuple[Dataset, np.nda
             part=cfg.dataset.part,
             add_blur_and_noise=cfg.dataset.add_blur_and_noise,
         )
-        gt = dataset.ground_truth
 
     elif cfg.experiment.lower() == "synthetic":
         params = {
@@ -88,18 +85,13 @@ def get_test_dataset_and_gt(cfg: DictConfig, cwd: Path) -> Tuple[Dataset, np.nda
             "pad_divisor": pad_divisor,
             "standardize": cfg.dataset.standardize,
         }
-        dataset = {
-            "kodak": synthetic.KodakSyntheticDataset(path=cwd / "data/Kodak", **params),
-            "bsd300": synthetic.BSD300SyntheticDataset(path=cwd / "data/BSD300/test", **params),
-            "set14": synthetic.Set14SyntheticDataset(path=cwd / "data/Set14", **params),
-        }
-        gt = {name: [synthetic.read_image(ds.images[i % len(ds.images)]) for i in trange(len(ds), desc=name)]
-              for name, ds in dataset.items()}
-
-        # Concatenate datasets together
-        dataset = ConcatDataset(list(dataset.values()))
-        gt = np.concatenate(list(gt.values()))
-        assert len(dataset) == len(gt)
+        dataset = synthetic.SyntheticTestDataset(
+            [partial(synthetic.KodakSyntheticDataset, path=cwd / "data/Kodak"),
+             partial(synthetic.BSD300SyntheticDataset, path=cwd / "data/BSD300/test"),
+             partial(synthetic.Set14SyntheticDataset, path=cwd / "data/Set14"),
+             ],
+            **params,
+        )
 
     elif cfg.experiment.lower() == "synthetic_grayscale":
         params = {
@@ -108,21 +100,12 @@ def get_test_dataset_and_gt(cfg: DictConfig, cwd: Path) -> Tuple[Dataset, np.nda
             "pad_divisor": pad_divisor,
             "standardize": cfg.dataset.standardize,
         }
-        dataset = {
-            "set12": synthetic_grayscale.Set12SyntheticDataset(path=cwd / "data/Set12", **params),
-            # Fixed noise is lower intensity, because it was quantized to 8-bit
-            "bsd68": synthetic_grayscale.BSD68SyntheticDataset(path=cwd / "data/BSD68-test", fixed=False, **params),
-        }
-        # TODO rewrite in a readable way
-        gt = {name: [
-            synthetic.read_image((ds.ground_truth if ds.ground_truth is not None else ds.images)[i % len(ds.images)])
-            for i in trange(len(ds), desc=name)]
-            for name, ds in dataset.items()}
-
-        # Concatenate datasets together
-        dataset = ConcatDataset(list(dataset.values()))
-        gt = np.concatenate(list(gt.values()))
-        assert len(dataset) == len(gt)
+        dataset = synthetic.SyntheticTestDataset(
+            [partial(synthetic_grayscale.Set12SyntheticDataset, path=cwd / "data/Set12"),
+             partial(synthetic_grayscale.BSD68SyntheticDataset, path=cwd / "data/BSD68-test", fixed=False),
+             ],
+            **params,
+        )
 
     elif cfg.experiment.lower() == "hanzi":
         dataset = hanzi.HanziDataset(
@@ -131,16 +114,12 @@ def get_test_dataset_and_gt(cfg: DictConfig, cwd: Path) -> Tuple[Dataset, np.nda
             pad_divisor=pad_divisor,
             noise_level=cfg.dataset.noise_level
         )
-        gt = np.load(str(cwd / "data/Hanzi/tiles/testing.npy"))[:, 0]
 
     elif cfg.experiment.lower() == "imagenet":
         dataset = imagenet.ImagenetTestDataset(
             path=cwd / "data/ImageNet/",
             pad_divisor=pad_divisor,
         )
-        gt = [
-            np.load(p)[0] for p in tqdm(sorted((dataset.path / "test").glob("*.npy")))
-        ]
 
     elif cfg.experiment.lower() == "sidd":
         dataset = sidd.SIDDDataset(
@@ -148,7 +127,6 @@ def get_test_dataset_and_gt(cfg: DictConfig, cwd: Path) -> Tuple[Dataset, np.nda
             mode='test',
             pad_divisor=pad_divisor,
         )
-        gt = dataset.ground_truth
 
     elif cfg.experiment.lower() == "planaria":
         # This returns just a single image!
@@ -160,12 +138,6 @@ def get_test_dataset_and_gt(cfg: DictConfig, cwd: Path) -> Tuple[Dataset, np.nda
             pad_divisor=pad_divisor,
         )
         dataset.mean, dataset.std = 0, 1
-
-        gt = tifffile.imread(
-            cwd
-            / "data/Denoising_Planaria/test_data/GT/EXP278_Smed_fixed_RedDot1_sub_5_N7_m0012.tif"
-        )
-        gt = normalize_percentile(gt, 0.1, 99.9)
 
     elif cfg.experiment.lower() == "microtubules":
         dataset = microtubules.MicrotubulesDataset(
@@ -179,20 +151,16 @@ def get_test_dataset_and_gt(cfg: DictConfig, cwd: Path) -> Tuple[Dataset, np.nda
         )
         # dataset.mean, dataset.std = 0, 1
 
-        gt = io.imread(str(cwd / "data/microtubules-simulation/ground-truth.tif"))
-        gt = normalize_percentile(gt, 0.1, 99.9)
-
     elif cfg.experiment.lower() == "ssi":
         dataset = ssi.SSIDataset(
             path=cwd / cfg.dataset.path,
             input_name=cfg.dataset.input_name,
             pad_divisor=pad_divisor,
         )
-        gt = dataset.gt
     else:
         raise ValueError(f"Dataset {cfg.experiment} not found")
 
-    return dataset, gt
+    return dataset, dataset.ground_truth
 
 
 def get_planaria_dataset_and_gt(filename_gt: str) -> Tuple[Dict[str, Dataset], np.ndarray]:

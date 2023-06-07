@@ -8,6 +8,7 @@ from pytorch_toolbelt.inference.tiles import ImageSlicer
 
 from noise2same.dataset.abc import AbstractNoiseDataset3D, AbstractNoiseDataset3DLarge
 from noise2same.util import normalize_percentile
+import re
 
 
 @dataclass
@@ -38,6 +39,8 @@ class PlanariaTiffDataset(AbstractNoiseDataset3DLarge):
 
     def _get_images(self) -> Dict[str, Union[List[str], np.ndarray]]:
         self.image = tifffile.imread(self.path)[..., None]
+        self.ground_truth = normalize_percentile(tifffile.imread(re.sub(r'condition_\d', 'GT', str(self.path))),
+                                                 0.1, 99.9)
 
         if self.standardize:
             self.mean = self.image.mean()

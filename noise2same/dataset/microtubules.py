@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict, List, Tuple, Union
+from typing import Union
 
 import numpy as np
 from skimage import io
@@ -11,6 +11,7 @@ from noise2same.dataset.util import (
     add_poisson_gaussian_noise,
     normalize,
 )
+from noise2same.util import normalize_percentile
 
 
 @dataclass
@@ -21,6 +22,8 @@ class MicrotubulesDataset(AbstractNoiseDataset3DLarge):
 
     def _read_large_image(self):
         self.image = io.imread(str(self.path / self.input_name)).astype(np.float32)
+        self.ground_truth = normalize_percentile(io.imread(str(self.path / 'ground-truth.tif')).astype(np.float32),
+                                                 0.1, 99.9)
         if self.add_blur_and_noise:
             print(f"Generating blur and noise for {self.input_name}")
             # self.image = normalize_percentile(self.image, 0.1, 99.9)

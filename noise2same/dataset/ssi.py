@@ -39,7 +39,7 @@ class SSIDataset(AbstractNoiseDataset2D):
         )
 
         self.psf = psf_kernel
-        self.gt = image_clipped
+        self.ground_truth = image_clipped
 
         return {
             "noisy_input": noisy_blurred_image[None, ...]
