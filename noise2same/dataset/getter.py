@@ -3,14 +3,15 @@ from typing import Tuple, Optional, Dict
 
 import numpy as np
 import tifffile
+from hydra.utils import instantiate
 from omegaconf import DictConfig
+from omegaconf import OmegaConf
 from skimage import io
 from torch.utils.data import Dataset, ConcatDataset
 from tqdm.auto import tqdm
 
-from . import bsd68, fmd, hanzi, imagenet, sidd, microtubules, planaria, ssi, synthetic, synthetic_grayscale
-from .util import training_augmentations_2d, training_augmentations_3d, validation_transforms_2d
 from noise2same.util import normalize_percentile
+from . import bsd68, fmd, hanzi, imagenet, sidd, microtubules, planaria, ssi, synthetic, synthetic_grayscale
 
 
 def compute_pad_divisor(cfg: DictConfig) -> Optional[int]:
@@ -37,171 +38,18 @@ def get_dataset(cfg: DictConfig, cwd: Path) -> Tuple[Dataset, Dataset]:
     :param cwd: Path, project working directory
     :return: Tuple[Dataset, Dataset]
     """
-
+    # TODO consider moving to main
     dataset_valid = None
-
     pad_divisor = compute_pad_divisor(cfg)
 
-    transforms = None
-    transforms_valid = None
-    if cfg.experiment.lower() in ("bsd68", "fmd", "synthetic", "synthetic_grayscale", "hanzi", "imagenet", "sidd", "ssi"):
-        transforms = training_augmentations_2d(crop=cfg.training.crop)
-        transforms_valid = validation_transforms_2d(crop=cfg.training.crop)
+    if 'dataset_valid' in cfg:
+        # Validation dataset config updates fields of the training dataset config
+        cfg.dataset_valid = OmegaConf.merge(cfg.dataset, cfg.dataset_valid)
+        cfg.dataset_valid.path = str(cwd / cfg.dataset_valid.path)
+        dataset_valid = instantiate(cfg.dataset_valid, pad_divisor=pad_divisor)
 
-    if cfg.experiment.lower() == "bsd68":
-        dataset_train = bsd68.BSD68Dataset(
-            path=cwd / "data/BSD68/",
-            mode="train",
-            transforms=transforms,
-            pad_divisor=pad_divisor,
-        )
-        if cfg.training.validate:
-            dataset_valid = bsd68.BSD68Dataset(
-                path=cwd / "data/BSD68/", mode="val",
-                pad_divisor=pad_divisor,
-            )
-
-    elif cfg.experiment.lower() == "synthetic":
-        dataset_train = synthetic.ImagenetSyntheticDataset(
-            path=cwd / "data/Imagenet_val",
-            noise_type=cfg.dataset.noise_type,
-            noise_param=cfg.dataset.noise_param,
-            transforms=transforms,
-            pad_divisor=pad_divisor,
-            standardize=cfg.dataset.standardize,
-        )
-        if cfg.training.validate:
-            dataset_valid = synthetic.Set14SyntheticDataset(
-                path=cwd / "data/Set14",
-                noise_type=cfg.dataset.noise_type,
-                noise_param=cfg.dataset.noise_param,
-                transforms=transforms_valid,
-                pad_divisor=pad_divisor,
-                standardize=cfg.dataset.standardize,
-            )
-
-    elif cfg.experiment.lower() == "synthetic_grayscale":
-        dataset_train = synthetic_grayscale.BSD400SyntheticDataset(
-            path=cwd / "data/BSD400",
-            noise_type=cfg.dataset.noise_type,
-            noise_param=cfg.dataset.noise_param,
-            transforms=transforms,
-            pad_divisor=pad_divisor,
-            standardize=cfg.dataset.standardize,
-        )
-        if cfg.training.validate:
-            dataset_valid = synthetic_grayscale.BSD68SyntheticDataset(
-                path=cwd / "data/BSD68-test",
-                noise_type=cfg.dataset.noise_type,
-                noise_param=cfg.dataset.noise_param,
-                transforms=transforms_valid,
-                pad_divisor=pad_divisor,
-                standardize=cfg.dataset.standardize,
-                fixed=True,
-            )
-
-    elif cfg.experiment.lower() == "fmd":
-        dataset_train = fmd.FMDDataset(
-            path=cwd / "data/FMD",
-            mode="train",
-            transforms=transforms,
-            pad_divisor=pad_divisor,
-            part=cfg.dataset.part,
-            add_blur_and_noise=cfg.dataset.add_blur_and_noise,
-        )
-        if cfg.training.validate:
-            dataset_valid = fmd.FMDDataset(
-                path=cwd / "data/FMD",
-                mode="val",
-                pad_divisor=pad_divisor,
-                part=cfg.dataset.part,
-                add_blur_and_noise=cfg.dataset.add_blur_and_noise,
-            )
-
-    elif cfg.experiment.lower() == "hanzi":
-        dataset_train = hanzi.HanziDataset(
-            path=cwd / "data/Hanzi/tiles",
-            mode="training",
-            transforms=transforms,
-            version=cfg.dataset.version,
-            noise_level=cfg.dataset.noise_level,
-            pad_divisor=pad_divisor,
-        )
-        if cfg.training.validate:
-            dataset_valid = hanzi.HanziDataset(
-                path=cwd / "data/Hanzi/tiles",
-                mode="validation",
-                version=cfg.dataset.version,
-                noise_level=cfg.dataset.noise_level,
-                pad_divisor=pad_divisor,
-            )
-
-    elif cfg.experiment.lower() == "imagenet":
-        dataset_train = imagenet.ImagenetDataset(
-            path=cwd / "data/ImageNet",
-            mode="train",
-            transforms=transforms,
-            version=cfg.dataset.version,
-            pad_divisor=pad_divisor,
-        )
-        if cfg.training.validate:
-            dataset_valid = imagenet.ImagenetDataset(
-                path=cwd / "data/ImageNet",
-                mode="val",
-                version=cfg.dataset.version,
-                pad_divisor=pad_divisor,
-            )
-
-    elif cfg.experiment.lower() == "sidd":
-        dataset_train = sidd.SIDDDataset(
-            path=cwd / "data/SIDD-NAFNet",
-            mode="train",
-            transforms=transforms,
-            pad_divisor=pad_divisor,
-        )
-        if cfg.training.validate:
-            dataset_valid = sidd.SIDDDataset(
-                path=cwd / "data/SIDD-NAFNet",
-                mode="val",
-                pad_divisor=pad_divisor,
-            )
-
-    elif cfg.experiment.lower() == "planaria":
-        dataset_train = planaria.PlanariaDataset(
-            path=cwd / "data/Denoising_Planaria",
-            mode="train",
-            transforms=training_augmentations_3d(),
-            pad_divisor=pad_divisor,
-        )
-        if cfg.training.validate:
-            dataset_valid = planaria.PlanariaDataset(
-                path=cwd / "data/Denoising_Planaria",
-                mode="val",
-                pad_divisor=pad_divisor,
-            )
-
-    elif cfg.experiment.lower() == "microtubules":
-        dataset_train = microtubules.MicrotubulesDataset(
-            path=cwd / cfg.dataset.path,
-            input_name=cfg.dataset.input_name,
-            transforms=training_augmentations_3d(),
-            tile_size=cfg.dataset.tile_size,
-            tile_step=cfg.dataset.tile_step,
-            add_blur_and_noise=cfg.dataset.add_blur_and_noise,
-            pad_divisor=pad_divisor,
-        )
-
-    elif cfg.experiment.lower() == "ssi":
-        dataset_train = ssi.SSIDataset(
-            path=cwd / cfg.dataset.path,
-            input_name=cfg.dataset.input_name,
-            transforms=transforms,
-            pad_divisor=pad_divisor,
-        )
-    else:
-        # todo add other datasets
-        raise ValueError(f"Unknown experiment: {cfg.experiment}")
-
+    cfg.dataset.path = str(cwd / cfg.dataset.path)
+    dataset_train = instantiate(cfg.dataset, pad_divisor=pad_divisor)
     return dataset_train, dataset_valid
 
 

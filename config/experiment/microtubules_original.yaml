@@ -8,6 +8,8 @@ dataset:
   n_dim: 3
   tile_size: 64
   tile_step: 64  # to prevent overlap
+  transforms:
+    _target_: noise2same.dataset.util.training_augmentations_3d
 
 network:
   base_channels: 48

@@ -1,3 +1,4 @@
+from pathlib import Path
 from typing import Optional
 
 import numpy as np
@@ -7,6 +8,7 @@ from hydra.utils import instantiate
 from omegaconf import OmegaConf
 
 from noise2same.dataset import *
+from noise2same.dataset.getter import get_dataset
 from noise2same.dataset.util import mask_like_image
 from noise2same.util import crop_as
 
@@ -64,17 +66,49 @@ def test_mask_3d(mask_percentage: float):
                           ])
 def test_dataset_instantiation(dataset_name: str, expected_dataclass: type, expected_dataclass_valid: Optional[type]):
     cfg = OmegaConf.load(f'../config/experiment/{dataset_name}.yaml')
+    pad_divisor = 32
 
     if 'dataset_valid' in cfg:
         # Validation dataset config updates fields of the training dataset config
         cfg.dataset_valid = OmegaConf.merge(cfg.dataset, cfg.dataset_valid)
         cfg.dataset_valid.path = '../' + cfg.dataset_valid.path
-        dataset_valid = instantiate(cfg.dataset_valid)
+        dataset_valid = instantiate(cfg.dataset_valid, pad_divisor=pad_divisor)
         assert isinstance(dataset_valid, expected_dataclass_valid)
 
     cfg.dataset.path = '../' + cfg.dataset.path
     if 'cached' in cfg.dataset:
         # Do not use cache for testing because of memory issues
         cfg.dataset.cached = ''
-    dataset = instantiate(cfg.dataset)
+    dataset = instantiate(cfg.dataset, pad_divisor=pad_divisor)
     assert isinstance(dataset, expected_dataclass)
+
+
+@pytest.mark.parametrize('dataset_name,expected_dataclass,expected_dataclass_valid',
+                         [('bsd68', BSD68Dataset, BSD68Dataset),
+                          # ('hanzi', HanziDataset, HanziDataset), # TODO fix memory issue
+                          ('imagenet', ImagenetDataset, ImagenetDataset),
+                          ('microtubules', MicrotubulesDataset, None),
+                          ('microtubules_generated', MicrotubulesDataset, None),
+                          ('fmd', FMDDataset, FMDDataset),
+                          ('fmd_deconvolution', FMDDataset, FMDDataset),
+                          # ('planaria', PlanariaDataset, PlanariaDataset), # TODO fix memory issue
+                          # ('sidd', SIDDDataset, SIDDDataset), # TODO move dataset
+                          ('synthetic', ImagenetSyntheticDataset, Set14SyntheticDataset),
+                          ('synthetic_grayscale', BSD400SyntheticDataset, BSD68SyntheticDataset),
+                          ('ssi', SSIDataset, None),
+                          ])
+def test_get_dataset(dataset_name: str, expected_dataclass: type, expected_dataclass_valid: Optional[type]):
+    cwd = Path('..')
+    cfg = OmegaConf.load(f'../config/experiment/{dataset_name}.yaml')
+    cfg.update({'backbone_name': 'unet'})
+    cfg.update({'backbone': {'depth': 3}})
+    if 'cached' in cfg.dataset:
+        # Do not use cache for testing because of memory issues
+        cfg.dataset.cached = ''
+
+    dataset_train, dataset_valid = get_dataset(cfg, cwd=cwd)
+    assert isinstance(dataset_train, expected_dataclass)
+    if expected_dataclass_valid is not None:
+        assert isinstance(dataset_valid, expected_dataclass_valid)
+    else:
+        assert dataset_valid is None

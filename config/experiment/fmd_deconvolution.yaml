@@ -6,9 +6,15 @@ dataset:
   path: data/FMD/
   part: cf_fish
   add_blur_and_noise: True
+  transforms:
+    _target_: noise2same.dataset.util.training_augmentations_2d
+    crop: 64
 
 dataset_valid:
   mode: val
+  transforms:
+    _target_: noise2same.dataset.util.validation_transforms_2d
+    crop: 64
 
 training:
   crop: 128

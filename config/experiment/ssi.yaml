@@ -7,6 +7,9 @@ dataset:
   _target_: noise2same.dataset.SSIDataset
   path: data/ssi/
   input_name: drosophila
+  transforms:
+    _target_: noise2same.dataset.util.training_augmentations_2d
+    crop: 64
 
 training:
   num_workers: 4

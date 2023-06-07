@@ -5,9 +5,15 @@ dataset:
   _target_: noise2same.dataset.SIDDDataset
   path: data/SIDD-NAFNet/
   n_channels: 3
+  transforms:
+    _target_: noise2same.dataset.util.training_augmentations_2d
+    crop: 64
 
 dataset_valid:
   mode: val
+  transforms:
+    _target_: noise2same.dataset.util.validation_transforms_2d
+    crop: 64
 
 training:
   steps: 50000
