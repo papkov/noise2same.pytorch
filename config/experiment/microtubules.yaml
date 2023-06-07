@@ -13,6 +13,11 @@ dataset:
   transforms:
     _target_: noise2same.dataset.util.training_augmentations_3d
 
+dataset_test:
+  transforms: null
+  tile_size: 128
+  tile_step: 96
+
 network:
   base_channels: 48
   skip_method: add

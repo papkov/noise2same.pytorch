@@ -9,7 +9,12 @@ dataset:
     crop: 128
 
 dataset_valid:
+  transforms: null
   mode: val
+
+dataset_test:
+  transforms: null
+  mode: test
 
 training:
   crop: 128  # 64 in the paper

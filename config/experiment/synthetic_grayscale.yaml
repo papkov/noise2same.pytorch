@@ -19,6 +19,19 @@ dataset_valid:
     _target_: noise2same.dataset.util.validation_transforms_2d
     crop: 64
 
+dataset_test:
+  _target_: noise2same.dataset.SyntheticTestDataset
+  transforms: null
+  datasets:
+    - _target_: noise2same.dataset.BSD68SyntheticDataset
+      _partial_: True
+      path: data/BSD68-test/
+      n_repeats: 4
+    - _target_: noise2same.dataset.Set12SyntheticDataset
+      _partial_: True
+      path: data/Set12/
+      n_repeats: 20
+
 training:
   crop: 64
   steps: 50000

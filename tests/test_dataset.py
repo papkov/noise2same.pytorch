@@ -120,3 +120,14 @@ def test_dataset_repeat(n_repeats: int):
     dataset = Set12SyntheticDataset(path="../data/Set12", n_repeats=n_repeats, standardize=True, noise_param=0)
     assert len(dataset) == 12 * n_repeats
     assert torch.equal(dataset[(len(dataset) - 1) % 12]['image'], dataset[len(dataset) - 1]['image'])
+
+
+@pytest.mark.parametrize('dataset_name', ['synthetic', 'synthetic_grayscale'])
+def test_concat_dataset(dataset_name):
+    # TODO add more meaningful tests
+    cwd = Path('..')
+    cfg = OmegaConf.load(f'../config/experiment/{dataset_name}.yaml')
+    for i, d in enumerate(cfg.dataset_test.datasets):
+        cfg.dataset_test.datasets[i].path = str(cwd / d.path)
+        cfg.dataset_test.datasets[i] = OmegaConf.merge(cfg.dataset, cfg.dataset_test.datasets[i])
+    _ = instantiate(cfg.dataset_test)

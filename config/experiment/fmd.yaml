@@ -16,6 +16,10 @@ dataset_valid:
     _target_: noise2same.dataset.util.validation_transforms_2d
     crop: 64
 
+dataset_test:
+  transforms: null
+  mode: test
+
 training:
   crop: 64
   steps: 20000

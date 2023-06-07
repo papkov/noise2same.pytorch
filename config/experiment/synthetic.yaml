@@ -20,6 +20,23 @@ dataset_valid:
     _target_: noise2same.dataset.util.validation_transforms_2d
     crop: 64
 
+dataset_test:
+  _target_: noise2same.dataset.SyntheticTestDataset
+  transforms: null
+  datasets:
+    - _target_: noise2same.dataset.KodakSyntheticDataset
+      _partial_: True
+      path: data/Kodak/
+      n_repeats: 10
+    - _target_: noise2same.dataset.BSD300SyntheticDataset
+      _partial_: True
+      path: data/BSD300/test/
+      n_repeats: 3
+    - _target_: noise2same.dataset.Set14SyntheticDataset
+      _partial_: True
+      path: data/Set14/
+      n_repeats: 20
+
 training:
   crop: 64
   steps: 50000
