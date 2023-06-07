@@ -113,6 +113,7 @@ class KodakSyntheticDataset(SyntheticDataset):
     path: Union[Path, str] = "data/Kodak"
     extension: str = "png"
     name: str = "kodak"
+    n_repeats: int = 10  # 240
 
 
 @dataclass
@@ -120,6 +121,7 @@ class Set14SyntheticDataset(SyntheticDataset):
     path: Union[Path, str] = "data/Set14"
     extension: str = "png"
     name: str = "set14"
+    n_repeats: int = 20  # 280 TODO in fact we have 12 images, investigate
 
 
 @dataclass
@@ -127,3 +129,4 @@ class BSD300SyntheticDataset(SyntheticDataset):
     path: Union[Path, str] = "data/BSD300/test"
     extension: str = "png"
     name: str = "bsd300"
+    n_repeats: int = 3  # 300
