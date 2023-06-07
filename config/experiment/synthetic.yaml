@@ -1,6 +1,9 @@
 # @package _global_
 experiment: synthetic
 data:
+  _target_: noise2same.dataset.ImagenetSyntheticDataset
+  path: data/Imagenet_val/
+  cached: Imagenet_val.npy
   n_dim: 2
   n_channels: 3
   noise_type: gaussian

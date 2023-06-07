@@ -1,6 +1,8 @@
 # @package _global_
 experiment: hanzi
 data:
+  _target_: noise2same.dataset.HanziDataset
+  path: data/Hanzi/tiles/
   version: 0
   noise_level: 3
 

@@ -1,6 +1,8 @@
 # @package _global_
 experiment: imagenet
 data:
+  _target_: noise2same.dataset.ImagenetDataset
+  path: data/ImageNet/
   n_channels: 3
   version: 0
 

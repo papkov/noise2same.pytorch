@@ -1,8 +1,9 @@
 # @package _global_
 experiment: microtubules
 data:
+  _target_: noise2same.dataset.MicrotubulesDataset
   n_dim: 3
-  path: data/microtubules-simulation
+  path: data/microtubules-simulation/
   input_name: input.tif
   tile_size: 64
   tile_step: 64  # to prevent overlap
