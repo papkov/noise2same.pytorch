@@ -32,6 +32,7 @@ class AbstractNoiseDataset(Dataset, ABC):
     standardize: bool = True
     standardize_by_channel: bool = False
     n_dim: int = 2
+    n_channels: int = 1
     mean: Optional[Union[float, np.ndarray]] = None
     std: Optional[Union[float, np.ndarray]] = None
     transforms: Optional[
@@ -66,7 +67,8 @@ class AbstractNoiseDataset(Dataset, ABC):
             ".tiff",
         ):
             raise ValueError(
-                f"Incorrect path, {self.path} not a dir and {self.path.suffix} is not TIF "
+                f"Incorrect path, {self.path} not a dir and {self.path.suffix} is not TIF. "
+                f"Current working dir: {Path.cwd()}"
             )
 
         images = self._get_images()
@@ -138,12 +140,14 @@ class AbstractNoiseDataset(Dataset, ABC):
         :return: dict(image, mask, mean, std)
         """
         image = self._read_image(self.images[i]).astype(np.float32)
+        # TODO move this functionality to _read_image or a separate method
         if image.ndim == self.n_dim:
             image = np.expand_dims(image, axis=-1 if self.channel_last else 0)
 
         ground_truth = None
         if self.ground_truth is not None:
             ground_truth = self._read_image(self.ground_truth[i]).astype(np.float32)
+            # TODO move this functionality to _read_image or a separate method
             if ground_truth.ndim == self.n_dim:
                 ground_truth = np.expand_dims(ground_truth, axis=-1 if self.channel_last else 0)
 
@@ -161,6 +165,7 @@ class AbstractNoiseDataset(Dataset, ABC):
                 ret["ground_truth"], _, _ = self._standardize(ret["ground_truth"], ret["mean"], ret["std"])
         else:
             # in case the data was normalized or standardized before
+            # TODO less ugly way to do this
             ret["mean"] = torch.tensor(0).view((1,) * ret["image"].ndim)
             ret["std"] = torch.tensor(1).view((1,) * ret["image"].ndim)
 
