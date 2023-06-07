@@ -20,34 +20,6 @@ from noise2same.evaluator import Evaluator
 from utils import parametrize_backbone_and_head
 
 
-def get_loader(
-    dataset: Dataset,
-    experiment: str,
-    num_workers: int,
-):
-    loader = None
-    # TODO why two different loaders?
-    if experiment.lower() in ("bsd68", "fmd", "imagenet", "sidd", "hanzi", "synthetic", "synthetic_grayscale"):
-        loader = DataLoader(
-            dataset,
-            batch_size=1,  # todo customize
-            num_workers=num_workers,
-            shuffle=False,
-            pin_memory=True,
-            drop_last=False,
-        )
-    elif experiment == "ssi":
-        loader = DataLoader(
-            dataset,
-            batch_size=1,  # todo customize
-            num_workers=num_workers,
-            shuffle=False,
-            pin_memory=True,
-            drop_last=False,
-        )
-    return loader
-
-
 def get_ground_truth_and_predictions(
     evaluator: Evaluator,
     experiment: str,
@@ -157,21 +129,24 @@ def get_scores(
 
 def evaluate(
     evaluator: Evaluator,
+    dataset: Dataset,
     ground_truth: np.ndarray,
     experiment: str,
     cwd: Path,
     train_dir: Path,
-    loader: DataLoader = None,
-    dataset: Dataset = None,
     num_workers: int = None,
     half: bool = False,
     save_results: bool = True,
     verbose: bool = True,
 ):
-    assert loader is not None or dataset is not None
-
-    if loader is None:
-        loader = get_loader(dataset, experiment, num_workers)
+    loader = DataLoader(
+        dataset,
+        batch_size=1,  # todo customize
+        num_workers=num_workers,
+        shuffle=False,
+        pin_memory=True,
+        drop_last=False,
+    )
 
     ground_truth, predictions = get_ground_truth_and_predictions(
         evaluator, experiment, ground_truth, cwd, loader, dataset, half
@@ -262,7 +237,7 @@ def main(train_dir: Path, checkpoint: str = 'last', other_args: list = None) -> 
     masked = getattr(cfg, "masked", False)
     evaluator = Evaluator(mdl, checkpoint_path=checkpoint_path, masked=masked)
     evaluate(
-        evaluator, ground_truth, cfg.experiment, cwd, train_dir, dataset=dataset, half=half,
+        evaluator, dataset, ground_truth, cfg.experiment, cwd, train_dir, half=half,
         num_workers=cfg.training.num_workers
     )
 

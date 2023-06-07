@@ -158,8 +158,8 @@ def main(cfg: DictConfig) -> None:
     if cfg.evaluate:
         test_dataset, ground_truth = get_test_dataset_and_gt(cfg, cwd)
 
-        scores = evaluate.evaluate(trainer.evaluator, ground_truth, cfg.experiment, cwd, Path(os.getcwd()),
-                                   dataset=test_dataset, half=cfg.training.amp, num_workers=cfg.training.num_workers)
+        scores = evaluate.evaluate(trainer.evaluator, test_dataset, ground_truth, cfg.experiment, cwd,
+                                   Path(os.getcwd()), half=cfg.training.amp, num_workers=cfg.training.num_workers)
 
         if not cfg.check:
             wandb.log(scores)
