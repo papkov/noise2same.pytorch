@@ -73,6 +73,7 @@ class SIDDDataset(AbstractNoiseDataset2D):
     path: Union[Path, str] = Path("data/SIDD-NAFNet")
     mode: str = "train"
     standardize_by_channel: bool = True
+    n_channels: int = 3
 
     def _validate(self) -> bool:
         assert self.mode in ("train", "val", "test")

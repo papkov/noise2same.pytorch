@@ -28,6 +28,7 @@ class SyntheticDataset(AbstractNoiseDataset2D):
     noise_param: Union[int, Tuple[int, int]] = 25
     name: str = ""
     cached: str = ""
+    n_channels: int = 3
 
     def _validate(self) -> bool:
         assert self.noise_type in ("gaussian", "poisson", "none")

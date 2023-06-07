@@ -13,6 +13,7 @@ class ImagenetDataset(AbstractNoiseDataset2D):
     mode: str = "train"
     version: int = 0  # two noisy copies exist (0, 1)
     standardize_by_channel: bool = True
+    n_channels: int = 3
 
     def _validate(self) -> bool:
         assert self.mode in ("train", "val")
