@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, List, Union, Sequence, Tuple
+from typing import Any, Dict, List, Union, Sequence, Tuple
 
 import numpy as np
 import torch
@@ -29,6 +29,14 @@ class SyntheticDataset(AbstractNoiseDataset2D):
     name: str = ""
     cached: str = ""
     n_channels: int = 3
+    n_repeats: int = 1  # repeat dataset for stable testing
+
+    def __len__(self):
+        return super().__len__() * self.n_repeats
+
+    def __getitem__(self, i: int) -> Dict[str, Any]:
+        i = i % super().__len__()
+        return super().__getitem__(i)
 
     def _validate(self) -> bool:
         assert self.noise_type in ("gaussian", "poisson", "none")
