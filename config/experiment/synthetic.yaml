@@ -1,6 +1,6 @@
 # @package _global_
 experiment: synthetic
-data:
+dataset:
   _target_: noise2same.dataset.ImagenetSyntheticDataset
   path: data/Imagenet_val/
   cached: Imagenet_val.npy

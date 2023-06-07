@@ -38,7 +38,7 @@ training:
   amp: True
   info_padding: False
 
-data:
+dataset:
   n_dim: 2
   n_channels: 1
   standardize: True  # subtract mean and divide by std for each image separately

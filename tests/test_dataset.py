@@ -62,9 +62,9 @@ def test_mask_3d(mask_percentage: float):
                           ])
 def test_dataset_instantiation(dataset_name: str, expected_class: type):
     cfg = OmegaConf.load(f'../config/experiment/{dataset_name}.yaml')
-    cfg.data.path = '../' + cfg.data.path
-    if 'cached' in cfg.data:
+    cfg.dataset.path = '../' + cfg.dataset.path
+    if 'cached' in cfg.dataset:
         # Do not use cache for testing because of memory issues
-        cfg.data.cached = ''
-    dataset = instantiate(cfg.data)
+        cfg.dataset.cached = ''
+    dataset = instantiate(cfg.dataset)
     assert isinstance(dataset, expected_class)

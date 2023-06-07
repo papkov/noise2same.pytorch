@@ -1,6 +1,6 @@
 # @package _global_
 experiment: microtubules
-data:
+dataset:
   _target_: noise2same.dataset.MicrotubulesDataset
   path: data/microtubules-simulation/
   input_name: input.tif

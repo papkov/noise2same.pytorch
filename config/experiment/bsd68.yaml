@@ -1,6 +1,6 @@
 # @package _global_
 experiment: bsd68
-data:
+dataset:
   _target_: noise2same.dataset.BSD68Dataset
   path: data/BSD68/
   n_dim: 2

@@ -1,6 +1,6 @@
 # @package _global_
 experiment: synthetic_grayscale
-data:
+dataset:
   _target_: noise2same.dataset.BSD400SyntheticDataset
   path: data/BSD400/
   n_dim: 2

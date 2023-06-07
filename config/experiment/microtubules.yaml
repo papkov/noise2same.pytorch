@@ -2,7 +2,7 @@
 experiment: microtubules
 evaluate: True
 
-data:
+dataset:
   _target_: noise2same.dataset.MicrotubulesDataset
   n_dim: 3
   path: data/microtubules-simulation/

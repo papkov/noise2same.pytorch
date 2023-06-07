@@ -30,25 +30,25 @@ def parametrize_backbone_and_head(cfg: DictConfig) -> Tuple[torch.nn.Module, tor
     head = Identity()
     if cfg.backbone_name == 'unet':
         backbone = UNet(
-            in_channels=cfg.data.n_channels,
+            in_channels=cfg.dataset.n_channels,
             **cfg.backbone
         )
         head = RegressionHead(
             in_channels=cfg.backbone.base_channels,
-            out_channels=cfg.data.n_channels,
-            n_dim=cfg.data.n_dim
+            out_channels=cfg.dataset.n_channels,
+            n_dim=cfg.dataset.n_dim
         )
     elif cfg.backbone_name == 'swinir':
-        assert cfg.data.n_dim == 2
+        assert cfg.dataset.n_dim == 2
         backbone = SwinIR(
-            in_chans=cfg.data.n_channels,
+            in_chans=cfg.dataset.n_channels,
             img_size=recalculate_img_size(cfg),
             **cfg.backbone
         )
     elif cfg.backbone_name == 'swinia':
-        assert cfg.data.n_dim == 2
+        assert cfg.dataset.n_dim == 2
         backbone = SwinIA(
-            in_chans=cfg.data.n_channels,
+            in_chans=cfg.dataset.n_channels,
             input_size=recalculate_img_size(cfg),
             **cfg.backbone
         )

@@ -64,39 +64,39 @@ def get_dataset(cfg: DictConfig, cwd: Path) -> Tuple[Dataset, Dataset]:
     elif cfg.experiment.lower() == "synthetic":
         dataset_train = synthetic.ImagenetSyntheticDataset(
             path=cwd / "data/Imagenet_val",
-            noise_type=cfg.data.noise_type,
-            noise_param=cfg.data.noise_param,
+            noise_type=cfg.dataset.noise_type,
+            noise_param=cfg.dataset.noise_param,
             transforms=transforms,
             pad_divisor=pad_divisor,
-            standardize=cfg.data.standardize,
+            standardize=cfg.dataset.standardize,
         )
         if cfg.training.validate:
             dataset_valid = synthetic.Set14SyntheticDataset(
                 path=cwd / "data/Set14",
-                noise_type=cfg.data.noise_type,
-                noise_param=cfg.data.noise_param,
+                noise_type=cfg.dataset.noise_type,
+                noise_param=cfg.dataset.noise_param,
                 transforms=transforms_valid,
                 pad_divisor=pad_divisor,
-                standardize=cfg.data.standardize,
+                standardize=cfg.dataset.standardize,
             )
 
     elif cfg.experiment.lower() == "synthetic_grayscale":
         dataset_train = synthetic_grayscale.BSD400SyntheticDataset(
             path=cwd / "data/BSD400",
-            noise_type=cfg.data.noise_type,
-            noise_param=cfg.data.noise_param,
+            noise_type=cfg.dataset.noise_type,
+            noise_param=cfg.dataset.noise_param,
             transforms=transforms,
             pad_divisor=pad_divisor,
-            standardize=cfg.data.standardize,
+            standardize=cfg.dataset.standardize,
         )
         if cfg.training.validate:
             dataset_valid = synthetic_grayscale.BSD68SyntheticDataset(
                 path=cwd / "data/BSD68-test",
-                noise_type=cfg.data.noise_type,
-                noise_param=cfg.data.noise_param,
+                noise_type=cfg.dataset.noise_type,
+                noise_param=cfg.dataset.noise_param,
                 transforms=transforms_valid,
                 pad_divisor=pad_divisor,
-                standardize=cfg.data.standardize,
+                standardize=cfg.dataset.standardize,
                 fixed=True,
             )
 
@@ -106,16 +106,16 @@ def get_dataset(cfg: DictConfig, cwd: Path) -> Tuple[Dataset, Dataset]:
             mode="train",
             transforms=transforms,
             pad_divisor=pad_divisor,
-            part=cfg.data.part,
-            add_blur_and_noise=cfg.data.add_blur_and_noise,
+            part=cfg.dataset.part,
+            add_blur_and_noise=cfg.dataset.add_blur_and_noise,
         )
         if cfg.training.validate:
             dataset_valid = fmd.FMDDataset(
                 path=cwd / "data/FMD",
                 mode="val",
                 pad_divisor=pad_divisor,
-                part=cfg.data.part,
-                add_blur_and_noise=cfg.data.add_blur_and_noise,
+                part=cfg.dataset.part,
+                add_blur_and_noise=cfg.dataset.add_blur_and_noise,
             )
 
     elif cfg.experiment.lower() == "hanzi":
@@ -123,16 +123,16 @@ def get_dataset(cfg: DictConfig, cwd: Path) -> Tuple[Dataset, Dataset]:
             path=cwd / "data/Hanzi/tiles",
             mode="training",
             transforms=transforms,
-            version=cfg.data.version,
-            noise_level=cfg.data.noise_level,
+            version=cfg.dataset.version,
+            noise_level=cfg.dataset.noise_level,
             pad_divisor=pad_divisor,
         )
         if cfg.training.validate:
             dataset_valid = hanzi.HanziDataset(
                 path=cwd / "data/Hanzi/tiles",
                 mode="validation",
-                version=cfg.data.version,
-                noise_level=cfg.data.noise_level,
+                version=cfg.dataset.version,
+                noise_level=cfg.dataset.noise_level,
                 pad_divisor=pad_divisor,
             )
 
@@ -141,14 +141,14 @@ def get_dataset(cfg: DictConfig, cwd: Path) -> Tuple[Dataset, Dataset]:
             path=cwd / "data/ImageNet",
             mode="train",
             transforms=transforms,
-            version=cfg.data.version,
+            version=cfg.dataset.version,
             pad_divisor=pad_divisor,
         )
         if cfg.training.validate:
             dataset_valid = imagenet.ImagenetDataset(
                 path=cwd / "data/ImageNet",
                 mode="val",
-                version=cfg.data.version,
+                version=cfg.dataset.version,
                 pad_divisor=pad_divisor,
             )
 
@@ -182,19 +182,19 @@ def get_dataset(cfg: DictConfig, cwd: Path) -> Tuple[Dataset, Dataset]:
 
     elif cfg.experiment.lower() == "microtubules":
         dataset_train = microtubules.MicrotubulesDataset(
-            path=cwd / cfg.data.path,
-            input_name=cfg.data.input_name,
+            path=cwd / cfg.dataset.path,
+            input_name=cfg.dataset.input_name,
             transforms=training_augmentations_3d(),
-            tile_size=cfg.data.tile_size,
-            tile_step=cfg.data.tile_step,
-            add_blur_and_noise=cfg.data.add_blur_and_noise,
+            tile_size=cfg.dataset.tile_size,
+            tile_step=cfg.dataset.tile_step,
+            add_blur_and_noise=cfg.dataset.add_blur_and_noise,
             pad_divisor=pad_divisor,
         )
 
     elif cfg.experiment.lower() == "ssi":
         dataset_train = ssi.SSIDataset(
-            path=cwd / cfg.data.path,
-            input_name=cfg.data.input_name,
+            path=cwd / cfg.dataset.path,
+            input_name=cfg.dataset.input_name,
             transforms=transforms,
             pad_divisor=pad_divisor,
         )
@@ -230,17 +230,17 @@ def get_test_dataset_and_gt(cfg: DictConfig, cwd: Path) -> Tuple[Dataset, np.nda
             path=cwd / "data/FMD",
             mode="test",
             pad_divisor=pad_divisor,
-            part=cfg.data.part,
-            add_blur_and_noise=cfg.data.add_blur_and_noise,
+            part=cfg.dataset.part,
+            add_blur_and_noise=cfg.dataset.add_blur_and_noise,
         )
         gt = dataset.ground_truth
 
     elif cfg.experiment.lower() == "synthetic":
         params = {
-            "noise_type": cfg.data.noise_type,
-            "noise_param": cfg.data.noise_param,
+            "noise_type": cfg.dataset.noise_type,
+            "noise_param": cfg.dataset.noise_param,
             "pad_divisor": pad_divisor,
-            "standardize": cfg.data.standardize,
+            "standardize": cfg.dataset.standardize,
         }
         dataset = {
             "kodak": synthetic.KodakSyntheticDataset(path=cwd / "data/Kodak", **params),
@@ -262,10 +262,10 @@ def get_test_dataset_and_gt(cfg: DictConfig, cwd: Path) -> Tuple[Dataset, np.nda
 
     elif cfg.experiment.lower() == "synthetic_grayscale":
         params = {
-            "noise_type": cfg.data.noise_type,
-            "noise_param": cfg.data.noise_param,
+            "noise_type": cfg.dataset.noise_type,
+            "noise_param": cfg.dataset.noise_param,
             "pad_divisor": pad_divisor,
-            "standardize": cfg.data.standardize,
+            "standardize": cfg.dataset.standardize,
         }
         dataset = {
             "set12": synthetic_grayscale.Set12SyntheticDataset(path=cwd / "data/Set12", **params),
@@ -293,7 +293,7 @@ def get_test_dataset_and_gt(cfg: DictConfig, cwd: Path) -> Tuple[Dataset, np.nda
             path=cwd / "data/Hanzi/tiles",
             mode="testing",
             pad_divisor=pad_divisor,
-            noise_level=cfg.data.noise_level
+            noise_level=cfg.dataset.noise_level
         )
         gt = np.load(str(cwd / "data/Hanzi/tiles/testing.npy"))[:, 0]
 
@@ -333,12 +333,12 @@ def get_test_dataset_and_gt(cfg: DictConfig, cwd: Path) -> Tuple[Dataset, np.nda
 
     elif cfg.experiment.lower() == "microtubules":
         dataset = microtubules.MicrotubulesDataset(
-            path=cwd / cfg.data.path,
-            input_name=cfg.data.input_name,
+            path=cwd / cfg.dataset.path,
+            input_name=cfg.dataset.input_name,
             # we can double the size of the tiles for validation
-            tile_size=cfg.data.tile_size * 2,  # 64 * 2 = 128
-            tile_step=cfg.data.tile_step * 2,  # 48 * 2 = 96
-            add_blur_and_noise=cfg.data.add_blur_and_noise,  # TODO add different noise by random seed?
+            tile_size=cfg.dataset.tile_size * 2,  # 64 * 2 = 128
+            tile_step=cfg.dataset.tile_step * 2,  # 48 * 2 = 96
+            add_blur_and_noise=cfg.dataset.add_blur_and_noise,  # TODO add different noise by random seed?
             pad_divisor=pad_divisor,
         )
         # dataset.mean, dataset.std = 0, 1
@@ -348,8 +348,8 @@ def get_test_dataset_and_gt(cfg: DictConfig, cwd: Path) -> Tuple[Dataset, np.nda
 
     elif cfg.experiment.lower() == "ssi":
         dataset = ssi.SSIDataset(
-            path=cwd / cfg.data.path,
-            input_name=cfg.data.input_name,
+            path=cwd / cfg.dataset.path,
+            input_name=cfg.dataset.input_name,
             pad_divisor=pad_divisor,
         )
         gt = dataset.gt

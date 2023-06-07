@@ -3,7 +3,7 @@ experiment: ssi
 
 evaluate: True
 
-data:
+dataset:
   _target_: noise2same.dataset.SSIDataset
   path: data/ssi/
   n_dim: 2

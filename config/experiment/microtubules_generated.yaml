@@ -2,7 +2,7 @@
 experiment: microtubules
 evaluate: True
 
-data:
+dataset:
   _target_: noise2same.dataset.MicrotubulesDataset
   path: data/microtubules-simulation/
   input_name: ground-truth.tif

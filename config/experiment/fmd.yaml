@@ -1,6 +1,6 @@
 # @package _global_
 experiment: fmd
-data:
+dataset:
   _target_: noise2same.dataset.FMDDataset
   path: data/FMD/
   n_dim: 2
