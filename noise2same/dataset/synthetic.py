@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, List, Union, Sequence, Tuple
+from typing import Any, Dict, List, Union, Sequence, Tuple
 
 import numpy as np
 import torch
@@ -29,6 +29,14 @@ class SyntheticDataset(AbstractNoiseDataset2D):
     name: str = ""
     cached: str = ""
     n_channels: int = 3
+    n_repeats: int = 1  # repeat dataset for stable testing
+
+    def __len__(self):
+        return super().__len__() * self.n_repeats
+
+    def __getitem__(self, i: int) -> Dict[str, Any]:
+        i = i % super().__len__()
+        return super().__getitem__(i)
 
     def _validate(self) -> bool:
         assert self.noise_type in ("gaussian", "poisson", "none")
@@ -105,6 +113,7 @@ class KodakSyntheticDataset(SyntheticDataset):
     path: Union[Path, str] = "data/Kodak"
     extension: str = "png"
     name: str = "kodak"
+    n_repeats: int = 10  # 240
 
 
 @dataclass
@@ -112,6 +121,7 @@ class Set14SyntheticDataset(SyntheticDataset):
     path: Union[Path, str] = "data/Set14"
     extension: str = "png"
     name: str = "set14"
+    n_repeats: int = 20  # 280 TODO in fact we have 12 images, investigate
 
 
 @dataclass
@@ -119,3 +129,4 @@ class BSD300SyntheticDataset(SyntheticDataset):
     path: Union[Path, str] = "data/BSD300/test"
     extension: str = "png"
     name: str = "bsd300"
+    n_repeats: int = 3  # 300

@@ -83,6 +83,12 @@ class AbstractNoiseDataset(Dataset, ABC):
             additional_targets={"ground_truth": "image"} if self.ground_truth is not None else None
         )
 
+        # Convert mean and std to torch tensors
+        if self.mean is not None and not isinstance(self.mean, torch.Tensor):
+            self.mean = torch.from_numpy(self.mean)
+        if self.std is not None and not isinstance(self.std, torch.Tensor):
+            self.std = torch.from_numpy(self.std)
+
     def __len__(self) -> int:
         return len(self.images)
 
@@ -158,9 +164,7 @@ class AbstractNoiseDataset(Dataset, ABC):
         ret = self._apply_transforms(image, mask, ground_truth=ground_truth)
         if self.standardize:
             # by default, self.mean and self.std are None, and normalization is done by patch
-            ret["image"], ret["mean"], ret["std"] = self._standardize(ret["image"],
-                                                                      self.mean or torch.from_numpy(self.mean),
-                                                                      self.std or torch.from_numpy(self.std))
+            ret["image"], ret["mean"], ret["std"] = self._standardize(ret["image"], self.mean, self.std)
             if self.ground_truth is not None:
                 ret["ground_truth"], _, _ = self._standardize(ret["ground_truth"], ret["mean"], ret["std"])
         else:
@@ -176,7 +180,7 @@ class AbstractNoiseDataset(Dataset, ABC):
             image, mask_percentage=self.mask_percentage, channels_last=self.channel_last
         )
 
-    def _standardize(self, image: T, mean: T = None, std: T = None) -> Tuple[T, T, T]:
+    def _standardize(self, image: T, mean: Optional[T] = None, std: Optional[T] = None) -> Tuple[T, T, T]:
         """
         Normalize an image by mean and std
         :param image: tensor

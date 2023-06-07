@@ -41,6 +41,7 @@ class BSD68SyntheticDataset(SyntheticPreparedDataset):
     path: Union[Path, str] = "data/BSD68-test/"
     extension: str = "png"
     name: str = "bsd68"
+    n_repeats: int = 4  # 272
 
 
 @dataclass
@@ -48,6 +49,7 @@ class Set12SyntheticDataset(SyntheticDataset):
     path: Union[Path, str] = "data/Set12"
     extension: str = "png"
     name: str = "set12"
+    n_repeats: int = 20  # 240
 
 
 # @dataclass
