@@ -21,7 +21,7 @@ class HanziDataset(AbstractNoiseDataset2D):
         return True
 
     def _get_images(self) -> Dict[str, Union[List[str], np.ndarray]]:
-        data = np.load(self.path / f"{self.mode}.npy")
+        data = np.load(self.path / f"{self.mode}.npy", mmap_mode='r')
         return {
             "noisy_input": data[:, self.version * 4 + self.noise_level],
             "ground_truth": data[:, 0]
