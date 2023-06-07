@@ -54,6 +54,7 @@ class FMDDataset(AbstractNoiseDataset2D):
         }
 
     def _read_image(self, image_or_path: Union[str, np.ndarray]) -> np.ndarray:
+        # TODO understand why is it here
         self.mean = np.mean(image_or_path, keepdims=True, dtype=np.float32)[None, ...]
         self.std = np.std(image_or_path, keepdims=True, dtype=np.float32)[None, ...]
         return image_or_path

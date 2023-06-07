@@ -26,6 +26,7 @@ def get_loader(
     num_workers: int,
 ):
     loader = None
+    # TODO why two different loaders?
     if experiment.lower() in ("bsd68", "fmd", "imagenet", "sidd", "hanzi", "synthetic", "synthetic_grayscale"):
         loader = DataLoader(
             dataset,
