@@ -19,9 +19,12 @@ class BSD68Dataset(AbstractNoiseDataset2D):
     def _get_images(self) -> Dict[str, Union[List[str], np.ndarray]]:
         path = self.path / self.mode
         files = list(path.glob("*.npy"))
-        return {
+        images = {
             "noisy_input": np.load(files[0].as_posix(), allow_pickle=True)
         }
+        if self.mode == "test":
+            images["ground_truth"] = np.load(files[1].as_posix(), allow_pickle=True)
+        return images
 
     def _read_image(self, image_or_path: Union[str, np.ndarray]) -> np.ndarray:
         return image_or_path

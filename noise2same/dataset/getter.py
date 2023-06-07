@@ -69,9 +69,7 @@ def get_test_dataset_and_gt(cfg: DictConfig, cwd: Path) -> Tuple[Dataset, np.nda
             mode="test",
             pad_divisor=pad_divisor,
         )
-        gt = np.load(
-            str(cwd / "data/BSD68/test/bsd68_groundtruth.npy"), allow_pickle=True
-        )
+        gt = dataset.ground_truth
 
     elif cfg.experiment.lower() == "fmd":
         dataset = fmd.FMDDataset(
