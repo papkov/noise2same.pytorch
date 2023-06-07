@@ -6,6 +6,9 @@ dataset:
   version: 0
   noise_level: 3
 
+dataset_valid:
+  mode: validation
+
 training:
   steps: 50000
   crop: 64

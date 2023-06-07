@@ -4,9 +4,9 @@ evaluate: True
 
 dataset:
   _target_: noise2same.dataset.MicrotubulesDataset
-  n_dim: 3
   path: data/microtubules-simulation/
   input_name: input-generated-poisson-gaussian-2e-4.tif
+  n_dim: 3
   tile_size: 64
   tile_step: 48
   add_blur_and_noise: False

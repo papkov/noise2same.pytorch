@@ -1,9 +1,12 @@
 # @package _global_
 experiment: bsd68
+
 dataset:
   _target_: noise2same.dataset.BSD68Dataset
   path: data/BSD68/
-  n_dim: 2
+
+dataset_valid:
+  mode: val
 
 training:
   crop: 128  # 64 in the paper

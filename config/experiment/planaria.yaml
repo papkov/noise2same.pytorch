@@ -1,9 +1,13 @@
 # @package _global_
 experiment: planaria
+
 dataset:
   _target_: noise2same.dataset.PlanariaDataset
   path: data/Denoising_Planaria/
   n_dim: 3
+
+dataset_valid:
+  mode: val
 
 training:
   steps: 50000

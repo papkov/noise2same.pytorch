@@ -1,10 +1,14 @@
 # @package _global_
 experiment: imagenet
+
 dataset:
   _target_: noise2same.dataset.ImagenetDataset
   path: data/ImageNet/
   n_channels: 3
   version: 0
+
+dataset_valid:
+  mode: val
 
 training:
   steps: 50000

@@ -1,13 +1,18 @@
 # @package _global_
 experiment: synthetic
+
 dataset:
   _target_: noise2same.dataset.ImagenetSyntheticDataset
   path: data/Imagenet_val/
   cached: Imagenet_val.npy
-  n_dim: 2
   n_channels: 3
   noise_type: gaussian
   noise_param: 25
+  standardize: True
+
+dataset_valid:
+  _target_: noise2same.dataset.Set14SyntheticDataset
+  path: data/Set14/
 
 training:
   crop: 64

@@ -1,9 +1,13 @@
 # @package _global_
 experiment: sidd
+
 dataset:
   _target_: noise2same.dataset.SIDDDataset
   path: data/SIDD-NAFNet/
   n_channels: 3
+
+dataset_valid:
+  mode: val
 
 training:
   steps: 50000

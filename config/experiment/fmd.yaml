@@ -1,11 +1,14 @@
 # @package _global_
 experiment: fmd
+
 dataset:
   _target_: noise2same.dataset.FMDDataset
   path: data/FMD/
-  n_dim: 2
-  n_channels: 1
   part: cf_fish
+  add_blur_and_noise: False
+
+dataset_valid:
+  mode: val
 
 training:
   crop: 64
