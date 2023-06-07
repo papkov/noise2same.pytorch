@@ -1,12 +1,14 @@
+from pathlib import Path
 from typing import Optional
 
 import numpy as np
 import pytest
 from albumentations import PadIfNeeded
-from hydra.utils import instantiate, call
+from hydra.utils import instantiate
 from omegaconf import OmegaConf
 
 from noise2same.dataset import *
+from noise2same.dataset.getter import get_dataset
 from noise2same.dataset.util import mask_like_image
 from noise2same.util import crop_as
 
@@ -79,3 +81,34 @@ def test_dataset_instantiation(dataset_name: str, expected_dataclass: type, expe
         cfg.dataset.cached = ''
     dataset = instantiate(cfg.dataset, pad_divisor=pad_divisor)
     assert isinstance(dataset, expected_dataclass)
+
+
+@pytest.mark.parametrize('dataset_name,expected_dataclass,expected_dataclass_valid',
+                         [('bsd68', BSD68Dataset, BSD68Dataset),
+                          # ('hanzi', HanziDataset, HanziDataset), # TODO fix memory issue
+                          ('imagenet', ImagenetDataset, ImagenetDataset),
+                          ('microtubules', MicrotubulesDataset, None),
+                          ('microtubules_generated', MicrotubulesDataset, None),
+                          ('fmd', FMDDataset, FMDDataset),
+                          ('fmd_deconvolution', FMDDataset, FMDDataset),
+                          # ('planaria', PlanariaDataset, PlanariaDataset), # TODO fix memory issue
+                          # ('sidd', SIDDDataset, SIDDDataset), # TODO move dataset
+                          ('synthetic', ImagenetSyntheticDataset, Set14SyntheticDataset),
+                          ('synthetic_grayscale', BSD400SyntheticDataset, BSD68SyntheticDataset),
+                          ('ssi', SSIDataset, None),
+                          ])
+def test_get_dataset(dataset_name: str, expected_dataclass: type, expected_dataclass_valid: Optional[type]):
+    cwd = Path('..')
+    cfg = OmegaConf.load(f'../config/experiment/{dataset_name}.yaml')
+    cfg.update({'backbone_name': 'unet'})
+    cfg.update({'backbone': {'depth': 3}})
+    if 'cached' in cfg.dataset:
+        # Do not use cache for testing because of memory issues
+        cfg.dataset.cached = ''
+
+    dataset_train, dataset_valid = get_dataset(cfg, cwd=cwd)
+    assert isinstance(dataset_train, expected_dataclass)
+    if expected_dataclass_valid is not None:
+        assert isinstance(dataset_valid, expected_dataclass_valid)
+    else:
+        assert dataset_valid is None
