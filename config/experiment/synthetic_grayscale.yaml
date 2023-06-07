@@ -7,11 +7,17 @@ dataset:
   noise_type: gaussian
   noise_param: 25
   standardize: True
+  transforms:
+    _target_: noise2same.dataset.util.training_augmentations_2d
+    crop: 64
 
 dataset_valid:
   _target_: noise2same.dataset.BSD68SyntheticDataset
   path: data/BSD68-test/
   fixed: True
+  transforms:
+    _target_: noise2same.dataset.util.validation_transforms_2d
+    crop: 64
 
 training:
   crop: 64

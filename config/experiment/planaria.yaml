@@ -5,6 +5,8 @@ dataset:
   _target_: noise2same.dataset.PlanariaDataset
   path: data/Denoising_Planaria/
   n_dim: 3
+  transforms:
+    _target_: noise2same.dataset.util.training_augmentations_3d
 
 dataset_valid:
   mode: val

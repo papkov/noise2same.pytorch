@@ -3,7 +3,7 @@ from typing import Optional
 import numpy as np
 import pytest
 from albumentations import PadIfNeeded
-from hydra.utils import instantiate
+from hydra.utils import instantiate, call
 from omegaconf import OmegaConf
 
 from noise2same.dataset import *
@@ -64,17 +64,18 @@ def test_mask_3d(mask_percentage: float):
                           ])
 def test_dataset_instantiation(dataset_name: str, expected_dataclass: type, expected_dataclass_valid: Optional[type]):
     cfg = OmegaConf.load(f'../config/experiment/{dataset_name}.yaml')
+    pad_divisor = 32
 
     if 'dataset_valid' in cfg:
         # Validation dataset config updates fields of the training dataset config
         cfg.dataset_valid = OmegaConf.merge(cfg.dataset, cfg.dataset_valid)
         cfg.dataset_valid.path = '../' + cfg.dataset_valid.path
-        dataset_valid = instantiate(cfg.dataset_valid)
+        dataset_valid = instantiate(cfg.dataset_valid, pad_divisor=pad_divisor)
         assert isinstance(dataset_valid, expected_dataclass_valid)
 
     cfg.dataset.path = '../' + cfg.dataset.path
     if 'cached' in cfg.dataset:
         # Do not use cache for testing because of memory issues
         cfg.dataset.cached = ''
-    dataset = instantiate(cfg.dataset)
+    dataset = instantiate(cfg.dataset, pad_divisor=pad_divisor)
     assert isinstance(dataset, expected_dataclass)
