@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict, List, Union, Sequence, Tuple
+from typing import Any, Callable, Dict, List, Union, Sequence, Tuple
 
 import numpy as np
 import torch
@@ -8,6 +8,8 @@ from PIL import Image
 from torch import tensor as T
 
 from noise2same.dataset.abc import AbstractNoiseDataset2D
+from torch.utils.data import ConcatDataset
+from tqdm.auto import trange
 
 
 def read_image(path: Union[str, Path]) -> np.ndarray:
@@ -130,3 +132,17 @@ class BSD300SyntheticDataset(SyntheticDataset):
     extension: str = "png"
     name: str = "bsd300"
     n_repeats: int = 3  # 300
+
+
+class SyntheticTestDataset(ConcatDataset):
+    """
+    Concatenated dataset of multiple synthetic datasets.
+    Assumes that all datasets have the same parameters and are partially defined.
+    """
+
+    def __init__(self, datasets: List[Callable], **params):
+        super().__init__([ds(**params) for ds in datasets])
+        # TODO rewrite in a readable way
+        self.ground_truth = [
+            read_image((ds.ground_truth if ds.ground_truth is not None else ds.images)[i % len(ds.images)])
+            for ds in self.datasets for i in trange(len(ds))]
