@@ -2,8 +2,11 @@ import numpy as np
 import pytest
 from albumentations import PadIfNeeded
 
+from hydra.utils import instantiate
+from omegaconf import OmegaConf
 from noise2same.dataset.util import mask_like_image
 from noise2same.util import crop_as
+from noise2same.dataset import *
 
 
 @pytest.mark.parametrize("divisor", (2, 4, 8, 16, 32, 64))
@@ -41,3 +44,25 @@ def test_mask_3d(mask_percentage: float):
     )
     result = mask.mean() * 100
     assert np.isclose(mask_percentage, result, atol=0.1)
+
+
+@pytest.mark.parametrize('dataset_name,expected_class',
+                         [('bsd68', BSD68Dataset),
+                          # ('hanzi', HanziDataset), # TODO fix memory issue
+                          ('imagenet', ImagenetDataset),
+                          ('microtubules', MicrotubulesDataset),
+                          ('fmd', FMDDataset),
+                          ('planaria', PlanariaDataset),
+                          # ('sidd', SIDDDataset), # TODO move dataset
+                          ('synthetic', ImagenetSyntheticDataset),
+                          ('synthetic_grayscale', BSD400SyntheticDataset),
+                          ('ssi', SSIDataset),
+                          ])
+def test_dataset_instantiation(dataset_name: str, expected_class: type):
+    cfg = OmegaConf.load(f'../config/experiment/{dataset_name}.yaml')
+    cfg.data.path = '../' + cfg.data.path
+    if 'cached' in cfg.data:
+        # Do not use cache for testing because of memory issues
+        cfg.data.cached = ''
+    dataset = instantiate(cfg.data)
+    assert isinstance(dataset, expected_class)

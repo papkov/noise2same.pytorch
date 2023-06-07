@@ -7,3 +7,4 @@ from noise2same.dataset.planaria import PlanariaDataset, PlanariaTiffDataset
 from noise2same.dataset.sidd import SIDDDataset
 from noise2same.dataset.synthetic import ImagenetSyntheticDataset, KodakSyntheticDataset, Set14SyntheticDataset
 from noise2same.dataset.synthetic_grayscale import BSD400SyntheticDataset, BSD68SyntheticDataset, Set12SyntheticDataset
+from noise2same.dataset.ssi import SSIDataset
