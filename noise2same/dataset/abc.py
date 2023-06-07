@@ -72,7 +72,9 @@ class AbstractNoiseDataset(Dataset, ABC):
         images = self._get_images()
         self.images = images['noisy_input']
         self.ground_truth = images.get('ground_truth', None)
-        if not isinstance(self.transforms, list):
+        if self.transforms is None:
+            self.transforms = []
+        elif not isinstance(self.transforms, list):
             self.transforms = [self.transforms]
         self.transforms = self._compose_transforms(
             self.transforms + self._get_post_transforms(),
@@ -127,6 +129,7 @@ class AbstractNoiseDataset(Dataset, ABC):
         :param image_or_path:
         :return:
         """
+        # TODO split to read_image and process_image
         raise NotImplementedError
 
     def __getitem__(self, i: int) -> Dict[str, Any]:
@@ -222,11 +225,13 @@ class AbstractNoiseDataset3D(AbstractNoiseDataset, ABC):
     def _get_post_transforms(self) -> List[t3d.BaseTransform3D]:
         return [t3d.ToTensor(transpose=False)]
 
-    def _apply_transforms(self, image: np.ndarray, mask: np.ndarray) -> Dict[str, T]:
+    def _apply_transforms(self, image: np.ndarray, mask: np.ndarray, ground_truth: np.ndarray = None) -> Dict[str, T]:
         ret = {
             "image": self.transforms(image, resample=True),
             "mask": self.transforms(mask, resample=False),
         }
+        if ground_truth is not None:
+            ret["ground_truth"] = self.transforms(ground_truth, resample=False)
         return ret
 
 
@@ -267,7 +272,7 @@ class AbstractNoiseDataset3DLarge(AbstractNoiseDataset3D, ABC):
     def _read_large_image(self):
         self.image = io.imread(str(self.path / self.input_name)).astype(np.float32)
 
-    def _get_images(self) -> Union[List[str], np.ndarray]:
+    def _get_images(self) -> Dict[str, Union[List[str], np.ndarray]]:
         self._read_large_image()
 
         if len(self.image.shape) < 4:
@@ -288,7 +293,7 @@ class AbstractNoiseDataset3DLarge(AbstractNoiseDataset3D, ABC):
             is_channels=True,
         )
 
-        return self.tiler.crops
+        return {'noisy_input': self.tiler.crops}
 
 
 @dataclass

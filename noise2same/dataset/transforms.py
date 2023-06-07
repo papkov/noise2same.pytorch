@@ -1,6 +1,6 @@
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import List, Optional, Tuple, Union
+from typing import Any, List, Optional, Tuple, Union
 
 import numpy as np
 import torch
@@ -154,6 +154,7 @@ class CenterCrop(RandomCrop):
 class Compose:
     transforms: List[BaseTransform3D]
     debug: bool = False
+    additional_targets: Optional[Any] = None
 
     def __call__(self, x: ndarray, resample: bool = False):
         out = x.copy()

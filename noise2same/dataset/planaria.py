@@ -17,13 +17,13 @@ class PlanariaDataset(AbstractNoiseDataset3D):
     train_size: float = 0.9
     standardize: bool = False  # data was prepared and percentile normalized
 
-    def _get_images(self) -> Union[List[str], np.ndarray]:
-        data = np.load(self.path / "train_data/data_label.npz")["X"].astype(np.float32)
+    def _get_images(self) -> Dict[str, Union[List[str], np.ndarray]]:
+        data = np.load(self.path / "train_data/data_label.npz", mmap_mode='r')["X"].astype(np.float32)
         if self.mode == "train":
             data = data[: int(len(data) * self.train_size)]
         else:
-            data = data[int(len(data) * self.train_size) :]
-        return data
+            data = data[int(len(data) * self.train_size):]
+        return {'noisy_input': data}
 
     def _read_image(self, image_or_path: Union[str, np.ndarray]) -> np.ndarray:
         return image_or_path
@@ -36,7 +36,7 @@ class PlanariaTiffDataset(AbstractNoiseDataset3DLarge):
     crop_border: int = 32
     weight: str = "pyramid"
 
-    def _get_images(self) -> Union[List[str], np.ndarray]:
+    def _get_images(self) -> Dict[str, Union[List[str], np.ndarray]]:
         self.image = tifffile.imread(self.path)[..., None]
 
         if self.standardize:
@@ -54,7 +54,7 @@ class PlanariaTiffDataset(AbstractNoiseDataset3DLarge):
             is_channels=True,
             crop_border=(0, self.crop_border, self.crop_border),
         )
-        return self.tiler.crops
+        return {'noisy_input': self.tiler.crops}
 
     def _read_image(self, image_or_path: List[int]) -> Tuple[np.ndarray, List[int]]:
         image, crop = self.tiler.crop_tile(image=self.image, crop=image_or_path)
