@@ -10,7 +10,6 @@ from noise2same.dataset.synthetic import SyntheticDataset
 
 @dataclass
 class SyntheticPreparedDataset(SyntheticDataset):
-    fixed: bool = False  # if True, read prepared noisy images from disk
 
     def _get_images(self) -> Dict[str, Union[List[str], np.ndarray]]:
         path_original = self.path / "original"

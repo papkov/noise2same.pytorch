@@ -3,7 +3,7 @@ experiment: bsd68
 
 dataset:
   _target_: noise2same.dataset.BSD68Dataset
-  path: data/BSD68/
+  path: ${hydra.runtime.cwd}/data/BSD68/
   transforms:
     _target_: noise2same.dataset.util.training_augmentations_2d
     crop: 128

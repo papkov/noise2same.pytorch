@@ -32,6 +32,7 @@ class SyntheticDataset(AbstractNoiseDataset2D):
     cached: str = ""
     n_channels: int = 3
     n_repeats: int = 1  # repeat dataset for stable testing
+    fixed: bool = False  # if True, read prepared noisy images from disk
 
     def __len__(self):
         return super().__len__() * self.n_repeats

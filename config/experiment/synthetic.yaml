@@ -3,7 +3,7 @@ experiment: synthetic
 
 dataset:
   _target_: noise2same.dataset.ImagenetSyntheticDataset
-  path: data/Imagenet_val/
+  path: ${hydra.runtime.cwd}/data/Imagenet_val/
   cached: Imagenet_val.npy
   n_channels: 3
   noise_type: gaussian
@@ -15,7 +15,7 @@ dataset:
 
 dataset_valid:
   _target_: noise2same.dataset.Set14SyntheticDataset
-  path: data/Set14/
+  path: ${hydra.runtime.cwd}/data/Set14/
   transforms:
     _target_: noise2same.dataset.util.validation_transforms_2d
     crop: 64
@@ -26,15 +26,15 @@ dataset_test:
   datasets:
     - _target_: noise2same.dataset.KodakSyntheticDataset
       _partial_: True
-      path: data/Kodak/
+      path: ${hydra.runtime.cwd}/data/Kodak/
       n_repeats: 10
     - _target_: noise2same.dataset.BSD300SyntheticDataset
       _partial_: True
-      path: data/BSD300/test/
+      path: ${hydra.runtime.cwd}/data/BSD300/test/
       n_repeats: 3
     - _target_: noise2same.dataset.Set14SyntheticDataset
       _partial_: True
-      path: data/Set14/
+      path: ${hydra.runtime.cwd}/data/Set14/
       n_repeats: 20
 
 training:

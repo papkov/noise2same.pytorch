@@ -43,6 +43,7 @@ def get_dataset(cfg: DictConfig, cwd: Path) -> Tuple[Dataset, Dataset]:
 
     if 'dataset_valid' in cfg:
         # Validation dataset config updates fields of the training dataset config
+        OmegaConf.set_struct(cfg.dataset, False)  # necessary to create new keys
         cfg.dataset_valid = OmegaConf.merge(cfg.dataset, cfg.dataset_valid)
         cfg.dataset_valid.path = str(cwd / cfg.dataset_valid.path)
         dataset_valid = instantiate(cfg.dataset_valid, pad_divisor=pad_divisor)

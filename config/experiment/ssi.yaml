@@ -5,7 +5,7 @@ evaluate: True
 
 dataset:
   _target_: noise2same.dataset.SSIDataset
-  path: data/ssi/
+  path: ${hydra.runtime.cwd}/data/ssi/
   input_name: drosophila
   transforms:
     _target_: noise2same.dataset.util.training_augmentations_2d

@@ -3,7 +3,7 @@ experiment: fmd
 
 dataset:
   _target_: noise2same.dataset.FMDDataset
-  path: data/FMD/
+  path: ${hydra.runtime.cwd}/data/FMD/
   part: cf_fish
   add_blur_and_noise: True
   transforms:

@@ -1,3 +1,4 @@
+import os
 from pathlib import Path
 from typing import Optional
 
@@ -5,6 +6,7 @@ import numpy as np
 import pytest
 import torch
 from albumentations import PadIfNeeded
+from hydra import initialize, compose
 from hydra.utils import instantiate
 from omegaconf import OmegaConf
 
@@ -66,22 +68,25 @@ def test_mask_3d(mask_percentage: float):
                           ('ssi', SSIDataset, None),
                           ])
 def test_dataset_instantiation(dataset_name: str, expected_dataclass: type, expected_dataclass_valid: Optional[type]):
-    cfg = OmegaConf.load(f'../config/experiment/{dataset_name}.yaml')
-    pad_divisor = 32
+    os.chdir(Path(__file__).parent.parent)  # necessary to resolve interpolations as ${hydra.runtime.cwd}
+    with initialize(version_base=None, config_path="../config/experiment", job_name="test"):
+        cfg = compose(config_name=dataset_name, return_hydra_config=True)
+        OmegaConf.resolve(cfg)  # resolves interpolations as ${hydra.runtime.cwd}
+        print('\n', OmegaConf.to_yaml(cfg))
+        pad_divisor = 32
 
-    if 'dataset_valid' in cfg:
-        # Validation dataset config updates fields of the training dataset config
-        cfg.dataset_valid = OmegaConf.merge(cfg.dataset, cfg.dataset_valid)
-        cfg.dataset_valid.path = '../' + cfg.dataset_valid.path
-        dataset_valid = instantiate(cfg.dataset_valid, pad_divisor=pad_divisor)
-        assert isinstance(dataset_valid, expected_dataclass_valid)
+        if 'dataset_valid' in cfg:
+            # Validation dataset config updates fields of the training dataset config
+            OmegaConf.set_struct(cfg.dataset, False)  # necessary to create new keys
+            cfg.dataset_valid = OmegaConf.merge(cfg.dataset, cfg.dataset_valid)
+            dataset_valid = instantiate(cfg.dataset_valid, pad_divisor=pad_divisor)
+            assert isinstance(dataset_valid, expected_dataclass_valid)
 
-    cfg.dataset.path = '../' + cfg.dataset.path
-    if 'cached' in cfg.dataset:
-        # Do not use cache for testing because of memory issues
-        cfg.dataset.cached = ''
-    dataset = instantiate(cfg.dataset, pad_divisor=pad_divisor)
-    assert isinstance(dataset, expected_dataclass)
+        if 'cached' in cfg.dataset:
+            # Do not use cache for testing because of memory issues
+            cfg.dataset.cached = ''
+        dataset = instantiate(cfg.dataset, pad_divisor=pad_divisor)
+        assert isinstance(dataset, expected_dataclass)
 
 
 @pytest.mark.parametrize('dataset_name,expected_dataclass,expected_dataclass_valid',
@@ -99,15 +104,18 @@ def test_dataset_instantiation(dataset_name: str, expected_dataclass: type, expe
                           ('ssi', SSIDataset, None),
                           ])
 def test_get_dataset(dataset_name: str, expected_dataclass: type, expected_dataclass_valid: Optional[type]):
-    cwd = Path('..')
-    cfg = OmegaConf.load(f'../config/experiment/{dataset_name}.yaml')
-    cfg.update({'backbone_name': 'unet'})
-    cfg.update({'backbone': {'depth': 3}})
-    if 'cached' in cfg.dataset:
-        # Do not use cache for testing because of memory issues
-        cfg.dataset.cached = ''
+    os.chdir(Path(__file__).parent.parent)  # necessary to resolve interpolations as ${hydra.runtime.cwd}
+    with initialize(version_base=None, config_path="../config/experiment", job_name="test"):
+        overrides = ['+backbone_name=unet', '+backbone.depth=3']
+        if dataset_name == 'synthetic':
+            # Do not use cache for testing because of memory issues
+            overrides.append('dataset.cached=none')
 
-    dataset_train, dataset_valid = get_dataset(cfg, cwd=cwd)
+        cfg = compose(config_name=dataset_name, return_hydra_config=True, overrides=overrides)
+        OmegaConf.resolve(cfg)  # resolves interpolations as ${hydra.runtime.cwd}
+        print('\n', OmegaConf.to_yaml(cfg))
+
+    dataset_train, dataset_valid = get_dataset(cfg, cwd=Path('.'))
     assert isinstance(dataset_train, expected_dataclass)
     if expected_dataclass_valid is not None:
         assert isinstance(dataset_valid, expected_dataclass_valid)
@@ -125,9 +133,12 @@ def test_dataset_repeat(n_repeats: int):
 @pytest.mark.parametrize('dataset_name', ['synthetic', 'synthetic_grayscale'])
 def test_concat_dataset(dataset_name):
     # TODO add more meaningful tests
-    cwd = Path('..')
-    cfg = OmegaConf.load(f'../config/experiment/{dataset_name}.yaml')
-    for i, d in enumerate(cfg.dataset_test.datasets):
-        cfg.dataset_test.datasets[i].path = str(cwd / d.path)
-        cfg.dataset_test.datasets[i] = OmegaConf.merge(cfg.dataset, cfg.dataset_test.datasets[i])
-    _ = instantiate(cfg.dataset_test)
+    os.chdir(Path(__file__).parent.parent)  # necessary to resolve interpolations as ${hydra.runtime.cwd}
+    with initialize(version_base=None, config_path="../config/experiment"):
+        cfg = compose(config_name=dataset_name, return_hydra_config=True)
+        OmegaConf.resolve(cfg)  # resolves interpolations as ${hydra.runtime.cwd}
+        print('\n', OmegaConf.to_yaml(cfg))
+        for i, d in enumerate(cfg.dataset_test.datasets):
+            OmegaConf.set_struct(cfg.dataset, False)
+            cfg.dataset_test.datasets[i] = OmegaConf.merge(cfg.dataset, cfg.dataset_test.datasets[i])
+        _ = instantiate(cfg.dataset_test)

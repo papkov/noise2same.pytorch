@@ -4,7 +4,7 @@ evaluate: True
 
 dataset:
   _target_: noise2same.dataset.MicrotubulesDataset
-  path: data/microtubules-simulation/
+  path: ${hydra.runtime.cwd}/data/microtubules-simulation/
   input_name: input-generated-poisson-gaussian-2e-4.tif
   n_dim: 3
   tile_size: 64
