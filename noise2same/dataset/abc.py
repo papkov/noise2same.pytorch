@@ -85,9 +85,9 @@ class AbstractNoiseDataset(Dataset, ABC):
 
         # Convert mean and std to torch tensors
         if self.mean is not None and not isinstance(self.mean, torch.Tensor):
-            self.mean = torch.from_numpy(self.mean)
+            self.mean = torch.from_numpy(np.array(self.mean))
         if self.std is not None and not isinstance(self.std, torch.Tensor):
-            self.std = torch.from_numpy(self.std)
+            self.std = torch.from_numpy(np.array(self.std))
 
     def __len__(self) -> int:
         return len(self.images)
