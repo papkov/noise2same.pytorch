@@ -161,15 +161,15 @@ def normalize(image):
     )
 
 
-def add_poisson_gaussian_noise(
-    image,
-    alpha=5,
-    sigma=0.01,
-    sap=0.0,
-    quant_bits=8,
-    dtype=np.float32,
-    clip=True,
-    fix_seed=True,
+def add_noise(
+    image: np.ndarray,
+    alpha: Optional[int, float] = 0,
+    sigma: float = 0.1,
+    sap: float = 0.0,
+    quant_bits: int = 8,
+    dtype: np.dtype = np.float32,
+    clip: bool = True,
+    fix_seed: bool = True,
 ):
     if fix_seed:
         np.random.seed(0)
@@ -180,17 +180,6 @@ def add_poisson_gaussian_noise(
     noisy = noisy * (1 - rnd_bool) + rnd_bool * uniform(size=image.shape)
     noisy = np.around((2 ** quant_bits) * noisy) / 2 ** quant_bits
     noisy = np.clip(noisy, 0, 1) if clip else noisy
-    noisy = noisy.astype(dtype)
-    return noisy
-
-
-def add_noise(image, intensity=5, variance=0.01, sap=0.0, dtype=np.float32, clip=True):
-    np.random.seed(0)
-    noisy = image
-    if intensity is not None:
-        noisy = np.random.poisson(image * intensity) / intensity
-    noisy = random_noise(noisy, mode="gaussian", var=variance, seed=0, clip=clip)
-    noisy = random_noise(noisy, mode="s&p", amount=sap, seed=0, clip=clip)
     noisy = noisy.astype(dtype)
     return noisy
 

@@ -9,7 +9,7 @@ from imageio import imread
 from noise2same.dataset.abc import AbstractNoiseDataset2D
 from noise2same.dataset.util import (
     add_microscope_blur_2d,
-    add_poisson_gaussian_noise,
+    add_noise,
     normalize,
 )
 
@@ -34,7 +34,7 @@ class SSIDataset(AbstractNoiseDataset2D):
 
         image_clipped = normalize(image_clipped.astype(np.float32))
         blurred_image, psf_kernel = add_microscope_blur_2d(image_clipped)
-        noisy_blurred_image = add_poisson_gaussian_noise(
+        noisy_blurred_image = add_noise(
             blurred_image, alpha=0.001, sigma=0.1, sap=0.01, quant_bits=10
         )
 

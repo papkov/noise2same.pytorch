@@ -8,7 +8,7 @@ from skimage import io
 from noise2same.dataset.abc import AbstractNoiseDataset3DLarge
 from noise2same.dataset.util import (
     add_microscope_blur_3d,
-    add_poisson_gaussian_noise,
+    add_noise,
     normalize,
 )
 from noise2same.util import normalize_percentile
@@ -30,7 +30,7 @@ class MicrotubulesDataset(AbstractNoiseDataset3DLarge):
             self.image = normalize(self.image)
             # TODO parametrize
             self.image, self.psf = add_microscope_blur_3d(self.image, size=17)
-            self.image = add_poisson_gaussian_noise(
+            self.image = add_noise(
                 self.image,
                 alpha=0.001,
                 sigma=0.1,

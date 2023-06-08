@@ -9,7 +9,7 @@ import numpy as np
 from noise2same.dataset.abc import AbstractNoiseDataset2D
 from noise2same.dataset.util import (
     add_microscope_blur_2d,
-    add_poisson_gaussian_noise,
+    add_noise,
     normalize,
 )
 
@@ -66,7 +66,7 @@ class FMDDataset(AbstractNoiseDataset2D):
             image, self.psf = add_microscope_blur_2d(image, size=17)
         except ValueError as e:
             raise ValueError(f"Failed to convolve image {image.shape}") from e
-        image = add_poisson_gaussian_noise(
+        image = add_noise(
                 image,
                 alpha=0.001,
                 sigma=0.1,
