@@ -125,7 +125,8 @@ def test_get_dataset(dataset_name: str, expected_dataclass: type, expected_datac
 
 @pytest.mark.parametrize('n_repeats', (1, 5, 10))
 def test_dataset_repeat(n_repeats: int):
-    dataset = Set12SyntheticDataset(path="../data/Set12", n_repeats=n_repeats, standardize=True, noise_param=0)
+    os.chdir(Path(__file__).parent.parent)  # necessary to resolve interpolations as ${hydra.runtime.cwd}
+    dataset = Set12SyntheticDataset(path="data/Set12", n_repeats=n_repeats, standardize=True, noise_param=0)
     assert len(dataset) == 12 * n_repeats
     assert torch.equal(dataset[(len(dataset) - 1) % 12]['image'], dataset[len(dataset) - 1]['image'])
 
