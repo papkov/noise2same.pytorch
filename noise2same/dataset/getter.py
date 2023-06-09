@@ -48,11 +48,10 @@ def compute_pad_divisor(cfg: DictConfig) -> Optional[int]:
         raise ValueError("Incorrect backbone name")
 
 
-def get_dataset(cfg: DictConfig, cwd: Path) -> Tuple[Dataset, Dataset]:
+def get_dataset(cfg: DictConfig) -> Tuple[Dataset, Dataset]:
     """
     Collect training and validation datasets specified in the configuration
     :param cfg: DictConfig, training/evaluation configuration object
-    :param cwd: Path, project working directory
     :return: Tuple[Dataset, Dataset]
     """
     # TODO consider moving to main

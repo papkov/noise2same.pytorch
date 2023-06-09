@@ -58,7 +58,7 @@ def main(cfg: DictConfig) -> None:
         wandb.run.summary.update({'training_dir': os.getcwd()})
 
     # Data
-    dataset_train, dataset_valid = get_dataset(cfg, cwd)
+    dataset_train, dataset_valid = get_dataset(cfg)
     num_samples = cfg.training.batch_size * cfg.training.steps_per_epoch
     loader_train = DataLoader(
         dataset_train,

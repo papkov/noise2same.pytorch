@@ -114,7 +114,7 @@ def test_get_dataset(dataset_name: str, expected_dataclass: type, expected_datac
         expand_dataset_cfg(cfg)
         print('\n', OmegaConf.to_yaml(cfg))
 
-    dataset_train, dataset_valid = get_dataset(cfg, cwd=Path('.'))
+    dataset_train, dataset_valid = get_dataset(cfg)
     assert isinstance(dataset_train, expected_dataclass)
     if expected_dataclass_valid is not None:
         assert isinstance(dataset_valid, expected_dataclass_valid)
