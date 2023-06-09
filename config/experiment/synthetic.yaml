@@ -16,13 +16,16 @@ dataset:
 dataset_valid:
   _target_: noise2same.dataset.Set14SyntheticDataset
   path: ${hydra.runtime.cwd}/data/Set14/
+  cached: null
   transforms:
     _target_: noise2same.dataset.util.validation_transforms_2d
     crop: 64
 
 dataset_test:
   _target_: noise2same.dataset.SyntheticTestDataset
+  # Top-level arguments override partial arguments
   transforms: null
+  cached: null
   datasets:
     - _target_: noise2same.dataset.KodakSyntheticDataset
       _partial_: True

@@ -21,6 +21,7 @@ dataset_valid:
 
 dataset_test:
   _target_: noise2same.dataset.SyntheticTestDataset
+  # Top-level arguments override partial arguments
   transforms: null
   datasets:
     - _target_: noise2same.dataset.BSD68SyntheticDataset

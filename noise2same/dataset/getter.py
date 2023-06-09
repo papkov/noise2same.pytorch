@@ -13,6 +13,24 @@ from noise2same.util import normalize_percentile
 from . import bsd68, fmd, hanzi, imagenet, sidd, microtubules, planaria, ssi, synthetic, synthetic_grayscale
 
 
+def expand_dataset_cfg(cfg: DictConfig) -> None:
+    """
+    Expands dataset_valid and dataset_test configs with parameters from dataset config
+    :param cfg: config to modify inplace, should contain dataset, optionally dataset_valid, dataset_test
+    :return: None
+    """
+    OmegaConf.set_struct(cfg.dataset, False)  # necessary to create new keys
+    for dataset_key in ('dataset_valid', 'dataset_test'):
+        if dataset_key in cfg:
+            if 'datasets' in cfg[dataset_key]:
+                # If the dataset is composed of multiple datasets, update each of them
+                for i, dataset in enumerate(cfg[dataset_key].datasets):
+                    cfg[dataset_key].datasets[i] = OmegaConf.merge(cfg.dataset, dataset)
+            else:
+                # Validation dataset config updates fields of the training dataset config
+                cfg[dataset_key] = OmegaConf.merge(cfg.dataset, cfg[dataset_key])
+
+
 def compute_pad_divisor(cfg: DictConfig) -> Optional[int]:
     """
     Compute the number by which the padded image size should
@@ -42,13 +60,8 @@ def get_dataset(cfg: DictConfig, cwd: Path) -> Tuple[Dataset, Dataset]:
     pad_divisor = compute_pad_divisor(cfg)
 
     if 'dataset_valid' in cfg:
-        # Validation dataset config updates fields of the training dataset config
-        OmegaConf.set_struct(cfg.dataset, False)  # necessary to create new keys
-        cfg.dataset_valid = OmegaConf.merge(cfg.dataset, cfg.dataset_valid)
-        cfg.dataset_valid.path = str(cwd / cfg.dataset_valid.path)
         dataset_valid = instantiate(cfg.dataset_valid, pad_divisor=pad_divisor)
 
-    cfg.dataset.path = str(cwd / cfg.dataset.path)
     dataset_train = instantiate(cfg.dataset, pad_divisor=pad_divisor)
     return dataset_train, dataset_valid
 

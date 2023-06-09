@@ -11,7 +11,7 @@ from hydra.utils import instantiate
 from omegaconf import OmegaConf
 
 from noise2same.dataset import *
-from noise2same.dataset.getter import get_dataset
+from noise2same.dataset.getter import get_dataset, expand_dataset_cfg
 from noise2same.dataset.util import mask_like_image
 from noise2same.util import crop_as
 
@@ -72,13 +72,11 @@ def test_dataset_instantiation(dataset_name: str, expected_dataclass: type, expe
     with initialize(version_base=None, config_path="../config/experiment", job_name="test"):
         cfg = compose(config_name=dataset_name, return_hydra_config=True)
         OmegaConf.resolve(cfg)  # resolves interpolations as ${hydra.runtime.cwd}
+        expand_dataset_cfg(cfg)
         print('\n', OmegaConf.to_yaml(cfg))
         pad_divisor = 32
 
         if 'dataset_valid' in cfg:
-            # Validation dataset config updates fields of the training dataset config
-            OmegaConf.set_struct(cfg.dataset, False)  # necessary to create new keys
-            cfg.dataset_valid = OmegaConf.merge(cfg.dataset, cfg.dataset_valid)
             dataset_valid = instantiate(cfg.dataset_valid, pad_divisor=pad_divisor)
             assert isinstance(dataset_valid, expected_dataclass_valid)
 
@@ -105,14 +103,15 @@ def test_dataset_instantiation(dataset_name: str, expected_dataclass: type, expe
                           ])
 def test_get_dataset(dataset_name: str, expected_dataclass: type, expected_dataclass_valid: Optional[type]):
     os.chdir(Path(__file__).parent.parent)  # necessary to resolve interpolations as ${hydra.runtime.cwd}
-    with initialize(version_base=None, config_path="../config/experiment", job_name="test"):
+    with initialize(version_base=None, config_path="../config/experiment"):
         overrides = ['+backbone_name=unet', '+backbone.depth=3']
         if dataset_name == 'synthetic':
             # Do not use cache for testing because of memory issues
-            overrides.append('dataset.cached=none')
+            overrides.append('dataset.cached=null')
 
         cfg = compose(config_name=dataset_name, return_hydra_config=True, overrides=overrides)
         OmegaConf.resolve(cfg)  # resolves interpolations as ${hydra.runtime.cwd}
+        expand_dataset_cfg(cfg)
         print('\n', OmegaConf.to_yaml(cfg))
 
     dataset_train, dataset_valid = get_dataset(cfg, cwd=Path('.'))
@@ -138,8 +137,6 @@ def test_concat_dataset(dataset_name):
     with initialize(version_base=None, config_path="../config/experiment"):
         cfg = compose(config_name=dataset_name, return_hydra_config=True)
         OmegaConf.resolve(cfg)  # resolves interpolations as ${hydra.runtime.cwd}
+        expand_dataset_cfg(cfg)
         print('\n', OmegaConf.to_yaml(cfg))
-        for i, d in enumerate(cfg.dataset_test.datasets):
-            OmegaConf.set_struct(cfg.dataset, False)
-            cfg.dataset_test.datasets[i] = OmegaConf.merge(cfg.dataset, cfg.dataset_test.datasets[i])
         _ = instantiate(cfg.dataset_test)
