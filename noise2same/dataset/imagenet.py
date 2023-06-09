@@ -36,6 +36,7 @@ class ImagenetDataset(AbstractNoiseDataset2D):
 class ImagenetTestDataset(AbstractNoiseDataset2D):
     path: Union[Path, str] = "data/ImageNet"
     standardize_by_channel: bool = True
+    version: int = 0  # for config compatibility
 
     def _get_images(self) -> Dict[str, Union[List[str], np.ndarray]]:
         return {
