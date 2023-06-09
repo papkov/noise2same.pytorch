@@ -215,7 +215,7 @@ def main(train_dir: Path, checkpoint: str = 'last', other_args: list = None) -> 
     dataset, ground_truth = None, None
     if cfg.experiment not in ("planaria",):
         # For some datasets we need custom loading
-        dataset, ground_truth = get_test_dataset_and_gt(cfg, cwd)
+        dataset, ground_truth = get_test_dataset_and_gt(cfg)
 
     backbone, head = parametrize_backbone_and_head(cfg)
 

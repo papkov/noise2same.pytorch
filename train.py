@@ -156,7 +156,7 @@ def main(cfg: DictConfig) -> None:
         traceback.print_exc()
 
     if cfg.evaluate:
-        test_dataset, ground_truth = get_test_dataset_and_gt(cfg, cwd)
+        test_dataset, ground_truth = get_test_dataset_and_gt(cfg)
 
         scores = evaluate.evaluate(trainer.evaluator, test_dataset, ground_truth, cfg.experiment, cwd,
                                    Path(os.getcwd()), half=cfg.training.amp, num_workers=cfg.training.num_workers)
