@@ -36,6 +36,7 @@ def compute_pad_divisor(cfg: DictConfig) -> Optional[int]:
     :param cfg: DictConfig, training/evaluation configuration object
     :return: Optional[int]
     """
+    # TODO consider replacing with interpolation and eval https://github.com/omry/omegaconf/issues/91
     if cfg.backbone_name == "unet":
         return 2 ** cfg.backbone.depth
     elif cfg.backbone_name in ("swinir", "bsp_swinir"):
