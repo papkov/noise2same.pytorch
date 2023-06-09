@@ -11,6 +11,9 @@ dataset:
     _target_: noise2same.dataset.util.training_augmentations_2d
     crop: 64
 
+dataset_test:
+  transforms: null
+
 training:
   num_workers: 4
   crop: 128
