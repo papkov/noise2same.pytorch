@@ -39,10 +39,10 @@ class SSIDataset(AbstractNoiseDataset2D):
         )
 
         self.psf = psf_kernel
-        self.ground_truth = image_clipped
 
         return {
-            "noisy_input": noisy_blurred_image[None, ...]
+            "noisy_input": noisy_blurred_image[None, ...],
+            "ground_truth": image_clipped,
         }
 
     def _read_image(self, image_or_path: Union[str, np.ndarray]) -> np.ndarray:
