@@ -162,14 +162,14 @@ def normalize(image):
 
 
 def add_noise(
-    image: np.ndarray,
-    alpha: Optional[int, float] = 0,
-    sigma: float = 0.1,
-    sap: float = 0.0,
-    quant_bits: int = 8,
-    dtype: np.dtype = np.float32,
-    clip: bool = True,
-    fix_seed: bool = True,
+        image: np.ndarray,
+        alpha: float = 0,
+        sigma: float = 0.1,
+        sap: float = 0.0,
+        quant_bits: int = 8,
+        dtype: np.dtype = np.float32,
+        clip: bool = True,
+        fix_seed: bool = True,
 ):
     if fix_seed:
         np.random.seed(0)
