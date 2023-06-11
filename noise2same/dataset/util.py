@@ -1,5 +1,6 @@
 from itertools import product
 from typing import Any, List, Optional, Tuple, Union
+from torch import Tensor as T
 
 import albumentations as albu
 import numpy as np
@@ -162,15 +163,15 @@ def normalize(image):
 
 
 def add_noise(
-        image: np.ndarray,
-        alpha: float = 0,
-        sigma: float = 0.1,
-        sap: float = 0.0,
+        image: Union[np.ndarray, T],
+        alpha: Union[float, int] = 0.0,
+        sigma: Union[float, int] = 0.0,
+        sap: Union[float, int] = 0.0,
         quant_bits: int = 8,
-        dtype: np.dtype = np.float32,
         clip: bool = True,
         fix_seed: bool = True,
 ):
+    dtype = image.dtype
     if fix_seed:
         np.random.seed(0)
     rnd = normal(size=image.shape)
@@ -180,7 +181,7 @@ def add_noise(
     noisy = noisy * (1 - rnd_bool) + rnd_bool * uniform(size=image.shape)
     noisy = np.around((2 ** quant_bits) * noisy) / 2 ** quant_bits
     noisy = np.clip(noisy, 0, 1) if clip else noisy
-    noisy = noisy.astype(dtype)
+    noisy = noisy.astype(dtype) if isinstance(image, np.ndarray) else noisy.type(dtype)
     return noisy
 
 

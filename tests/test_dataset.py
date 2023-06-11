@@ -12,7 +12,7 @@ from omegaconf import OmegaConf
 
 from noise2same.dataset import *
 from noise2same.dataset.getter import get_dataset, get_test_dataset_and_gt, expand_dataset_cfg
-from noise2same.dataset.util import mask_like_image
+from noise2same.dataset.util import mask_like_image, add_noise
 from noise2same.util import crop_as
 
 
@@ -51,6 +51,16 @@ def test_mask_3d(mask_percentage: float):
     )
     result = mask.mean() * 100
     assert np.isclose(mask_percentage, result, atol=0.1)
+
+
+@pytest.mark.parametrize('zeros', (np.zeros, torch.zeros))
+def test_noise_addition(zeros: callable):
+    shape = (1, 16, 64, 64)
+    image = zeros(shape)
+    noisy = add_noise(image, alpha=5, sigma=0.1, sap=0.1)
+    assert image.shape == noisy.shape
+    assert type(image) == type(noisy)
+    assert image.dtype == noisy.dtype
 
 
 @pytest.mark.parametrize('dataset_name,expected_dataclass,expected_dataclass_valid',
