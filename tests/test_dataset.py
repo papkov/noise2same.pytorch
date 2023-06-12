@@ -1,6 +1,6 @@
 import os
 from pathlib import Path
-from typing import Optional, Union, Tuple
+from typing import Optional, Union, Tuple, Callable
 
 import numpy as np
 import pytest
@@ -60,7 +60,7 @@ def test_mask_3d(mask_percentage: float):
                           (torch.zeros, (1, 10), (0.1, 0.2), (0.1, 0.2))
                           ])
 def test_noise_addition(
-    zeros: callable,
+    zeros: Callable,
     alpha: Union[float, int, Tuple[Union[float, int]]],
     sigma: Union[float, int, Tuple[Union[float, int]]],
     sap: Union[float, int, Tuple[Union[float, int]]]
