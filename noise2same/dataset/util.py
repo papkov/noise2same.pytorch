@@ -164,9 +164,9 @@ def normalize(image):
 
 def add_noise(
         image: Union[np.ndarray, T],
-        alpha: Union[float, int] = 0.0,
-        sigma: Union[float, int] = 0.0,
-        sap: Union[float, int] = 0.0,
+        alpha: Union[float, int, Tuple[Union[float, int]]] = 0.0,
+        sigma: Union[float, int, Tuple[Union[float, int]]] = 0.0,
+        sap: Union[float, int, Tuple[Union[float, int]]] = 0.0,
         quant_bits: int = 8,
         clip: bool = True,
         fix_seed: bool = True,
@@ -174,6 +174,8 @@ def add_noise(
     dtype = image.dtype
     if fix_seed:
         np.random.seed(0)
+    alpha, sigma, sap = map(lambda param: np.random.uniform(*param) if isinstance(param, tuple) else param,
+                            [alpha, sigma, sap])
     rnd = normal(size=image.shape)
     rnd_bool = uniform(size=image.shape) < sap
 

@@ -1,6 +1,6 @@
 import os
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Union, Tuple
 
 import numpy as np
 import pytest
@@ -53,8 +53,18 @@ def test_mask_3d(mask_percentage: float):
     assert np.isclose(mask_percentage, result, atol=0.1)
 
 
-@pytest.mark.parametrize('zeros', (np.zeros, torch.zeros))
-def test_noise_addition(zeros: callable):
+@pytest.mark.parametrize('zeros,alpha,sigma,sap',
+                         [(np.zeros, 5, 0.1, 0.1),
+                          (np.zeros, (1, 10), (0.1, 0.2), (0.1, 0.2)),
+                          (torch.zeros, 5, 0.1, 0.1),
+                          (torch.zeros, (1, 10), (0.1, 0.2), (0.1, 0.2))
+                          ])
+def test_noise_addition(
+    zeros: callable,
+    alpha: Union[float, int, Tuple[Union[float, int]]],
+    sigma: Union[float, int, Tuple[Union[float, int]]],
+    sap: Union[float, int, Tuple[Union[float, int]]]
+):
     shape = (1, 16, 64, 64)
     image = zeros(shape)
     noisy = add_noise(image, alpha=5, sigma=0.1, sap=0.1)
