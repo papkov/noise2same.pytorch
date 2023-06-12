@@ -42,7 +42,7 @@ class SSIDataset(AbstractNoiseDataset2D):
 
         return {
             "noisy_input": noisy_blurred_image[None, ...],
-            "ground_truth": image_clipped,
+            "ground_truth": image_clipped[None, ...],
         }
 
     def _read_image(self, image_or_path: Union[str, np.ndarray]) -> np.ndarray:
