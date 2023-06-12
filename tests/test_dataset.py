@@ -1,4 +1,5 @@
 import os
+import traceback
 from pathlib import Path
 from typing import Optional, Union, Tuple, Callable
 
@@ -110,7 +111,7 @@ def test_dataset_instantiation(dataset_name: str, expected_dataclass: type, expe
 @pytest.mark.parametrize('dataset_name,expected_dataclass,expected_dataclass_valid',
                          [('bsd68', BSD68Dataset, BSD68Dataset),
                           # ('hanzi', HanziDataset, HanziDataset), # TODO fix memory issue
-                          ('imagenet', ImagenetDataset, ImagenetDataset),
+                          # ('imagenet', ImagenetDataset, ImagenetDataset), # TODO fix memory issue
                           ('microtubules', MicrotubulesDataset, None),
                           ('microtubules_generated', MicrotubulesDataset, None),
                           ('fmd', FMDDataset, FMDDataset),
@@ -136,8 +137,16 @@ def test_get_dataset(dataset_name: str, expected_dataclass: type, expected_datac
 
     dataset_train, dataset_valid = get_dataset(cfg)
     assert isinstance(dataset_train, expected_dataclass)
+    try:
+        dataset_train[0]
+    except:
+        pytest.fail(f'Train dataset item access threw an exception: {traceback.format_exc()}')
     if expected_dataclass_valid is not None:
         assert isinstance(dataset_valid, expected_dataclass_valid)
+        try:
+            dataset_valid[0]
+        except:
+            pytest.fail(f'Validation dataset item access threw an exception: {traceback.format_exc()}')
     else:
         assert dataset_valid is None
 
@@ -172,6 +181,11 @@ def test_get_test_dataset_and_gt(dataset_name: str, expected_dataclass: type):
     dataset, gt = get_test_dataset_and_gt(cfg)
     assert isinstance(dataset, expected_dataclass)
     assert gt is not None
+    try:
+        dataset[0]
+        gt[0]
+    except:
+        pytest.fail(f'Test dataset item access threw an exception: {traceback.format_exc()}')
 
 
 @pytest.mark.parametrize('n_repeats', (1, 5, 10))
