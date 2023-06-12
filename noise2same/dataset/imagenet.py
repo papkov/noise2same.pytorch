@@ -39,10 +39,11 @@ class ImagenetTestDataset(AbstractNoiseDataset2D):
     version: int = 0  # for config compatibility
 
     def _get_images(self) -> Dict[str, Union[List[str], np.ndarray]]:
+        image_pairs = [np.load(p) for p in tqdm(sorted((self.path / "test").glob("*.npy")))]
         return {
-            "noisy_input": sorted((self.path / "test").glob("*.npy")),
-            "ground_truth": [np.load(p)[0] for p in tqdm(sorted((self.path / "test").glob("*.npy")))]
+            "noisy_input": [pair[1] for pair in image_pairs],
+            "ground_truth": [pair[0] for pair in image_pairs]
         }
 
     def _read_image(self, image_or_path: Union[str, np.ndarray]) -> np.ndarray:
-        return np.load(image_or_path)[1]
+        return image_or_path

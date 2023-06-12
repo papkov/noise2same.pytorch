@@ -1,4 +1,4 @@
-from typing import Tuple, Optional, Dict
+from typing import Tuple, Optional, Dict, List
 
 import numpy as np
 import tifffile
@@ -64,7 +64,7 @@ def get_dataset(cfg: DictConfig) -> Tuple[Dataset, Dataset]:
     return dataset_train, dataset_valid
 
 
-def get_test_dataset_and_gt(cfg: DictConfig) -> Tuple[Dataset, np.ndarray]:
+def get_test_dataset_and_gt(cfg: DictConfig) -> Tuple[Dataset, List[np.ndarray]]:
     """
     Collect test dataset and ground truth specified in the configuration
     :param cfg: DictConfig, training/evaluation configuration object
@@ -73,6 +73,9 @@ def get_test_dataset_and_gt(cfg: DictConfig) -> Tuple[Dataset, np.ndarray]:
 
     pad_divisor = compute_pad_divisor(cfg)
     dataset_test = instantiate(cfg.dataset_test, pad_divisor=pad_divisor)
+    # TODO move ground truth access into evaluation
+    if not isinstance(dataset_test.ground_truth[0], np.ndarray):
+        dataset_test.ground_truth = [dataset_test._read_image(image) for image in dataset_test.ground_truth]
     return dataset_test, dataset_test.ground_truth
 
 
