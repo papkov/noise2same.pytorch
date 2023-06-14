@@ -7,7 +7,7 @@ import torch
 from PIL import Image
 from torch import tensor as T
 
-from noise2same.dataset.abc import AbstractNoiseDataset2D
+from noise2same.dataset.abc import AbstractNoiseDataset
 from torch.utils.data import ConcatDataset
 from tqdm.auto import trange
 
@@ -24,7 +24,7 @@ def read_image(path: Union[str, Path]) -> np.ndarray:
 
 
 @dataclass
-class SyntheticDataset(AbstractNoiseDataset2D):
+class SyntheticDataset(AbstractNoiseDataset):
     noise_type: str = "gaussian"
     extension: str = "JPEG"
     noise_param: Union[int, Tuple[int, int]] = 25

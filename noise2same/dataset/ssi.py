@@ -6,7 +6,7 @@ from typing import List, Union, Dict
 import numpy as np
 from imageio import imread
 
-from noise2same.dataset.abc import AbstractNoiseDataset2D
+from noise2same.dataset.abc import AbstractNoiseDataset
 from noise2same.dataset.util import (
     add_microscope_blur_2d,
     add_noise,
@@ -15,7 +15,7 @@ from noise2same.dataset.util import (
 
 
 @dataclass
-class SSIDataset(AbstractNoiseDataset2D):
+class SSIDataset(AbstractNoiseDataset):
     path: Union[Path, str] = "data/ssi/"
     standardize_by_channel: bool = True
     input_name: str = "drosophila"

@@ -6,17 +6,19 @@ import numpy as np
 import tifffile
 from pytorch_toolbelt.inference.tiles import ImageSlicer
 
-from noise2same.dataset.abc import AbstractNoiseDataset3D, AbstractNoiseDataset3DLarge
+from noise2same.dataset.abc import AbstractNoiseDataset, AbstractNoiseDataset3DLarge
 from noise2same.util import normalize_percentile
 import re
 
 
 @dataclass
-class PlanariaDataset(AbstractNoiseDataset3D):
+class PlanariaDataset(AbstractNoiseDataset):
     path: Union[Path, str] = "data/Denoising_Planaria"
     mode: str = "train"
     train_size: float = 0.9
     standardize: bool = False  # data was prepared and percentile normalized
+    channel_last: bool = False
+    n_dim: int = 3
 
     def _get_images(self) -> Dict[str, Union[List[str], np.ndarray]]:
         data = np.load(self.path / "train_data/data_label.npz", mmap_mode='r')["X"].astype(np.float32)

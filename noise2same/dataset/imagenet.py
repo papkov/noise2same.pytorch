@@ -5,11 +5,11 @@ from typing import List, Union, Dict
 import numpy as np
 from tqdm.auto import tqdm
 
-from noise2same.dataset.abc import AbstractNoiseDataset2D
+from noise2same.dataset.abc import AbstractNoiseDataset
 
 
 @dataclass
-class ImagenetDataset(AbstractNoiseDataset2D):
+class ImagenetDataset(AbstractNoiseDataset):
     path: Union[Path, str] = "data/ImageNet"
     mode: str = "train"
     version: int = 0  # two noisy copies exist (0, 1)
@@ -33,7 +33,7 @@ class ImagenetDataset(AbstractNoiseDataset2D):
 
 
 @dataclass
-class ImagenetTestDataset(AbstractNoiseDataset2D):
+class ImagenetTestDataset(AbstractNoiseDataset):
     path: Union[Path, str] = "data/ImageNet"
     standardize_by_channel: bool = True
     version: int = 0  # for config compatibility

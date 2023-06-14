@@ -4,11 +4,11 @@ from typing import List, Union, Dict
 
 import numpy as np
 
-from noise2same.dataset.abc import AbstractNoiseDataset2D
+from noise2same.dataset.abc import AbstractNoiseDataset
 
 
 @dataclass
-class HanziDataset(AbstractNoiseDataset2D):
+class HanziDataset(AbstractNoiseDataset):
     path: Union[Path, str] = "data//Hanzi/tiles/"
     mode: str = "training"
     version: int = 0  # two noisy copies exist (0, 1)

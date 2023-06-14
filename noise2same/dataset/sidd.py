@@ -6,7 +6,7 @@ import cv2
 import lmdb
 
 import numpy as np
-from noise2same.dataset.abc import AbstractNoiseDataset2D
+from noise2same.dataset.abc import AbstractNoiseDataset
 
 
 def paired_paths_from_lmdb(folders, keys) -> List[Dict[str, str]]:
@@ -69,7 +69,7 @@ def paired_paths_from_lmdb(folders, keys) -> List[Dict[str, str]]:
 
 
 @dataclass
-class SIDDDataset(AbstractNoiseDataset2D):
+class SIDDDataset(AbstractNoiseDataset):
     path: Union[Path, str] = Path("data/SIDD-NAFNet")
     mode: str = "train"
     standardize_by_channel: bool = True

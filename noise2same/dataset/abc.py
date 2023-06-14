@@ -92,7 +92,6 @@ class AbstractNoiseDataset(Dataset, ABC):
     def __len__(self) -> int:
         return len(self.images)
 
-    @abstractmethod
     def _compose_transforms(self, *args, **kwargs) -> Union[Compose, t3d.Compose]:
         """
         Compose a list of transforms with a specific function
@@ -100,9 +99,8 @@ class AbstractNoiseDataset(Dataset, ABC):
         :param kwargs:
         :return:
         """
-        raise NotImplementedError
+        return Compose(*args, **kwargs) if self.n_dim == 2 else t3d.Compose(*args, **kwargs)
 
-    @abstractmethod
     def _apply_transforms(self, image: np.ndarray, mask: np.ndarray, ground_truth: np.ndarray = None) -> Dict[str, T]:
         """
         Apply transforms to both image and mask
@@ -110,9 +108,19 @@ class AbstractNoiseDataset(Dataset, ABC):
         :param mask:
         :return:
         """
-        raise NotImplementedError
+        if self.n_dim == 2:
+            if ground_truth is None:
+                return self.transforms(image=image, mask=mask)
+            return self.transforms(image=image, mask=mask, ground_truth=ground_truth)
+        else:
+            ret = {
+                "image": self.transforms(image, resample=True),
+                "mask": self.transforms(mask, resample=False),
+            }
+            if ground_truth is not None:
+                ret["ground_truth"] = self.transforms(ground_truth, resample=False)
+            return ret
 
-    @abstractmethod
     def _get_post_transforms(
         self,
     ) -> Union[List[BasicTransform], List[t3d.BaseTransform3D]]:
@@ -120,7 +128,15 @@ class AbstractNoiseDataset(Dataset, ABC):
         Necessary post-transforms (e.g. ToTensor)
         :return:
         """
-        raise NotImplementedError
+        return [
+            albu.PadIfNeeded(
+                min_height=None,
+                min_width=None,
+                pad_height_divisor=self.pad_divisor,
+                pad_width_divisor=self.pad_divisor,
+            ),
+            ToTensorV2(transpose_mask=True)
+        ] if self.n_dim == 2 else [t3d.ToTensor(transpose=False)]
 
     @abstractmethod
     def _get_images(self) -> Dict[str, Union[List[str], np.ndarray]]:
@@ -199,53 +215,7 @@ class AbstractNoiseDataset(Dataset, ABC):
 
 
 @dataclass
-class AbstractNoiseDataset2D(AbstractNoiseDataset, ABC):
-    def _compose_transforms(self, *args, **kwargs) -> Compose:
-        return Compose(*args, **kwargs)
-
-    def _get_post_transforms(self) -> List[BasicTransform]:
-        return [
-            albu.PadIfNeeded(
-                min_height=None,
-                min_width=None,
-                pad_height_divisor=self.pad_divisor,
-                pad_width_divisor=self.pad_divisor,
-            ),
-            ToTensorV2(transpose_mask=True)
-        ]
-
-    def _apply_transforms(self, image, mask, ground_truth=None) -> Dict[str, T]:
-        if ground_truth is None:
-            return self.transforms(image=image, mask=mask)
-        return self.transforms(image=image, mask=mask, ground_truth=ground_truth)
-
-
-@dataclass
-class AbstractNoiseDataset3D(AbstractNoiseDataset, ABC):
-    channel_last: bool = False
-    n_dim: int = 3
-    transforms: Optional[
-        Union[List[t3d.BaseTransform3D], t3d.Compose, List[t3d.Compose]]
-    ] = None
-
-    def _compose_transforms(self, *args, **kwargs) -> t3d.Compose:
-        return t3d.Compose(*args, **kwargs)
-
-    def _get_post_transforms(self) -> List[t3d.BaseTransform3D]:
-        return [t3d.ToTensor(transpose=False)]
-
-    def _apply_transforms(self, image: np.ndarray, mask: np.ndarray, ground_truth: np.ndarray = None) -> Dict[str, T]:
-        ret = {
-            "image": self.transforms(image, resample=True),
-            "mask": self.transforms(mask, resample=False),
-        }
-        if ground_truth is not None:
-            ret["ground_truth"] = self.transforms(ground_truth, resample=False)
-        return ret
-
-
-@dataclass
-class AbstractNoiseDataset3DLarge(AbstractNoiseDataset3D, ABC):
+class AbstractNoiseDataset3DLarge(AbstractNoiseDataset, ABC):
     """
     For large images where we standardize a full-size image
     """
@@ -256,6 +226,8 @@ class AbstractNoiseDataset3DLarge(AbstractNoiseDataset3D, ABC):
     mean: float = 0
     std: float = 1
     weight: str = "pyramid"
+    channel_last: bool = False
+    n_dim: int = 3
 
     def __getitem__(self, i: int) -> Dict[str, Any]:
         """

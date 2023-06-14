@@ -6,7 +6,7 @@ from typing import List, Union, Dict
 import cv2
 import numpy as np
 
-from noise2same.dataset.abc import AbstractNoiseDataset2D
+from noise2same.dataset.abc import AbstractNoiseDataset
 from noise2same.dataset.util import (
     add_microscope_blur_2d,
     add_noise,
@@ -17,7 +17,7 @@ from tqdm import tqdm
 
 
 @dataclass
-class FMDDataset(AbstractNoiseDataset2D):
+class FMDDataset(AbstractNoiseDataset):
     path: Union[Path, str] = "data/FMD"
     mode: str = "train"
     part: str = "cf_fish"

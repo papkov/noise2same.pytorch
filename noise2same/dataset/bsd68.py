@@ -4,11 +4,11 @@ from typing import List, Union, Dict
 
 import numpy as np
 
-from noise2same.dataset.abc import AbstractNoiseDataset2D
+from noise2same.dataset.abc import AbstractNoiseDataset
 
 
 @dataclass
-class BSD68Dataset(AbstractNoiseDataset2D):
+class BSD68Dataset(AbstractNoiseDataset):
     path: Union[Path, str] = "data/BSD68"
     mode: str = "train"
 
