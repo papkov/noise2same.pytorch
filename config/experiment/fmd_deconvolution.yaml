@@ -28,13 +28,11 @@ training:
   val_batch_size: 1
   monitor: val_mse
 
-optim:
-  optimizer: adam
-  lr: 0.0004
+optimizer:
   weight_decay: 1e-8
-  decay_rate: 0.5
+
+scheduler:
   decay_steps: 1e3  # how many steps to decrease by decay rate
-  staircase: True  # integer division
 
 psf:
   path: null

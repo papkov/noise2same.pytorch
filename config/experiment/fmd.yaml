@@ -26,5 +26,5 @@ training:
   batch_size: 64
   monitor: val_mse
 
-optim:
+optimizer:
   weight_decay: 1e-8

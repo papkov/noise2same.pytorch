@@ -30,7 +30,7 @@ training:
   amp: True # No inf checks were recorded for this optimizer
   info_padding: True
 
-optim:
+scheduler:
   decay_steps: 2000
 
 psf:

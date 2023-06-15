@@ -30,7 +30,7 @@ training:
   validate: False
   monitor: rec_mse
 
-optim:
+scheduler:
   decay_steps: 2000
 
 psf:

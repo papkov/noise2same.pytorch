@@ -23,12 +23,8 @@ training:
   validate: False
   monitor: rec_mse
 
-optim:
-  optimizer: adam
-  lr: 0.0004
-  decay_rate: 0.5
+scheduler:
   decay_steps: 5e2  # how many steps to decrease by decay rate
-  staircase: True  # integer division
 
 
 psf:

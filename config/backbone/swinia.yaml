@@ -14,7 +14,11 @@ backbone:
 head:
   _target_: torch.nn.Identity
 
-optim:
+optimizer:
   lr: 1e-3
-  scheduler: cosine
+
+scheduler:
+  _target_: torch.optim.lr_scheduler.CosineAnnealingLR
+  _partial_: true
+  T_max: ${training.steps}
   eta_min: 1e-6

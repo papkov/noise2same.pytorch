@@ -6,6 +6,8 @@ from time import sleep
 from typing import Dict
 
 import hydra
+from hydra.utils import instantiate
+
 import torch
 import wandb
 from hydra.utils import get_original_cwd
@@ -120,26 +122,9 @@ def main(cfg: DictConfig) -> None:
         mdl = torch.nn.DataParallel(mdl)
 
     # Optimization
-    if cfg.optim.optimizer == "adam":
-        optimizer = torch.optim.Adam(mdl.parameters(), lr=cfg.optim.lr, weight_decay=cfg.optim.weight_decay)
-    elif cfg.optim.optimizer == "esadam":
-        optimizer = ESAdam(mdl.parameters(), lr=cfg.optim.lr)
-    else:
-        raise ValueError(f"Unknown optimizer {cfg.optim.optimizer}")
-
-    if cfg.optim.scheduler == "cosine":
-        scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
-            optimizer,
-            cfg.training.steps,
-            eta_min=cfg.optim.eta_min,
-        )
-    else:
-        scheduler = ExponentialDecayScheduler(
-            optimizer,
-            decay_rate=cfg.optim.decay_rate,
-            decay_steps=cfg.optim.decay_steps,
-            staircase=cfg.optim.staircase,
-        )
+    # TODO test instantiation for common configs
+    optimizer = instantiate(cfg.optimizer)(mdl.parameters())
+    scheduler = instantiate(cfg.scheduler)(optimizer)
 
     # Trainer
     trainer = noise2same.trainer.Trainer(
