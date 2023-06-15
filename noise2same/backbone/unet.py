@@ -192,16 +192,17 @@ class EncoderBlock(nn.Module):
 
 class UNet(nn.Module):
     def __init__(
-        self,
-        in_channels: int,
-        base_channels: int = 96,
-        kernel_size: int = 3,
-        n_dim: int = 2,
-        depth: int = 3,
-        encoding_block_sizes: Tuple[int, ...] = (1, 1, 0),
-        decoding_block_sizes: Tuple[int, ...] = (1, 1),
-        downsampling: Tuple[str, ...] = ("conv", "conv"),
-        skip_method: str = "concat",
+            self,
+            in_channels: int,
+            base_channels: int = 96,
+            kernel_size: int = 3,
+            n_dim: int = 2,
+            depth: int = 3,
+            encoding_block_sizes: Tuple[int, ...] = (1, 1, 0),
+            decoding_block_sizes: Tuple[int, ...] = (1, 1),
+            downsampling: Tuple[str, ...] = ("conv", "conv"),
+            skip_method: str = "concat",
+            **kwargs,
     ):
         """
 

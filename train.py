@@ -18,7 +18,7 @@ from noise2same import model, util
 from noise2same.dataset.getter import get_dataset, get_test_dataset_and_gt
 from noise2same.optimizer.esadam import ESAdam
 from noise2same.scheduler import ExponentialDecayScheduler
-from utils import parametrize_backbone_and_head
+from noise2same.backbone.utils import parametrize_backbone_and_head
 
 
 def flatten_config(cfg: DictConfig) -> Dict:

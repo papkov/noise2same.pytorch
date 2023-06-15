@@ -17,7 +17,7 @@ from noise2same.dataset.getter import (
     get_test_dataset_and_gt,
 )
 from noise2same.evaluator import Evaluator
-from utils import parametrize_backbone_and_head
+from noise2same.backbone.utils import parametrize_backbone_and_head
 
 
 def get_ground_truth_and_predictions(

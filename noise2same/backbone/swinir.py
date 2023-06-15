@@ -474,7 +474,7 @@ class SwinIR(nn.Module):
     r""" SwinIR
         A PyTorch impl of : `SwinIR: Image Restoration Using Swin Transformer`, based on Swin Transformer.
     Args:
-        img_size (int | tuple(int)): Input image size. Default 64
+        input_size (int | tuple(int)): Input image size. Default 64
         patch_size (int | tuple(int)): Patch size. Default: 1
         in_channels (int): Number of input image channels. Default: 3
         embed_dim (int): Patch embedding dimension. Default: 96
@@ -496,7 +496,7 @@ class SwinIR(nn.Module):
         resi_connection: The convolutional block before residual connection. '1conv'/'3conv'
     """
 
-    def __init__(self, img_size=64, in_channels=3, embed_dim=96,
+    def __init__(self, input_size=64, in_channels=3, embed_dim=96,
                  depths=(6, 6, 6, 6), num_heads=(6, 6, 6, 6), window_size=7,
                  mlp_ratio=4., qkv_bias=True, qk_scale=None,
                  drop_rate=0., attn_drop_rate=0., drop_path_rate=0.1,
@@ -523,10 +523,10 @@ class SwinIR(nn.Module):
 
         # split image into non-overlapping patches
         self.patch_embed = PatchEmbed(
-            img_size=img_size, embed_dim=embed_dim, norm_layer=norm_layer if self.patch_norm else None
+            img_size=input_size, embed_dim=embed_dim, norm_layer=norm_layer if self.patch_norm else None
         )
-        self.patches_resolution = (img_size, img_size)
-        num_patches = img_size ** 2
+        self.patches_resolution = (input_size, input_size)
+        num_patches = input_size ** 2
 
         # merge non-overlapping patches into image
         self.patch_unembed = PatchUnEmbed(embed_dim=embed_dim)
@@ -557,7 +557,7 @@ class SwinIR(nn.Module):
                          norm_layer=norm_layer,
                          downsample=None,
                          use_checkpoint=use_checkpoint,
-                         img_size=img_size,
+                         img_size=input_size,
                          resi_connection=resi_connection
                          )
             self.layers.append(layer)

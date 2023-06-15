@@ -2,6 +2,9 @@
 backbone_name: unet
 
 backbone:
+  _target_: noise2same.backbone.unet.UNet
+  _partial_: true  # to recalculate some parameters in code
+  in_channels: ${dataset.n_channels}
   base_channels: 96
   kernel_size: 3
   depth: 3
@@ -9,3 +12,9 @@ backbone:
   decoding_block_sizes: [ 1, 1 ]
   downsampling: [ conv, conv ]
   skip_method: concat
+
+head:
+  _target_: noise2same.backbone.unet.RegressionHead
+  in_channels: ${backbone.base_channels}
+  out_channels: ${dataset.n_channels}
+  n_dim: ${dataset.n_dim}

@@ -2,8 +2,13 @@
 backbone_name: swinir
 
 backbone:
+  _target_: noise2same.backbone.swinir.SwinIR
+  _partial_: true  # to recalculate some parameters in code
   embed_dim: 96
   upscale: 1
   window_size: 8
   depths: [ 6, 6, 6, 6, 6, 6 ]
   num_heads: [ 6, 6, 6, 6, 6, 6 ]
+
+head:
+  _target_: torch.nn.Identity
