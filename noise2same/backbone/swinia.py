@@ -272,22 +272,22 @@ class ResidualGroup(nn.Module):
 class SwinIA(nn.Module):
 
     def __init__(
-        self,
-        in_chans: int = 1,
-        embed_dim: int = 96,
-        window_size: int = 8,
-        input_size: int = 128,
-        depths: Tuple[int] = (8, 4, 4, 4, 4, 4, 8),
-        num_heads: Tuple[int] = (6, 6, 6, 6, 6, 6, 6),
-        dilations: Tuple[int] = (1, 1, 1, 1, 1, 1, 1),
-        shuffles: Tuple[int] = (1, 1, 1, 1, 1, 1, 1)
+            self,
+            in_channels: int = 1,
+            embed_dim: int = 96,
+            window_size: int = 8,
+            input_size: int = 128,
+            depths: Tuple[int] = (8, 4, 4, 4, 4, 4, 8),
+            num_heads: Tuple[int] = (6, 6, 6, 6, 6, 6, 6),
+            dilations: Tuple[int] = (1, 1, 1, 1, 1, 1, 1),
+            shuffles: Tuple[int] = (1, 1, 1, 1, 1, 1, 1)
     ):
         super().__init__()
         self.window_size = window_size
         self.num_heads = num_heads
-        self.embed_k = MLP(in_chans, embed_dim)
-        self.embed_v = MLP(in_chans, embed_dim)
-        self.proj_last = nn.Linear(embed_dim, in_chans)
+        self.embed_k = MLP(in_channels, embed_dim)
+        self.embed_v = MLP(in_channels, embed_dim)
+        self.proj_last = nn.Linear(embed_dim, in_channels)
         self.shortcut = MLP(embed_dim * 2, embed_dim)
         self.absolute_pos_embed = nn.Parameter(torch.zeros(window_size ** 2, embed_dim // num_heads[0]))
         trunc_normal_(self.absolute_pos_embed, std=.02)

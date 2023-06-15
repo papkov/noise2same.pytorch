@@ -41,14 +41,14 @@ def parametrize_backbone_and_head(cfg: DictConfig) -> Tuple[torch.nn.Module, tor
     elif cfg.backbone_name == 'swinir':
         assert cfg.dataset.n_dim == 2
         backbone = SwinIR(
-            in_chans=cfg.dataset.n_channels,
+            in_channels=cfg.dataset.n_channels,
             img_size=recalculate_img_size(cfg),
             **cfg.backbone
         )
     elif cfg.backbone_name == 'swinia':
         assert cfg.dataset.n_dim == 2
         backbone = SwinIA(
-            in_chans=cfg.dataset.n_channels,
+            in_channels=cfg.dataset.n_channels,
             input_size=recalculate_img_size(cfg),
             **cfg.backbone
         )

@@ -476,7 +476,7 @@ class SwinIR(nn.Module):
     Args:
         img_size (int | tuple(int)): Input image size. Default 64
         patch_size (int | tuple(int)): Patch size. Default: 1
-        in_chans (int): Number of input image channels. Default: 3
+        in_channels (int): Number of input image channels. Default: 3
         embed_dim (int): Patch embedding dimension. Default: 96
         depths (tuple(int)): Depth of each Swin Transformer layer.
         num_heads (tuple(int)): Number of attention heads in different layers.
@@ -496,7 +496,7 @@ class SwinIR(nn.Module):
         resi_connection: The convolutional block before residual connection. '1conv'/'3conv'
     """
 
-    def __init__(self, img_size=64, in_chans=3, embed_dim=96,
+    def __init__(self, img_size=64, in_channels=3, embed_dim=96,
                  depths=(6, 6, 6, 6), num_heads=(6, 6, 6, 6), window_size=7,
                  mlp_ratio=4., qkv_bias=True, qk_scale=None,
                  drop_rate=0., attn_drop_rate=0., drop_path_rate=0.1,
@@ -504,8 +504,8 @@ class SwinIR(nn.Module):
                  use_checkpoint=False, upscale=2, img_range=1., resi_connection='1conv',
                  **kwargs):
         super().__init__()
-        num_in_ch = in_chans
-        num_out_ch = in_chans
+        num_in_ch = in_channels
+        num_out_ch = in_channels
         self.img_range = img_range
         self.upscale = upscale
         self.window_size = window_size
