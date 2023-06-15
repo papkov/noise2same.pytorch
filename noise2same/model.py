@@ -65,28 +65,24 @@ class Noise2Same(nn.Module):
         self,
         n_dim: int = 2,
         in_channels: int = 1,
-        base_channels: int = 96,
         lambda_bsp: float = 0,
-        lambda_rec: float = 1.0,
-        lambda_inv: float = 2.0,
-        lambda_inv_deconv: float = 0.0,
-        masked_inv_deconv: bool = True,
-        mask_percentage: float = 0.5,
-        masking: str = "gaussian",
-        noise_mean: float = 0,
-        noise_std: float = 0.2,
-        lambda_bound: float = 0,
-        lambda_sharp: float = 0,
-        psf: Optional[Union[str, np.ndarray]] = None,
-        psf_size: Optional[int] = None,
-        psf_pad_mode: str = "reflect",
-        residual: bool = False,
-        regularization_key: str = "image",
-        mode: str = "noise2same",
-        psf_fft: Union[str, bool] = "auto",
-        backbone: Union[UNet, SwinIR, Identity] = Identity(),
-        head: Union[RegressionHead, Identity] = Identity(),
-        **kwargs: Any,
+            lambda_rec: float = 1.0,
+            lambda_inv: float = 2.0,
+            lambda_inv_deconv: float = 0.0,
+            masked_inv_deconv: bool = True,
+            mask_percentage: float = 0.5,
+            masking: str = "gaussian",
+            noise_mean: float = 0,
+            noise_std: float = 0.2,
+            lambda_bound: float = 0,
+            lambda_sharp: float = 0,
+            psf: Optional[PSFParameter] = None,
+            residual: bool = False,
+            regularization_key: str = "image",
+            mode: str = "noise2same",
+            backbone: Union[UNet, SwinIR, Identity] = Identity(),
+            head: Union[RegressionHead, Identity] = Identity(),
+            **kwargs: Any,
     ):
         """
 
@@ -130,19 +126,8 @@ class Noise2Same(nn.Module):
 
         # todo parametrize
         self.blur = GaussianBlur(5, sigma=0.2) if residual else None
-
         self.mask_kernel = DonutMask(n_dim=n_dim, in_channels=in_channels)
-
-        self.psf = None
-        if psf is not None:
-            if isinstance(psf, (str, Path)):
-                # read by path, otherwise assume ndarray
-                # TODO check
-                psf = read_psf(psf, psf_size=psf_size)
-            print("PSF shape", psf.shape)
-            self.psf = PSFParameter(psf, pad_mode=psf_pad_mode, fft=psf_fft)
-            for param in self.psf.parameters():
-                param.requires_grad = False
+        self.psf = psf
 
     def forward(
         self,

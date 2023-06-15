@@ -34,7 +34,7 @@ scheduler:
   decay_steps: 2000
 
 psf:
-  path: null
-  psf_size: null
-  psf_pad_mode: replicate  # check if reflect affected anything
-  psf_fft: auto
+  _target_: noise2same.psf.psf_convolution.PSFParameter
+  pad_mode: replicate
+  fft: auto
+  in_channels: ${dataset.n_channels}

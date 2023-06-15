@@ -97,10 +97,14 @@ def main(cfg: DictConfig) -> None:
         )
 
     # Read PSF from dataset if available or by path
-    psf = getattr(dataset_train, "psf", None)
-    if psf is None and getattr(cfg, "psf", None) is not None:
-        psf = cwd / cfg.psf.path
-        print(f"Read PSF from {psf}")
+    psf = None
+    if 'psf' in cfg:
+        # TODO figure out a way to override kernel_psf on demand if it is available in the dataset
+        kernel_psf = getattr(dataset_train, "psf", None)
+        if kernel_psf is not None:
+            psf = instantiate(cfg.psf, kernel_psf=kernel_psf)
+        else:
+            psf = instantiate(cfg.psf)
 
     backbone, head = parametrize_backbone_and_head(cfg)
 
@@ -109,9 +113,6 @@ def main(cfg: DictConfig) -> None:
         n_dim=cfg.dataset.n_dim,
         in_channels=cfg.dataset.n_channels,
         psf=psf,
-        psf_size=cfg.psf.psf_size if "psf" in cfg else None,
-        psf_pad_mode=cfg.psf.psf_pad_mode if "psf" in cfg else None,
-        psf_fft=cfg.psf.psf_fft if "psf" in cfg else None,
         backbone=backbone,
         head=head,
         **cfg.model,

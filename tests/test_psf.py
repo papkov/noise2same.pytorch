@@ -1,6 +1,14 @@
-import numpy as np
-import torch
+import os
+from pathlib import Path
 
+import numpy as np
+import pytest
+import torch
+from hydra import initialize, compose
+from hydra.utils import instantiate
+from omegaconf import OmegaConf
+
+from noise2same.dataset.getter import get_dataset, expand_dataset_cfg
 from noise2same.psf.psf_convolution import PSF, PSFParameter
 
 
@@ -78,3 +86,29 @@ def test_psf_auto_padding():
 
     assert patch.shape == psf_auto_out.shape
     assert torch.allclose(psf_out, psf_auto_out)
+
+
+@pytest.mark.parametrize("dataset_name", ["fmd_deconvolution",
+                                          "microtubules",
+                                          "microtubules_generated",
+                                          "microtubules_original",
+                                          "ssi",
+                                          ])
+def test_psf_instantiation(dataset_name):
+    os.chdir(Path(__file__).parent.parent)  # necessary to resolve interpolations as ${hydra.runtime.cwd}
+    with initialize(version_base=None, config_path="../config/experiment"):
+        overrides = ['+backbone_name=unet', '+backbone.depth=3', '+dataset.n_channels=1']
+        cfg = compose(config_name=dataset_name, return_hydra_config=True, overrides=overrides)
+        OmegaConf.resolve(cfg)  # resolves interpolations as ${hydra.runtime.cwd}
+        expand_dataset_cfg(cfg)
+        print('\n', OmegaConf.to_yaml(cfg))
+
+    dataset_train, dataset_valid = get_dataset(cfg)
+
+    kernel_psf = getattr(dataset_train, "psf", None)
+    if kernel_psf is not None:
+        psf = instantiate(cfg.psf, kernel_psf=kernel_psf)
+    else:
+        psf = instantiate(cfg.psf)
+
+    assert isinstance(psf, PSFParameter)
