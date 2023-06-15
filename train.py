@@ -6,21 +6,18 @@ from time import sleep
 from typing import Dict
 
 import hydra
-from hydra.utils import instantiate
-
 import torch
 import wandb
 from hydra.utils import get_original_cwd
+from hydra.utils import instantiate
 from omegaconf import DictConfig, OmegaConf
 from torch.utils.data import DataLoader, RandomSampler
 
 import evaluate
 import noise2same.trainer
 from noise2same import model, util
-from noise2same.dataset.getter import get_dataset, get_test_dataset_and_gt
-from noise2same.optimizer.esadam import ESAdam
-from noise2same.scheduler import ExponentialDecayScheduler
 from noise2same.backbone.utils import parametrize_backbone_and_head
+from noise2same.dataset.getter import get_dataset, get_test_dataset_and_gt
 
 
 def flatten_config(cfg: DictConfig) -> Dict:
@@ -106,9 +103,8 @@ def main(cfg: DictConfig) -> None:
         else:
             psf = instantiate(cfg.psf)
 
-    backbone, head = parametrize_backbone_and_head(cfg)
-
     # Model
+    backbone, head = parametrize_backbone_and_head(cfg)
     mdl = model.Noise2Same(
         n_dim=cfg.dataset.n_dim,
         in_channels=cfg.dataset.n_channels,
@@ -140,9 +136,7 @@ def main(cfg: DictConfig) -> None:
 
     n_epochs = cfg.training.steps // cfg.training.steps_per_epoch
     try:
-        history = trainer.fit(
-            n_epochs, loader_train, loader_valid if cfg.training.validate else None
-        )
+        _ = trainer.fit(n_epochs, loader_train, loader_valid)
     except KeyboardInterrupt:
         print("Training interrupted")
     except RuntimeError:
