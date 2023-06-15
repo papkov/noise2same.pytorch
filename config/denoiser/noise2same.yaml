@@ -1,6 +1,6 @@
 # @package _global_
 denoiser:
-  _target_: denoiser.Noise2Same
+  _target_: noise2same.denoiser.Noise2Same
   n_dim: 2
   in_channels: 1
   masking: gaussian

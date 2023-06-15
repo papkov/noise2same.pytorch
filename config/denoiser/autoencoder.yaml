@@ -1,5 +1,5 @@
 # @package _global_
 denoiser:
-  _target_: denoiser.Denoiser
+  _target_: noise2same.denoiser.Denoiser
   n_dim: 2
   in_channels: 1
