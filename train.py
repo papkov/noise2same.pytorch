@@ -3,6 +3,7 @@ import traceback
 from pathlib import Path
 from random import randint
 from time import sleep
+from typing import Dict
 
 import hydra
 import torch
@@ -16,13 +17,28 @@ import noise2same.trainer
 from noise2same import model, util
 from noise2same.dataset.getter import get_dataset, get_test_dataset_and_gt
 from noise2same.optimizer.esadam import ESAdam
-from utils import parametrize_backbone_and_head
 from noise2same.scheduler import ExponentialDecayScheduler
+from utils import parametrize_backbone_and_head
+
+
+def flatten_config(cfg: DictConfig) -> Dict:
+    """
+    Flattens the config to a dictionary for logging
+    :param cfg: hydra config
+    :return: dict with flattened config
+    """
+    d_cfg = {}
+    for group, group_dict in dict(cfg).items():
+        if isinstance(group_dict, DictConfig):
+            for param, value in dict(group_dict).items():
+                d_cfg[f"{group}.{param}"] = value
+        else:
+            d_cfg[group] = group_dict
+    return d_cfg
 
 
 @hydra.main(config_path="config", config_name="config", version_base="1.1")
 def main(cfg: DictConfig) -> None:
-
     # trying to fix: unable to open shared memory object </torch_197398_0> in read-write mode
     # torch.multiprocessing.set_sharing_strategy("file_system")
 
@@ -42,19 +58,12 @@ def main(cfg: DictConfig) -> None:
     print(f"Run backbone {cfg.backbone_name} on experiment {cfg.experiment}, work in {os.getcwd()}")
     cwd = Path(get_original_cwd())
 
+    # Make training deterministic
     util.fix_seed(cfg.seed)
 
-    # flatten 2-level config
-    d_cfg = {}
-    for group, group_dict in dict(cfg).items():
-        if isinstance(group_dict, DictConfig):
-            for param, value in dict(group_dict).items():
-                d_cfg[f"{group}.{param}"] = value
-        else:
-            d_cfg[group] = group_dict
-
+    # Start WandB logging
     if not cfg.check:
-        wandb.init(project=cfg.project, config=d_cfg, settings=wandb.Settings(start_method="fork"))
+        wandb.init(project=cfg.project, config=flatten_config(cfg), settings=wandb.Settings(start_method="fork"))
         wandb.run.summary.update({'training_dir': os.getcwd()})
 
     # Data
