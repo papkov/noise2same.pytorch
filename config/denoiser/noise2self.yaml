@@ -1,8 +1,8 @@
 # @package _global_
 denoiser:
   _target_: noise2same.denoiser.Noise2Self
-  n_dim: 2
-  in_channels: 1
+  n_dim: ${dataset.n_dim}
+  in_channels: ${dataset.n_channels}
   masking: gaussian
   noise_mean: 0
   noise_std: 0.2
