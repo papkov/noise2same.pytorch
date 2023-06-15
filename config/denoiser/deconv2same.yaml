@@ -1,0 +1,12 @@
+# @package _global_
+denoiser:
+  _target_: noise2same.denoiser.Noise2SameDeconvolution
+  n_dim: ${dataset.n_dim}
+  in_channels: ${dataset.n_channels}
+  masking: gaussian
+  noise_mean: 0
+  noise_std: 0.2
+  lambda_rec: 1.0
+  lambda_inv: 2.0
+  lambda_bsp: 0.0
+  lambda_inv_deconv: 0.0
