@@ -8,7 +8,7 @@ from hydra import initialize, compose
 from hydra.utils import instantiate
 from omegaconf import OmegaConf
 
-from noise2same.dataset.getter import get_dataset, expand_dataset_cfg
+from noise2same.dataset.getter import expand_dataset_cfg
 from noise2same.psf.psf_convolution import PSF, PSFParameter
 
 
@@ -97,13 +97,13 @@ def test_psf_auto_padding():
 def test_psf_instantiation(dataset_name):
     os.chdir(Path(__file__).parent.parent)  # necessary to resolve interpolations as ${hydra.runtime.cwd}
     with initialize(version_base=None, config_path="../config/experiment"):
-        overrides = ['+backbone_name=unet', '+backbone.depth=3', '+dataset.n_channels=1']
+        overrides = ['+backbone_name=unet', '+backbone.depth=3', "+cwd=${hydra.runtime.cwd}"]
         cfg = compose(config_name=dataset_name, return_hydra_config=True, overrides=overrides)
         OmegaConf.resolve(cfg)  # resolves interpolations as ${hydra.runtime.cwd}
         expand_dataset_cfg(cfg)
         print('\n', OmegaConf.to_yaml(cfg))
 
-    dataset_train, dataset_valid = get_dataset(cfg)
+    dataset_train = instantiate(cfg.dataset)
 
     kernel_psf = getattr(dataset_train, "psf", None)
     if kernel_psf is not None:

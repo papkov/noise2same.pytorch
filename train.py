@@ -15,7 +15,7 @@ from torch.utils.data import DataLoader, RandomSampler
 import evaluate
 import noise2same.trainer
 from noise2same import util
-from noise2same.dataset.getter import get_dataset, get_test_dataset_and_gt
+from noise2same.dataset.getter import get_test_dataset_and_gt
 
 
 @hydra.main(config_path="config", config_name="config", version_base="1.1")
@@ -46,7 +46,9 @@ def main(cfg: DictConfig) -> None:
         wandb.run.summary.update({'training_dir': os.getcwd()})
 
     # Data
-    dataset_train, dataset_valid = get_dataset(cfg)
+    dataset_train = instantiate(cfg.dataset)
+    dataset_valid = instantiate(cfg.dataset_valid) if 'dataset_valid' in cfg else None
+
     num_samples = cfg.training.batch_size * cfg.training.steps_per_epoch
     loader_train = DataLoader(
         dataset_train,
@@ -95,8 +97,8 @@ def main(cfg: DictConfig) -> None:
 
     # Optimization
     # TODO test instantiation for common configs
-    optimizer = instantiate(cfg.optimizer)(denoiser.parameters())
-    scheduler = instantiate(cfg.scheduler)(optimizer)
+    optimizer = instantiate(cfg.optimizer, denoiser.parameters())
+    scheduler = instantiate(cfg.scheduler, optimizer)
 
     # Trainer
     trainer = noise2same.trainer.Trainer(

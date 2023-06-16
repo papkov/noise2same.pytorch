@@ -29,22 +29,6 @@ def expand_dataset_cfg(cfg: DictConfig) -> None:
                 cfg[dataset_key] = OmegaConf.merge(cfg.dataset, cfg[dataset_key])
 
 
-def get_dataset(cfg: DictConfig) -> Tuple[Dataset, Dataset]:
-    """
-    Collect training and validation datasets specified in the configuration
-    :param cfg: DictConfig, training/evaluation configuration object
-    :return: Tuple[Dataset, Dataset]
-    """
-    # TODO consider moving to main
-    dataset_valid = None
-
-    if 'dataset_valid' in cfg:
-        dataset_valid = instantiate(cfg.dataset_valid)
-
-    dataset_train = instantiate(cfg.dataset)
-    return dataset_train, dataset_valid
-
-
 def get_test_dataset_and_gt(cfg: DictConfig) -> Tuple[Dataset, List[np.ndarray]]:
     """
     Collect test dataset and ground truth specified in the configuration

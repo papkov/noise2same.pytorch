@@ -12,7 +12,7 @@ from hydra.utils import instantiate
 from omegaconf import OmegaConf
 
 from noise2same.dataset import *
-from noise2same.dataset.getter import get_dataset, get_test_dataset_and_gt, expand_dataset_cfg
+from noise2same.dataset.getter import get_test_dataset_and_gt, expand_dataset_cfg
 from noise2same.dataset.util import mask_like_image, add_noise
 from noise2same.util import crop_as
 
@@ -99,55 +99,21 @@ def test_dataset_instantiation(dataset_name: str, expected_dataclass: type, expe
         OmegaConf.resolve(cfg)  # resolves interpolations as ${hydra.runtime.cwd}
         expand_dataset_cfg(cfg)
         print('\n', OmegaConf.to_yaml(cfg))
-        pad_divisor = 32
 
         if 'dataset_valid' in cfg:
-            dataset_valid = instantiate(cfg.dataset_valid, pad_divisor=pad_divisor)
+            dataset_valid = instantiate(cfg.dataset_valid)
             assert isinstance(dataset_valid, expected_dataclass_valid)
+            val_image = dataset_valid[0]
+            assert val_image is not None
 
         if 'cached' in cfg.dataset:
             # Do not use cache for testing because of memory issues
             cfg.dataset.cached = ''
-        dataset = instantiate(cfg.dataset, pad_divisor=pad_divisor)
+
+        dataset = instantiate(cfg.dataset)
         assert isinstance(dataset, expected_dataclass)
-
-
-@pytest.mark.parametrize('dataset_name,expected_dataclass,expected_dataclass_valid',
-                         [('bsd68', BSD68Dataset, BSD68Dataset),
-                          # ('hanzi', HanziDataset, HanziDataset), # TODO fix memory issue
-                          # ('imagenet', ImagenetDataset, ImagenetDataset), # TODO fix memory issue
-                          ('microtubules', MicrotubulesDataset, None),
-                          ('microtubules_generated', MicrotubulesDataset, None),
-                          ('fmd', FMDDataset, FMDDataset),
-                          ('fmd_deconvolution', FMDDataset, FMDDataset),
-                          # ('planaria', PlanariaDataset, PlanariaDataset), # TODO fix memory issue
-                          # ('sidd', SIDDDataset, SIDDDataset), # TODO move dataset
-                          ('synthetic', ImagenetSyntheticDataset, Set14SyntheticDataset),
-                          ('synthetic_grayscale', BSD400SyntheticDataset, BSD68SyntheticDataset),
-                          ('ssi', SSIDataset, None),
-                          ])
-def test_get_dataset(dataset_name: str, expected_dataclass: type, expected_dataclass_valid: Optional[type]):
-    with initialize(version_base=None, config_path="../config/experiment"):
-        overrides = ['+backbone_name=unet', '+backbone.depth=3', '+cwd=${hydra.runtime.cwd}']
-        if dataset_name == 'synthetic':
-            # Do not use cache for testing because of memory issues
-            overrides.append('dataset.cached=null')
-
-        cfg = compose(config_name=dataset_name, return_hydra_config=True, overrides=overrides)
-        OmegaConf.resolve(cfg)  # resolves interpolations as ${hydra.runtime.cwd}
-        expand_dataset_cfg(cfg)
-        print('\n', OmegaConf.to_yaml(cfg))
-
-    dataset_train, dataset_valid = get_dataset(cfg)
-    assert isinstance(dataset_train, expected_dataclass)
-    train_image = dataset_train[0]
-    assert train_image is not None
-    if expected_dataclass_valid is not None:
-        assert isinstance(dataset_valid, expected_dataclass_valid)
-        val_image = dataset_valid[0]
-        assert val_image is not None
-    else:
-        assert dataset_valid is None
+        train_image = dataset[0]
+        assert train_image is not None
 
 
 @pytest.mark.parametrize('dataset_name,expected_dataclass',
