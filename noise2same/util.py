@@ -120,7 +120,7 @@ def calculate_scores(
         prefix + "psnr": peak_signal_noise_ratio(gt, x_, data_range=data_range),
         prefix
         + "ssim": structural_similarity(
-            gt, x_, data_range=data_range, channel_axis=-1 if multichannel else None, **kwargs,
+            gt, x_, data_range=data_range, multichannel=multichannel, **kwargs,
         ),
     }
 
