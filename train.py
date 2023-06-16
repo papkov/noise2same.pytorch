@@ -134,4 +134,5 @@ def main(cfg: DictConfig) -> None:
 
 
 if __name__ == "__main__":
+    util.register_config_resolvers()
     main()

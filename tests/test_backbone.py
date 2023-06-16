@@ -1,7 +1,6 @@
 import os
 from pathlib import Path
 
-import math
 import pytest
 from hydra import initialize, compose
 from hydra.utils import instantiate
@@ -9,14 +8,12 @@ from omegaconf import OmegaConf
 from torch.nn import Identity
 
 from noise2same.backbone import unet, swinia, swinir
+from noise2same.util import register_config_resolvers
 
 
 @pytest.fixture(scope="module", autouse=True)
-def register_eval_resolver():
-    # TODO factor out
-    OmegaConf.register_new_resolver('eval', eval)
-    OmegaConf.register_new_resolver('max', max)
-    OmegaConf.register_new_resolver('ceil', lambda x: math.ceil(eval(x)))
+def register_config_resolvers_fixture():
+    register_config_resolvers()
 
 
 @pytest.mark.parametrize('backbone_name,expected_backbone,expected_head',

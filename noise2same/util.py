@@ -4,12 +4,14 @@ from functools import partial
 from typing import Any, Dict, Tuple, Union
 
 import cv2
+import math
 import numpy as np
 import torch
 from matplotlib import pyplot as plt
 from numpy import ndarray
 from numpy.linalg import norm
 from omegaconf import DictConfig
+from omegaconf import OmegaConf
 from scipy.fft import dct
 from skimage.metrics import (
     mean_squared_error,
@@ -464,3 +466,13 @@ def flatten_config(cfg: DictConfig) -> Dict:
         else:
             d_cfg[group] = group_dict
     return d_cfg
+
+
+def register_config_resolvers():
+    """
+    Registers custom resolvers for OmegaConf for config interpolation
+    :return:
+    """
+    OmegaConf.register_new_resolver('eval', eval)
+    OmegaConf.register_new_resolver('max', max)
+    OmegaConf.register_new_resolver('ceil', lambda x: math.ceil(eval(x)))
