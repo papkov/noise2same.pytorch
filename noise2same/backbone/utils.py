@@ -1,22 +1,8 @@
 from typing import Tuple
 
-import math
 import torch.nn
 from hydra.utils import instantiate
 from omegaconf import DictConfig
-
-from noise2same.dataset.getter import compute_pad_divisor
-
-
-def recalculate_img_size(cfg: DictConfig) -> int:
-    """
-    Recalculate image size with respect to future padding
-    :param cfg: DictConfig, training/evaluation configuration object
-    :return: int
-    """
-    # TODO training.crop will be deprecated and moved to transforms config. Consider removing this function
-    pad_divisor = compute_pad_divisor(cfg)
-    return math.ceil(cfg.training.crop / pad_divisor) * pad_divisor
 
 
 def parametrize_backbone_and_head(cfg: DictConfig) -> Tuple[torch.nn.Module, torch.nn.Module]:
@@ -25,6 +11,6 @@ def parametrize_backbone_and_head(cfg: DictConfig) -> Tuple[torch.nn.Module, tor
     :param cfg: DictConfig, training/evaluation configuration object
     :return: Tuple[torch.nn.Module, torch.nn.Module]
     """
-    backbone = instantiate(cfg.backbone)(input_size=recalculate_img_size(cfg))
+    backbone = instantiate(cfg.backbone)
     head = instantiate(cfg.head)
     return backbone, head

@@ -1,5 +1,5 @@
 import itertools
-from typing import Tuple, Optional, Iterable, Set
+from typing import Any, Tuple, Optional, Iterable, Set
 
 import torch
 import torch.nn as nn
@@ -280,7 +280,8 @@ class SwinIA(nn.Module):
             depths: Tuple[int] = (8, 4, 4, 4, 4, 4, 8),
             num_heads: Tuple[int] = (6, 6, 6, 6, 6, 6, 6),
             dilations: Tuple[int] = (1, 1, 1, 1, 1, 1, 1),
-            shuffles: Tuple[int] = (1, 1, 1, 1, 1, 1, 1)
+            shuffles: Tuple[int] = (1, 1, 1, 1, 1, 1, 1),
+            **kwargs: Any,
     ):
         super().__init__()
         self.window_size = window_size
