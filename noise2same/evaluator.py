@@ -9,42 +9,39 @@ from tqdm import tqdm
 import time
 
 from noise2same.dataset.util import PadAndCropResizer
-from noise2same.model import Noise2Same
+from noise2same.denoiser import Denoiser
 from noise2same.backbone.unet import UNet
 from noise2same.backbone.swinir import SwinIR
 
 
 class Evaluator(object):
     def __init__(
-        self,
-        model: Noise2Same,
-        device: str = "cuda",
-        checkpoint_path: Optional[str] = None,
-        masked: bool = False,
+            self,
+            denoiser: Denoiser,
+            device: str = "cuda",
+            checkpoint_path: Optional[str] = None,
     ):
         """
         Model evaluator, describes inference for different data formats
-        :param model: model architecture to evaluate
+        :param denoiser: model architecture to evaluate
         :param device: str, device to run inference
         :param checkpoint_path: optional str, path to the model checkpoint
-        :param masked: if perform forward pass masked
         """
-        self.model = model
+        self.model = denoiser
         self.device = device
         self.checkpoint_path = checkpoint_path
         if checkpoint_path is not None:
             self.load_checkpoint(checkpoint_path)
-        self.masked = masked
 
         self.model.to(device)
 
-        if isinstance(self.model.net, UNet):
+        if isinstance(self.model.backbone, UNet):
             self.resizer = PadAndCropResizer(
-                mode="reflect", div_n=2 ** self.model.net.depth
+                mode="reflect", div_n=2 ** self.model.backbone.depth
             )
-        elif isinstance(self.model.net, SwinIR):
+        elif isinstance(self.model.backbone, SwinIR):
             self.resizer = PadAndCropResizer(
-                mode="reflect", div_n=self.model.net.window_size
+                mode="reflect", div_n=self.model.backbone.window_size
             )
         else:
             self.resizer = PadAndCropResizer(div_n=1)
@@ -55,7 +52,6 @@ class Evaluator(object):
         loader: DataLoader,
         half: bool = False,
         empty_cache: bool = False,
-        convolve: bool = False,
         key: str = "image",
     ) -> Tuple[List[Dict[str, np.ndarray]], List[int]]:
         """
@@ -63,7 +59,6 @@ class Evaluator(object):
         :param loader: DataLoader
         :param half: bool, if use half precision
         :param empty_cache: bool, if empty CUDA cache after each iteration
-        :param convolve: bool, if convolve the output with a PSF
         :param key: str, key to use for the output [image, deconv]
         :return: List[Dict[key, output]]
         """
@@ -79,29 +74,17 @@ class Evaluator(object):
                 batch = {k: v.to(self.device) for k, v in batch.items()}
                 start = time.time()
                 with autocast(enabled=half):
-                    if self.masked:
-                        # TODO remove randomness
-                        # idea: use the same mask for all images? mask as tta?
-                        out, _ = self.model.forward(
-                            batch["image"], mask=batch["mask"], convolve=convolve
-                        )
-                    else:
-                        _, out = self.model.forward(batch["image"], convolve=convolve)
-                    out_raw = out[key] * batch["std"] + batch["mean"]
+                    x_out = self.model.forward(batch["image"])[key] * batch["std"] + batch["mean"]
 
-                out_raw = {"image": np.moveaxis(out_raw.detach().cpu().numpy(), 1, -1)}
-                if self.model.lambda_proj > 0:
-                    out_raw.update(
-                        {"proj": np.moveaxis(out["proj"].detach().cpu().numpy(), 1, -1)}
-                    )
+                x_out = {"image": np.moveaxis(x_out.detach().cpu().numpy(), 1, -1)}
 
                 end = time.time()
                 times.append(end - start)
 
-                outputs.append(out_raw)
+                outputs.append(x_out)
                 iterator.set_postfix(
                     {
-                        "shape": out_raw["image"].shape,
+                        "shape": x_out["image"].shape,
                         "reserved": torch.cuda.memory_reserved(0) / (1024 ** 2),
                         "allocated": torch.cuda.memory_allocated(0) / (1024 ** 2),
                     }
@@ -131,7 +114,6 @@ class Evaluator(object):
         half: bool = False,
         empty_cache: bool = False,
         key: str = "image",
-        convolve: bool = False,
     ) -> np.ndarray:
         """
         Run inference for a single image represented as Dataset
@@ -145,7 +127,6 @@ class Evaluator(object):
         :param half: bool, if use half precision
         :param empty_cache: bool, if empty CUDA cache after
         :param key: str, which output key to accumulate
-        :param convolve: bool, if convolve the output
         :return: numpy array, merged image
         """
         assert hasattr(dataset, "tiler"), "Dataset should have a `tiler` attribute"
@@ -186,9 +167,9 @@ class Evaluator(object):
             }
             with autocast(enabled=half):
                 pred_batch = (
-                    self.model.forward(batch["image"], convolve=convolve)[1][key]
-                    * batch["std"]
-                    + batch["mean"]
+                        self.model.forward(batch["image"])[key]
+                        * batch["std"]
+                        + batch["mean"]
                 )
             iterator.set_postfix(
                 {

@@ -318,7 +318,7 @@ def detach_to_np(
     """
     return {
         k: np.moveaxis(
-            (v.detach().cpu() * std + mean).numpy(),
+            (v * std + mean).detach().cpu().numpy(),
             1,
             -1,
         )

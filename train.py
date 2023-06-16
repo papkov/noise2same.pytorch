@@ -15,7 +15,7 @@ from torch.utils.data import DataLoader, RandomSampler
 
 import evaluate
 import noise2same.trainer
-from noise2same import model, util
+from noise2same import util
 from noise2same.backbone.utils import parametrize_backbone_and_head
 from noise2same.dataset.getter import get_dataset, get_test_dataset_and_gt
 
@@ -94,38 +94,32 @@ def main(cfg: DictConfig) -> None:
         )
 
     # Read PSF from dataset if available or by path
-    psf = None
+    # TODO factor out
+    denoiser_kwargs = {}
     if 'psf' in cfg:
         # TODO figure out a way to override kernel_psf on demand if it is available in the dataset
         kernel_psf = getattr(dataset_train, "psf", None)
         if kernel_psf is not None:
-            psf = instantiate(cfg.psf, kernel_psf=kernel_psf)
+            denoiser_kwargs["psf"] = instantiate(cfg.psf, kernel_psf=kernel_psf)
         else:
-            psf = instantiate(cfg.psf)
+            denoiser_kwargs["psf"] = instantiate(cfg.psf)
 
     # Model
     backbone, head = parametrize_backbone_and_head(cfg)
-    mdl = model.Noise2Same(
-        n_dim=cfg.dataset.n_dim,
-        in_channels=cfg.dataset.n_channels,
-        psf=psf,
-        backbone=backbone,
-        head=head,
-        **cfg.model,
-    )
+    denoiser = instantiate(cfg.denoiser, backbone=backbone, head=head, **denoiser_kwargs)
 
     if torch.cuda.device_count() > 1:
         print(f'Using data parallel with {torch.cuda.device_count()} GPUs')
-        mdl = torch.nn.DataParallel(mdl)
+        denoiser = torch.nn.DataParallel(denoiser)
 
     # Optimization
     # TODO test instantiation for common configs
-    optimizer = instantiate(cfg.optimizer)(mdl.parameters())
+    optimizer = instantiate(cfg.optimizer)(denoiser.parameters())
     scheduler = instantiate(cfg.scheduler)(optimizer)
 
     # Trainer
     trainer = noise2same.trainer.Trainer(
-        model=mdl,
+        denoiser=denoiser,
         optimizer=optimizer,
         scheduler=scheduler,
         check=cfg.check,

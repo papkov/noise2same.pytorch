@@ -9,8 +9,8 @@ from torch.cuda.amp import GradScaler, autocast
 from torch.utils.data import DataLoader
 from tqdm import tqdm, trange
 
+from noise2same.denoiser import Denoiser
 from noise2same.evaluator import Evaluator
-from noise2same.model import Noise2Same
 from noise2same.util import (
     detach_to_np,
     load_checkpoint_to_module,
@@ -20,21 +20,21 @@ from noise2same.util import (
 
 class Trainer(object):
     def __init__(
-        self,
-        model: Noise2Same,
-        optimizer,
-        scheduler=None,
-        device: str = "cuda",
-        checkpoint_path: str = "checkpoints",
-        monitor: str = "val_rec_mse",
-        experiment: str = None,
-        check: bool = False,
-        wandb_log: bool = True,
-        amp: bool = False,
+            self,
+            denoiser: Denoiser,
+            optimizer,
+            scheduler=None,
+            device: str = "cuda",
+            checkpoint_path: str = "checkpoints",
+            monitor: str = "val_rec_mse",
+            experiment: str = None,
+            check: bool = False,
+            wandb_log: bool = True,
+            amp: bool = False,
     ):
 
-        self.model = model
-        self.inner_model = model if not isinstance(model, torch.nn.DataParallel) else model.module
+        self.model = denoiser
+        self.inner_model = denoiser if not isinstance(denoiser, torch.nn.DataParallel) else denoiser.module
         self.optimizer = optimizer
         self.scheduler = scheduler
         self.device = device
@@ -48,7 +48,7 @@ class Trainer(object):
 
         self.model.to(device)
         self.checkpoint_path.mkdir(parents=True, exist_ok=False)
-        self.evaluator = Evaluator(model=self.inner_model, device=device)
+        self.evaluator = Evaluator(denoiser=self.inner_model, device=device)
 
         self.amp = amp
         self.scaler = GradScaler() if amp else None
@@ -77,33 +77,19 @@ class Trainer(object):
         iterator = tqdm(loader, desc="train")
         total_loss = Counter()
         images = {}
-        for i, batch in enumerate(iterator):
-            x = batch["image"].to(self.device)
-            ground_truth = None if "ground_truth" not in batch else batch["ground_truth"].to(self.device)
-            mask = batch["mask"].to(self.device)
+        for i, x_in in enumerate(iterator):
+            x_in = {k: v.to(self.device) for k, v in x_in.items()}
             self.optimizer.zero_grad()
 
             # todo gradient accumulation
             with autocast(enabled=self.amp):
                 try:
-                    out_mask, out_raw = self.model.forward(x, mask=mask)
+                    x_out = self.model.forward(x_in["image"], mask=x_in["mask"])
                 except RuntimeError as e:
-                    raise RuntimeError(f"Batch {x.shape} failed on device {x.device}") from e
+                    raise RuntimeError(f"Batch {x_in['image'].shape} failed on device {self.device}") from e
 
-                loss, loss_log = self.inner_model.compute_losses_from_output(
-                    x, mask, out_mask, out_raw, ground_truth
-                )
+                loss, loss_log = self.inner_model.compute_loss(x_in, x_out)
 
-                reg_loss, reg_loss_log = self.inner_model.compute_regularization_loss(
-                    out_mask if out_raw is None else out_raw,
-                    mean=batch["mean"].to(self.device),
-                    std=batch["std"].to(self.device),
-                    max_value=x.max(),
-                )
-
-                if reg_loss_log:
-                    loss += reg_loss
-                    loss_log.update(reg_loss_log)
             self.optimizer_scheduler_step(loss)
             total_loss += loss_log
             iterator.set_postfix({k: v / (i + 1) for k, v in total_loss.items()})
@@ -114,21 +100,10 @@ class Trainer(object):
             # Log last batch of images
             if i == len(iterator) - 1 or (self.check and i == 3):
                 images = {
-                    "input": x
+                    "input": x_in["image"],
+                    **x_out
                 }
-
-                if out_mask is not None:
-                    images["out_mask"] = out_mask["image"]
-
-                if out_raw is not None:
-                    images["out_raw"] = out_raw["image"]
-
-                if out_mask is not None and "deconv" in out_mask:
-                    images["out_mask_deconv"] = out_mask["deconv"]
-                if out_raw is not None and "deconv" in out_raw:
-                    images["out_raw_deconv"] = out_raw["deconv"]
-
-                images = detach_to_np(images, mean=batch["mean"], std=batch["std"])
+                images = detach_to_np(images, mean=x_in["mean"], std=x_in["std"])
                 images = normalize_zero_one_dict(images)
 
         total_loss = {k: v / len(loader) for k, v in total_loss.items()}
@@ -146,17 +121,17 @@ class Trainer(object):
         total_loss = 0
         val_mse_log = []
         images = {}
-        for i, batch in enumerate(iterator):
-            x = batch["image"].to(self.device)
+        for i, x_in in enumerate(iterator):
+            x_in = {k: v.to(self.device) for k, v in x_in.items()}
 
             with autocast(enabled=self.amp):
-                out_raw = self.model(x)[1]["image"]
+                x_out = self.model(x_in["image"])
 
-            if "ground_truth" in batch.keys():
-                val_mse = torch.mean(torch.square(out_raw - batch["ground_truth"].to(self.device)))
+            if "ground_truth" in x_in.keys():
+                val_mse = torch.mean(torch.square(x_out["image"] - x_in["ground_truth"].to(self.device)))
                 val_mse_log.append(val_mse.item())
 
-            rec_mse = torch.mean(torch.square(out_raw - x))
+            rec_mse = torch.mean(torch.square(x_out["image"] - x_in["image"]))
             total_loss += rec_mse.item()
 
             iterator.set_postfix({"val_rec_mse": total_loss / (i + 1)})
@@ -166,10 +141,10 @@ class Trainer(object):
 
             if i == len(iterator) - 1 or (self.check and i == 3):
                 images = {
-                    "val_input": x,
-                    "val_out_raw": out_raw,
+                    "val_input": x_in["image"],
+                    "val_out_raw": x_out["image"],
                 }
-                images = detach_to_np(images, mean=batch["mean"], std=batch["std"])
+                images = detach_to_np(images, mean=x_in["mean"], std=x_in["std"])
                 images = normalize_zero_one_dict(images)
         if len(val_mse_log) > 0:
             return {"val_rec_mse": total_loss / len(loader), "val_mse": np.mean(val_mse_log)}, images

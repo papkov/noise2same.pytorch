@@ -1,33 +1,34 @@
+import datetime
 import glob
 import os
-import datetime
+from argparse import ArgumentParser
 from pathlib import Path
 from pprint import pprint
 
-from argparse import ArgumentParser
 import numpy as np
 import pandas as pd
+from hydra.utils import instantiate
 from omegaconf import OmegaConf
-from torch.utils.data import DataLoader, Dataset, ConcatDataset
+from torch.utils.data import DataLoader, Dataset
 from tqdm.auto import tqdm
 
-from noise2same import model, util
+from noise2same import util
+from noise2same.backbone.utils import parametrize_backbone_and_head
 from noise2same.dataset.getter import (
     get_planaria_dataset_and_gt,
     get_test_dataset_and_gt,
 )
 from noise2same.evaluator import Evaluator
-from noise2same.backbone.utils import parametrize_backbone_and_head
 
 
 def get_ground_truth_and_predictions(
-    evaluator: Evaluator,
-    experiment: str,
-    ground_truth: np.ndarray,
-    cwd: Path,
-    loader: DataLoader = None,
-    dataset: Dataset = None,
-    half: bool = False
+        evaluator: Evaluator,
+        experiment: str,
+        ground_truth: np.ndarray,
+        cwd: Path,
+        loader: DataLoader = None,
+        dataset: Dataset = None,
+        half: bool = False
 ):
     if experiment in ("bsd68", "fmd", "hanzi", "sidd", "synthetic", "synthetic_grayscale"):
         add_blur_and_noise = getattr(dataset, "add_blur_and_noise", False)
@@ -192,41 +193,42 @@ def evaluate(
 
 
 def main(train_dir: Path, checkpoint: str = 'last', other_args: list = None) -> None:
-
     cfg = OmegaConf.load(f'{train_dir}/.hydra/config.yaml')
     if other_args is not None:
         cfg.merge_with_dotlist(other_args)
 
-    os.environ["CUDA_VISIBLE_DEVICES"] = f"{cfg.device}"
+    # os.environ["CUDA_VISIBLE_DEVICES"] = f"{cfg.device}"
 
     print(f"Evaluate backbone {cfg.backbone_name} on experiment {cfg.experiment}, work in {train_dir}")
 
     cwd = Path(os.getcwd())
+    cfg.cwd = cwd
+    OmegaConf.resolve(cfg)
 
     dataset, ground_truth = None, None
     if cfg.experiment not in ("planaria",):
         # For some datasets we need custom loading
         dataset, ground_truth = get_test_dataset_and_gt(cfg)
 
-    backbone, head = parametrize_backbone_and_head(cfg)
+    # Read PSF from dataset if available or by path
+    denoiser_kwargs = {}
+    if 'psf' in cfg:
+        # TODO figure out a way to override kernel_psf on demand if it is available in the dataset
+        kernel_psf = getattr(dataset, "psf", None)
+        if kernel_psf is not None:
+            denoiser_kwargs["psf"] = instantiate(cfg.psf, kernel_psf=kernel_psf)
+        else:
+            denoiser_kwargs["psf"] = instantiate(cfg.psf)
 
-    mdl = model.Noise2Same(
-        n_dim=cfg.dataset.n_dim,
-        in_channels=cfg.dataset.n_channels,
-        psf=cfg.psf.path if "psf" in cfg else None,
-        psf_size=cfg.psf.psf_size if "psf" in cfg else None,
-        psf_pad_mode=cfg.psf.psf_pad_mode if "psf" in cfg else None,
-        backbone=backbone,
-        head=head,
-        **cfg.model,
-    )
+    # Model
+    backbone, head = parametrize_backbone_and_head(cfg)
+    denoiser = instantiate(cfg.denoiser, backbone=backbone, head=head, **denoiser_kwargs)
 
     checkpoint_path = train_dir / Path(f"checkpoints/model{'_last' if checkpoint == 'last' else ''}.pth")
 
     # Run evaluation
     half = getattr(cfg, "amp", False)
-    masked = getattr(cfg, "masked", False)
-    evaluator = Evaluator(mdl, checkpoint_path=checkpoint_path, masked=masked)
+    evaluator = Evaluator(denoiser, checkpoint_path=checkpoint_path)
     evaluate(
         evaluator, dataset, ground_truth, cfg.experiment, cwd, train_dir, half=half,
         num_workers=cfg.training.num_workers
