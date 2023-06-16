@@ -1,5 +1,6 @@
 from typing import Tuple
 
+import math
 import torch.nn
 from hydra.utils import instantiate
 from omegaconf import DictConfig
@@ -15,10 +16,7 @@ def recalculate_img_size(cfg: DictConfig) -> int:
     """
     # TODO training.crop will be deprecated and moved to transforms config. Consider removing this function
     pad_divisor = compute_pad_divisor(cfg)
-    if cfg.training.crop % pad_divisor:
-        return (cfg.training.crop // pad_divisor + 1) * pad_divisor
-    else:
-        return cfg.training.crop
+    return math.ceil(cfg.training.crop / pad_divisor) * pad_divisor
 
 
 def parametrize_backbone_and_head(cfg: DictConfig) -> Tuple[torch.nn.Module, torch.nn.Module]:
