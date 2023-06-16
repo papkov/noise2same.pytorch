@@ -7,6 +7,7 @@ dataset:
   n_dim: 3
   transforms:
     _target_: noise2same.dataset.util.training_augmentations_3d
+  input_size: 64  # needed for some models
 
 dataset_valid:
   mode: val

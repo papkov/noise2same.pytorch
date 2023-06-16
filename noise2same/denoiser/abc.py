@@ -15,6 +15,7 @@ class Denoiser(nn.Module):
 
     def __init__(
         self,
+        # TODO consider removing default values
         backbone: nn.Module = nn.Identity(),
         head: nn.Module = nn.Identity(),
         residual: bool = False,

@@ -13,6 +13,7 @@ dataset:
   add_blur_and_noise: False
   transforms:
     _target_: noise2same.dataset.util.training_augmentations_3d
+  input_size: ${.tile_size}  # needed for some models
 
 dataset_test:
   transforms: null
