@@ -3,7 +3,7 @@ experiment: synthetic_grayscale
 
 dataset:
   _target_: noise2same.dataset.BSD400SyntheticDataset
-  path: ${hydra.runtime.cwd}/data/BSD400/
+  path: ${cwd}/data/BSD400/
   noise_type: gaussian
   noise_param: 25
   standardize: True
@@ -13,7 +13,7 @@ dataset:
 
 dataset_valid:
   _target_: noise2same.dataset.BSD68SyntheticDataset
-  path: ${hydra.runtime.cwd}/data/BSD68-test/
+  path: ${cwd}/data/BSD68-test/
   fixed: True
   transforms:
     _target_: noise2same.dataset.util.validation_transforms_2d
@@ -26,11 +26,11 @@ dataset_test:
   datasets:
     - _target_: noise2same.dataset.BSD68SyntheticDataset
       _partial_: True
-      path: ${hydra.runtime.cwd}/data/BSD68-test/
+      path: ${cwd}/data/BSD68-test/
       n_repeats: 4
     - _target_: noise2same.dataset.Set12SyntheticDataset
       _partial_: True
-      path: ${hydra.runtime.cwd}/data/Set12/
+      path: ${cwd}/data/Set12/
       n_repeats: 20
 
 training:

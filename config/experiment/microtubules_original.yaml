@@ -3,9 +3,10 @@ experiment: microtubules
 
 dataset:
   _target_: noise2same.dataset.MicrotubulesDataset
-  path: ${hydra.runtime.cwd}/data/microtubules-simulation/
+  path: ${cwd}/data/microtubules-simulation/
   input_name: input.tif
   n_dim: 3
+  n_channels: 1
   tile_size: 64
   tile_step: 64  # to prevent overlap
   transforms:
@@ -37,7 +38,7 @@ psf:
   _target_: noise2same.psf.psf_convolution.PSFParameter
   kernel_psf: # this can be substituted by a PSF from dataset
     _target_: noise2same.psf.psf_convolution.read_psf
-    path: ${hydra.runtime.cwd}/data/microtubules-simulation/psf.tif
+    path: ${cwd}/data/microtubules-simulation/psf.tif
   pad_mode: constant
   fft: auto
   in_channels: ${dataset.n_channels}

@@ -2,28 +2,13 @@ hydra:
   run:
     dir: results/${experiment}/${backbone_name}/${hydra.job.name}/${now:%Y-%m-%d_%H-%M-%S}
 
+cwd: ${hydra:runtime.cwd}
+
 project: noise2same
 device: 0
 seed: 56
 check: False
 evaluate: True
-
-model:
-  lambda_rec: 1
-  lambda_bsp: 0
-  lambda_inv: 2
-  lambda_inv_deconv: 0
-  lambda_proj: 0
-  lambda_bound: 0
-  lambda_sharp: 0
-  masked_inv_deconv: True
-  mask_percentage: 0.5
-  masking: gaussian
-  noise_mean: 0
-  noise_std: 0.2
-  residual: False
-  regularization_key: image
-  mode: "noise2same"
 
 training:
   steps_per_epoch: 1000
@@ -36,13 +21,11 @@ training:
   val_batch_size: 4
   monitor: bsp_mse
   amp: True
-  info_padding: False
 
 dataset:
   n_dim: 2
   n_channels: 1
   standardize: True  # subtract mean and divide by std for each image separately
-  add_blur_and_noise: False
 
 optimizer:
   _target_: torch.optim.Adam

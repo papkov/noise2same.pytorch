@@ -3,7 +3,7 @@ experiment: imagenet
 
 dataset:
   _target_: noise2same.dataset.ImagenetDataset
-  path: ${hydra.runtime.cwd}/data/ImageNet/
+  path: ${cwd}/data/ImageNet/
   n_channels: 3
   version: 0
   transforms:

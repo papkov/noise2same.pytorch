@@ -3,7 +3,7 @@ experiment: sidd
 
 dataset:
   _target_: noise2same.dataset.SIDDDataset
-  path: ${hydra.runtime.cwd}/data/SIDD-NAFNet/
+  path: ${cwd}/data/SIDD-NAFNet/
   n_channels: 3
   transforms:
     _target_: noise2same.dataset.util.training_augmentations_2d

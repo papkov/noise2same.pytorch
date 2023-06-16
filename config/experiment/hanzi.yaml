@@ -2,7 +2,7 @@
 experiment: hanzi
 dataset:
   _target_: noise2same.dataset.HanziDataset
-  path: ${hydra.runtime.cwd}/data/Hanzi/tiles/
+  path: ${cwd}/data/Hanzi/tiles/
   version: 0
   noise_level: 3
   transforms:

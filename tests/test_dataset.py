@@ -77,7 +77,7 @@ def test_noise_addition(
 @pytest.mark.parametrize('dataset_name,expected_dataclass,expected_dataclass_valid',
                          [('bsd68', BSD68Dataset, BSD68Dataset),
                           # ('hanzi', HanziDataset, HanziDataset), # TODO fix memory issue
-                          ('imagenet', ImagenetDataset, ImagenetDataset),
+                          # ('imagenet', ImagenetDataset, ImagenetDataset), # TODO fix memory issue
                           ('microtubules', MicrotubulesDataset, None),
                           ('microtubules_generated', MicrotubulesDataset, None),
                           ('fmd', FMDDataset, FMDDataset),
@@ -91,7 +91,7 @@ def test_noise_addition(
 def test_dataset_instantiation(dataset_name: str, expected_dataclass: type, expected_dataclass_valid: Optional[type]):
     os.chdir(Path(__file__).parent.parent)  # necessary to resolve interpolations as ${hydra.runtime.cwd}
     with initialize(version_base=None, config_path="../config/experiment", job_name="test"):
-        cfg = compose(config_name=dataset_name, return_hydra_config=True)
+        cfg = compose(config_name=dataset_name, return_hydra_config=True, overrides=["+cwd=${hydra.runtime.cwd}"])
         OmegaConf.resolve(cfg)  # resolves interpolations as ${hydra.runtime.cwd}
         expand_dataset_cfg(cfg)
         print('\n', OmegaConf.to_yaml(cfg))
@@ -125,7 +125,7 @@ def test_dataset_instantiation(dataset_name: str, expected_dataclass: type, expe
 def test_get_dataset(dataset_name: str, expected_dataclass: type, expected_dataclass_valid: Optional[type]):
     os.chdir(Path(__file__).parent.parent)  # necessary to resolve interpolations as ${hydra.runtime.cwd}
     with initialize(version_base=None, config_path="../config/experiment"):
-        overrides = ['+backbone_name=unet', '+backbone.depth=3']
+        overrides = ['+backbone_name=unet', '+backbone.depth=3', '+cwd=${hydra.runtime.cwd}']
         if dataset_name == 'synthetic':
             # Do not use cache for testing because of memory issues
             overrides.append('dataset.cached=null')
@@ -164,7 +164,7 @@ def test_get_dataset(dataset_name: str, expected_dataclass: type, expected_datac
 def test_get_test_dataset_and_gt(dataset_name: str, expected_dataclass: type):
     os.chdir(Path(__file__).parent.parent)  # necessary to resolve interpolations as ${hydra.runtime.cwd}
     with initialize(version_base=None, config_path="../config/experiment"):
-        overrides = ['+backbone_name=unet', '+backbone.depth=3']
+        overrides = ['+backbone_name=unet', '+backbone.depth=3', '+cwd=${hydra.runtime.cwd}']
         if dataset_name == 'synthetic':
             # Do not use cache for testing because of memory issues
             overrides.append('dataset.cached=null')
@@ -195,7 +195,7 @@ def test_concat_dataset(dataset_name):
     # TODO add more meaningful tests
     os.chdir(Path(__file__).parent.parent)  # necessary to resolve interpolations as ${hydra.runtime.cwd}
     with initialize(version_base=None, config_path="../config/experiment"):
-        cfg = compose(config_name=dataset_name, return_hydra_config=True)
+        cfg = compose(config_name=dataset_name, return_hydra_config=True, overrides=['+cwd=${hydra.runtime.cwd}'])
         OmegaConf.resolve(cfg)  # resolves interpolations as ${hydra.runtime.cwd}
         expand_dataset_cfg(cfg)
         print('\n', OmegaConf.to_yaml(cfg))

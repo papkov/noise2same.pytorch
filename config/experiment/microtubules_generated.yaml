@@ -4,9 +4,10 @@ evaluate: True
 
 dataset:
   _target_: noise2same.dataset.MicrotubulesDataset
-  path: ${hydra.runtime.cwd}/data/microtubules-simulation/
+  path: ${cwd}/data/microtubules-simulation/
   input_name: ground-truth.tif
   n_dim: 3
+  n_channels: 1
   tile_size: 64
   tile_step: 48
   add_blur_and_noise: True
