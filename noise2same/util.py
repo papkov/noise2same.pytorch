@@ -9,6 +9,7 @@ import torch
 from matplotlib import pyplot as plt
 from numpy import ndarray
 from numpy.linalg import norm
+from omegaconf import DictConfig
 from scipy.fft import dct
 from skimage.metrics import (
     mean_squared_error,
@@ -447,3 +448,19 @@ def calculate_ssim(target, ref):
             return ssim(np.squeeze(img1), np.squeeze(img2))
     else:
         raise ValueError('Wrong input image dimensions.')
+
+
+def flatten_config(cfg: DictConfig) -> Dict:
+    """
+    Flattens the config to a dictionary for logging
+    :param cfg: hydra config
+    :return: dict with flattened config
+    """
+    d_cfg = {}
+    for group, group_dict in dict(cfg).items():
+        if isinstance(group_dict, DictConfig):
+            for param, value in dict(group_dict).items():
+                d_cfg[f"{group}.{param}"] = value
+        else:
+            d_cfg[group] = group_dict
+    return d_cfg

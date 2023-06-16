@@ -3,7 +3,6 @@ import traceback
 from pathlib import Path
 from random import randint
 from time import sleep
-from typing import Dict
 
 import hydra
 import torch
@@ -20,22 +19,6 @@ from noise2same.backbone.utils import parametrize_backbone_and_head
 from noise2same.dataset.getter import get_dataset, get_test_dataset_and_gt
 
 
-def flatten_config(cfg: DictConfig) -> Dict:
-    """
-    Flattens the config to a dictionary for logging
-    :param cfg: hydra config
-    :return: dict with flattened config
-    """
-    d_cfg = {}
-    for group, group_dict in dict(cfg).items():
-        if isinstance(group_dict, DictConfig):
-            for param, value in dict(group_dict).items():
-                d_cfg[f"{group}.{param}"] = value
-        else:
-            d_cfg[group] = group_dict
-    return d_cfg
-
-
 @hydra.main(config_path="config", config_name="config", version_base="1.1")
 def main(cfg: DictConfig) -> None:
     # trying to fix: unable to open shared memory object </torch_197398_0> in read-write mode
@@ -44,13 +27,11 @@ def main(cfg: DictConfig) -> None:
     # Prevent from writing from the same log folder
     sleep(randint(1, 5))
 
-    if "backbone_name" not in cfg.keys():
-        print("Please specify a backbone with `+backbone=name`")
-        return
-
-    if "experiment" not in cfg.keys():
-        print("Please specify an experiment with `+experiment=name`")
-        return
+    # Check if all necessary arguments are specified
+    for arg in ["backbone", "experiment", "denoiser"]:
+        if arg not in cfg.keys():
+            print(f"Please specify a {arg} with `+{arg}=name`")
+            return
 
     print(OmegaConf.to_yaml(cfg))
     # os.environ["CUDA_VISIBLE_DEVICES"] = f"{cfg.device}"
@@ -62,7 +43,7 @@ def main(cfg: DictConfig) -> None:
 
     # Start WandB logging
     if not cfg.check:
-        wandb.init(project=cfg.project, config=flatten_config(cfg), settings=wandb.Settings(start_method="fork"))
+        wandb.init(project=cfg.project, config=util.flatten_config(cfg), settings=wandb.Settings(start_method="fork"))
         wandb.run.summary.update({'training_dir': os.getcwd()})
 
     # Data
