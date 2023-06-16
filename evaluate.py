@@ -18,6 +18,7 @@ from noise2same.dataset.getter import (
     get_test_dataset_and_gt,
 )
 from noise2same.evaluator import Evaluator
+from noise2same.psf.psf_convolution import instantiate_psf
 
 
 def get_ground_truth_and_predictions(
@@ -209,20 +210,10 @@ def main(train_dir: Path, checkpoint: str = 'last', other_args: list = None) -> 
         # For some datasets we need custom loading
         dataset, ground_truth = get_test_dataset_and_gt(cfg)
 
-    # Read PSF from dataset if available or by path
-    denoiser_kwargs = {}
-    if 'psf' in cfg:
-        # TODO figure out a way to override kernel_psf on demand if it is available in the dataset
-        kernel_psf = getattr(dataset, "psf", None)
-        if kernel_psf is not None:
-            denoiser_kwargs["psf"] = instantiate(cfg.psf, kernel_psf=kernel_psf)
-        else:
-            denoiser_kwargs["psf"] = instantiate(cfg.psf)
-
     # Model
     backbone = instantiate(cfg.backbone)
     head = instantiate(cfg.head)
-    denoiser = instantiate(cfg.denoiser, backbone=backbone, head=head, **denoiser_kwargs)
+    denoiser = instantiate(cfg.denoiser, backbone=backbone, head=head, **instantiate_psf(cfg, dataset))
 
     checkpoint_path = train_dir / Path(f"checkpoints/model{'_last' if checkpoint == 'last' else ''}.pth")
 

@@ -1,6 +1,6 @@
 from functools import partial
 from pathlib import Path
-from typing import Optional, Union
+from typing import Dict, Optional, Union
 
 import h5py
 import numpy as np
@@ -11,15 +11,18 @@ from torch import nn
 
 from noise2same.psf.fft_conv import FFTConv2d, FFTConv3d, fft_conv
 from noise2same.util import center_crop
+from omegaconf import DictConfig
+from torch.utils.data import Dataset
+from hydra.utils import instantiate
 
 
 class PSF(nn.Module):
     def __init__(
-        self,
-        kernel_psf: np.ndarray,
-        in_channels: int = 1,
-        pad_mode: str = "replicate",
-        fft: Union[str, bool] = "auto",
+            self,
+            kernel_psf: np.ndarray,
+            in_channels: int = 1,
+            pad_mode: str = "replicate",
+            fft: Union[str, bool] = "auto",
     ):
         """
         Point-spread function
@@ -165,3 +168,21 @@ def read_psf(
         psf /= psf.sum()
 
     return psf
+
+
+def instantiate_psf(cfg: DictConfig, dataset_train: Dataset) -> Dict[str, PSFParameter]:
+    """
+    Instantiate PSF from config and dataset PSF kernel is available
+    :param cfg: hydra config
+    :param dataset_train: dataset which may contain psf attribute
+    :return: dict to initialize Denoiser
+    """
+    denoiser_kwargs = {}
+    if 'psf' in cfg:
+        # TODO figure out a way to override kernel_psf on demand if it is available in the dataset
+        kernel_psf = getattr(dataset_train, "psf", None)
+        if kernel_psf is not None:
+            denoiser_kwargs["psf"] = instantiate(cfg.psf, kernel_psf=kernel_psf)
+        else:
+            denoiser_kwargs["psf"] = instantiate(cfg.psf)
+    return denoiser_kwargs

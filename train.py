@@ -16,6 +16,7 @@ import evaluate
 import noise2same.trainer
 from noise2same import util
 from noise2same.dataset.getter import get_test_dataset_and_gt
+from noise2same.psf.psf_convolution import instantiate_psf
 
 
 @hydra.main(config_path="config", config_name="config", version_base="1.1")
@@ -75,21 +76,10 @@ def main(cfg: DictConfig) -> None:
             drop_last=False,
         )
 
-    # Read PSF from dataset if available or by path
-    # TODO factor out
-    denoiser_kwargs = {}
-    if 'psf' in cfg:
-        # TODO figure out a way to override kernel_psf on demand if it is available in the dataset
-        kernel_psf = getattr(dataset_train, "psf", None)
-        if kernel_psf is not None:
-            denoiser_kwargs["psf"] = instantiate(cfg.psf, kernel_psf=kernel_psf)
-        else:
-            denoiser_kwargs["psf"] = instantiate(cfg.psf)
-
     # Model
     backbone = instantiate(cfg.backbone)
     head = instantiate(cfg.head)
-    denoiser = instantiate(cfg.denoiser, backbone=backbone, head=head, **denoiser_kwargs)
+    denoiser = instantiate(cfg.denoiser, backbone=backbone, head=head, **instantiate_psf(cfg, dataset_train))
 
     if torch.cuda.device_count() > 1:
         print(f'Using data parallel with {torch.cuda.device_count()} GPUs')
