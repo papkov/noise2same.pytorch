@@ -17,6 +17,11 @@ from noise2same.dataset.util import mask_like_image, add_noise
 from noise2same.util import crop_as
 
 
+@pytest.fixture(scope="module", autouse=True)
+def set_cwd():
+    os.chdir(Path(__file__).parent.parent)  # necessary to resolve interpolations as ${hydra.runtime.cwd}
+
+
 @pytest.mark.parametrize("divisor", (2, 4, 8, 16, 32, 64))
 def test_crop_as(divisor: int):
     pad = PadIfNeeded(
@@ -89,7 +94,6 @@ def test_noise_addition(
                           ('ssi', SSIDataset, None),
                           ])
 def test_dataset_instantiation(dataset_name: str, expected_dataclass: type, expected_dataclass_valid: Optional[type]):
-    os.chdir(Path(__file__).parent.parent)  # necessary to resolve interpolations as ${hydra.runtime.cwd}
     with initialize(version_base=None, config_path="../config/experiment", job_name="test"):
         cfg = compose(config_name=dataset_name, return_hydra_config=True, overrides=["+cwd=${hydra.runtime.cwd}"])
         OmegaConf.resolve(cfg)  # resolves interpolations as ${hydra.runtime.cwd}
@@ -123,7 +127,6 @@ def test_dataset_instantiation(dataset_name: str, expected_dataclass: type, expe
                           ('ssi', SSIDataset, None),
                           ])
 def test_get_dataset(dataset_name: str, expected_dataclass: type, expected_dataclass_valid: Optional[type]):
-    os.chdir(Path(__file__).parent.parent)  # necessary to resolve interpolations as ${hydra.runtime.cwd}
     with initialize(version_base=None, config_path="../config/experiment"):
         overrides = ['+backbone_name=unet', '+backbone.depth=3', '+cwd=${hydra.runtime.cwd}']
         if dataset_name == 'synthetic':
@@ -162,7 +165,6 @@ def test_get_dataset(dataset_name: str, expected_dataclass: type, expected_datac
                           ('ssi', SSIDataset),
                           ])
 def test_get_test_dataset_and_gt(dataset_name: str, expected_dataclass: type):
-    os.chdir(Path(__file__).parent.parent)  # necessary to resolve interpolations as ${hydra.runtime.cwd}
     with initialize(version_base=None, config_path="../config/experiment"):
         overrides = ['+backbone_name=unet', '+backbone.depth=3', '+cwd=${hydra.runtime.cwd}']
         if dataset_name == 'synthetic':
@@ -184,7 +186,6 @@ def test_get_test_dataset_and_gt(dataset_name: str, expected_dataclass: type):
 
 @pytest.mark.parametrize('n_repeats', (1, 5, 10))
 def test_dataset_repeat(n_repeats: int):
-    os.chdir(Path(__file__).parent.parent)  # necessary to resolve interpolations as ${hydra.runtime.cwd}
     dataset = Set12SyntheticDataset(path="data/Set12", n_repeats=n_repeats, standardize=True, noise_param=0)
     assert len(dataset) == 12 * n_repeats
     assert torch.equal(dataset[(len(dataset) - 1) % 12]['image'], dataset[len(dataset) - 1]['image'])
@@ -193,7 +194,6 @@ def test_dataset_repeat(n_repeats: int):
 @pytest.mark.parametrize('dataset_name', ['synthetic', 'synthetic_grayscale'])
 def test_concat_dataset(dataset_name):
     # TODO add more meaningful tests
-    os.chdir(Path(__file__).parent.parent)  # necessary to resolve interpolations as ${hydra.runtime.cwd}
     with initialize(version_base=None, config_path="../config/experiment"):
         cfg = compose(config_name=dataset_name, return_hydra_config=True, overrides=['+cwd=${hydra.runtime.cwd}'])
         OmegaConf.resolve(cfg)  # resolves interpolations as ${hydra.runtime.cwd}
