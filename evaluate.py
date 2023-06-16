@@ -157,19 +157,10 @@ def evaluate(
 
     if experiment in ("synthetic", "synthetic_grayscale",):
         # Label each score with its dataset name and repeat id
-        # by default {"kodak": 10, "bsd300": 3, "set14": 20} but the code below generalizes to any number of repeats
-        dataset_name = []
-        repeat_id = []
-        repeat = 0
-        assert isinstance(dataset, ConcatDataset)
-        for ds in dataset.datasets:
-            assert isinstance(ds, ConcatDataset)
-            for repeat_ds in ds.datasets:
-                repeat_id += [repeat] * len(repeat_ds)
-                dataset_name += [repeat_ds.name] * len(repeat_ds)
-                repeat += 1
-            repeat = 0
-        scores = scores.assign(dataset_name=dataset_name, repeat_id=repeat_id)
+        scores = scores.assign(
+            dataset_name=np.concatenate([[ds.name] * len(ds) for ds in dataset.datasets]),
+            repeat_id=np.concatenate([np.arange(len(ds)) // (len(ds) // ds.n_repeats) for ds in dataset.datasets])
+        )
     evaluation_dir = train_dir / f'evaluate' / datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
     evaluation_dir.mkdir(parents=True, exist_ok=True)
 
