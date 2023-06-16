@@ -30,13 +30,11 @@ dataset:
 
 optimizer:
   _target_: torch.optim.Adam
-  _partial_: true
   lr: 0.0004
   weight_decay: 0
 
 scheduler:
   _target_: noise2same.scheduler.ExponentialDecayScheduler
-  _partial_: true
   decay_rate: 0.5
   decay_steps: 5e3  # how many steps to decrease by decay rate
   staircase: True  # integer division
