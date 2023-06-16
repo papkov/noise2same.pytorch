@@ -26,6 +26,7 @@ dataset:
   n_dim: 2
   n_channels: 1
   standardize: True  # subtract mean and divide by std for each image separately
+  pad_divisor: ${backbone.pad_divisor}
 
 optimizer:
   _target_: torch.optim.Adam

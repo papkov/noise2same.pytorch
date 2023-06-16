@@ -1,4 +1,4 @@
-from typing import Tuple, Optional, Dict, List
+from typing import Tuple, Dict, List
 
 import numpy as np
 import tifffile
@@ -29,24 +29,6 @@ def expand_dataset_cfg(cfg: DictConfig) -> None:
                 cfg[dataset_key] = OmegaConf.merge(cfg.dataset, cfg[dataset_key])
 
 
-def compute_pad_divisor(cfg: DictConfig) -> Optional[int]:
-    """
-    Compute the number by which the padded image size should
-    be divisible, so that it is suitable for the chosen backbone
-    :param cfg: DictConfig, training/evaluation configuration object
-    :return: Optional[int]
-    """
-    # TODO consider replacing with interpolation and eval https://github.com/omry/omegaconf/issues/91
-    if cfg.backbone_name == "unet":
-        return 2 ** cfg.backbone.depth
-    elif cfg.backbone_name in ("swinir", "bsp_swinir"):
-        return cfg.backbone.window_size
-    elif cfg.backbone_name == "swinia":
-        return cfg.backbone.window_size * max(cfg.backbone.dilations) * max(cfg.backbone.shuffles)
-    else:
-        raise ValueError("Incorrect backbone name")
-
-
 def get_dataset(cfg: DictConfig) -> Tuple[Dataset, Dataset]:
     """
     Collect training and validation datasets specified in the configuration
@@ -55,12 +37,11 @@ def get_dataset(cfg: DictConfig) -> Tuple[Dataset, Dataset]:
     """
     # TODO consider moving to main
     dataset_valid = None
-    pad_divisor = compute_pad_divisor(cfg)
 
     if 'dataset_valid' in cfg:
-        dataset_valid = instantiate(cfg.dataset_valid, pad_divisor=pad_divisor)
+        dataset_valid = instantiate(cfg.dataset_valid)
 
-    dataset_train = instantiate(cfg.dataset, pad_divisor=pad_divisor)
+    dataset_train = instantiate(cfg.dataset)
     return dataset_train, dataset_valid
 
 
@@ -71,8 +52,7 @@ def get_test_dataset_and_gt(cfg: DictConfig) -> Tuple[Dataset, List[np.ndarray]]
     :return: Tuple[Dataset, np.ndarray]
     """
 
-    pad_divisor = compute_pad_divisor(cfg)
-    dataset_test = instantiate(cfg.dataset_test, pad_divisor=pad_divisor)
+    dataset_test = instantiate(cfg.dataset_test)
     # TODO move ground truth access into evaluation
     if not isinstance(dataset_test.ground_truth[0], np.ndarray):
         dataset_test.ground_truth = [dataset_test._read_image(image) for image in dataset_test.ground_truth]
