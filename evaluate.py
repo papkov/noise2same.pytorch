@@ -13,7 +13,6 @@ from torch.utils.data import DataLoader, Dataset
 from tqdm.auto import tqdm
 
 from noise2same import util
-from noise2same.backbone.utils import parametrize_backbone_and_head
 from noise2same.dataset.getter import (
     get_planaria_dataset_and_gt,
     get_test_dataset_and_gt,
@@ -221,7 +220,8 @@ def main(train_dir: Path, checkpoint: str = 'last', other_args: list = None) -> 
             denoiser_kwargs["psf"] = instantiate(cfg.psf)
 
     # Model
-    backbone, head = parametrize_backbone_and_head(cfg)
+    backbone = instantiate(cfg.backbone)
+    head = instantiate(cfg.head)
     denoiser = instantiate(cfg.denoiser, backbone=backbone, head=head, **denoiser_kwargs)
 
     checkpoint_path = train_dir / Path(f"checkpoints/model{'_last' if checkpoint == 'last' else ''}.pth")

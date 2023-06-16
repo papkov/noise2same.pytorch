@@ -15,7 +15,6 @@ from torch.utils.data import DataLoader, RandomSampler
 import evaluate
 import noise2same.trainer
 from noise2same import util
-from noise2same.backbone.utils import parametrize_backbone_and_head
 from noise2same.dataset.getter import get_dataset, get_test_dataset_and_gt
 
 
@@ -86,7 +85,8 @@ def main(cfg: DictConfig) -> None:
             denoiser_kwargs["psf"] = instantiate(cfg.psf)
 
     # Model
-    backbone, head = parametrize_backbone_and_head(cfg)
+    backbone = instantiate(cfg.backbone)
+    head = instantiate(cfg.head)
     denoiser = instantiate(cfg.denoiser, backbone=backbone, head=head, **denoiser_kwargs)
 
     if torch.cuda.device_count() > 1:
