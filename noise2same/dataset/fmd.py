@@ -27,7 +27,7 @@ class FMDDataset(AbstractNoiseDataset):
         assert self.mode in ("train", "val", "test")
         assert self.part in ("cf_fish", "cf_mice", "tp_mice")
 
-    def _get_images(self) -> Dict[str, Union[List[str], np.ndarray]]:
+    def _create_image_index(self) -> Dict[str, Union[List[str], np.ndarray]]:
         path = self.path / {
             'cf_fish': 'Confocal_FISH',
             'cf_mice': 'Confocal_MICE',
@@ -52,11 +52,12 @@ class FMDDataset(AbstractNoiseDataset):
             "ground_truth": np.concatenate(paths['gt'])
         }
 
-    def _read_image(self, image_or_path: Union[str, np.ndarray]) -> np.ndarray:
+    def _get_image(self, i: int) -> Dict[str, np.ndarray]:
+        image = self.image_index['noisy_input'][i]
         # TODO understand why is it here
-        self.mean = np.mean(image_or_path, keepdims=True, dtype=np.float32)[None, ...]
-        self.std = np.std(image_or_path, keepdims=True, dtype=np.float32)[None, ...]
-        return image_or_path
+        self.mean = np.mean(image, keepdims=True, dtype=np.float32)[None, ...]
+        self.std = np.std(image, keepdims=True, dtype=np.float32)[None, ...]
+        return {'image': image, 'ground_truth': self.image_index['ground_truth'][i]}
 
     def _add_blur_and_noise(self, image: np.ndarray) -> np.ndarray:
         image = normalize(image)

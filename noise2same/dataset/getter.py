@@ -38,9 +38,10 @@ def get_test_dataset_and_gt(cfg: DictConfig) -> Tuple[Dataset, List[np.ndarray]]
 
     dataset_test = instantiate(cfg.dataset_test)
     # TODO move ground truth access into evaluation
-    if not isinstance(dataset_test.ground_truth[0], np.ndarray):
-        dataset_test.ground_truth = [dataset_test._read_image(image) for image in dataset_test.ground_truth]
-    return dataset_test, dataset_test.ground_truth
+    ground_truth = [elem['ground_truth'] for elem in dataset_test]
+    # if not isinstance(dataset_test.ground_truth[0], np.ndarray):
+    #     dataset_test.ground_truth = [dataset_test._get_image(image) for image in dataset_test.ground_truth]
+    return dataset_test, ground_truth
 
 
 def get_planaria_dataset_and_gt(filename_gt: str) -> Tuple[Dict[str, Dataset], np.ndarray]:

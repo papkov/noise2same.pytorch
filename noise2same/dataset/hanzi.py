@@ -19,12 +19,12 @@ class HanziDataset(AbstractNoiseDataset):
         assert self.noise_level in (1, 2, 3, 4)
         assert self.version in (0, 1)
 
-    def _get_images(self) -> Dict[str, Union[List[str], np.ndarray]]:
+    def _create_image_index(self) -> Dict[str, Union[List[str], np.ndarray]]:
         data = np.load(self.path / f"{self.mode}.npy", mmap_mode='r')
         return {
             "noisy_input": data[:, self.version * 4 + self.noise_level],
             "ground_truth": data[:, 0]
         }
 
-    def _read_image(self, image_or_path: Union[str, np.ndarray]) -> np.ndarray:
-        return image_or_path
+    def _get_image(self, i: int) -> Dict[str, np.ndarray]:
+        return {'image': self.image_index['noisy_input'][i], 'ground_truth': self.image_index['ground_truth'][i]}

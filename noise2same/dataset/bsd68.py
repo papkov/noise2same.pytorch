@@ -15,7 +15,7 @@ class BSD68Dataset(AbstractNoiseDataset):
     def _validate(self) -> None:
         assert self.mode in ("train", "val", "test")
 
-    def _get_images(self) -> Dict[str, Union[List[str], np.ndarray]]:
+    def _create_image_index(self) -> Dict[str, Union[List[str], np.ndarray]]:
         path = self.path / self.mode
         files = list(path.glob("*.npy"))
         images = {
@@ -25,5 +25,11 @@ class BSD68Dataset(AbstractNoiseDataset):
             images["ground_truth"] = np.load(files[1].as_posix(), allow_pickle=True)
         return images
 
-    def _read_image(self, image_or_path: Union[str, np.ndarray]) -> np.ndarray:
-        return image_or_path
+    def _get_image(self, i: int) -> Dict[str, np.ndarray]:
+        if 'ground_truth' in self.image_index:
+            return {
+                'image': self.image_index['noisy_input'][i],
+                'ground_truth': self.image_index['ground_truth'][i]
+            }
+        return {'image': self.image_index['noisy_input'][i]}
+

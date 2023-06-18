@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Union, Sequence, Tuple
+from typing import Any, Callable, Dict, List, Union, Sequence, Tuple, Optional
 
 import numpy as np
 import torch
@@ -72,7 +72,7 @@ class SyntheticDataset(AbstractNoiseDataset):
         lam = self._noise_param()
         return torch.poisson(lam * x) / lam
 
-    def _get_images(self) -> Dict[str, Union[List[str], np.ndarray]]:
+    def _create_image_index(self) -> Dict[str, Union[List[str], np.ndarray]]:
         if self.cached:
             cached_path = self.path / self.cached
             if cached_path.exists():
@@ -90,13 +90,14 @@ class SyntheticDataset(AbstractNoiseDataset):
         else:
             return x
 
-    def _read_image(self, image_or_path: Union[str, np.ndarray]) -> np.ndarray:
-        im = image_or_path if isinstance(image_or_path, np.ndarray) else read_image(image_or_path)
+    def _get_image(self, i: int) -> Dict[str, np.ndarray]:
+        im = self.image_index['noisy_input'][i]
+        im = im if isinstance(im, np.ndarray) else read_image(im)
         im = im.astype(np.float32) / 255.0
-        return im
+        return {'image': im, 'ground_truth': im}
 
-    def _apply_transforms(self, image: np.ndarray, mask: np.ndarray, ground_truth: np.ndarray = None) -> Dict[str, T]:
-        ret = super()._apply_transforms(image, mask, ground_truth)
+    def _apply_transforms(self, image: Dict[str, Optional[np.ndarray]]) -> Dict[str, T]:
+        ret = super()._apply_transforms(image)
         # Add noise on a cropped image (much faster than on the full one)
         ret["image"] = self.add_noise(ret["image"])
         return ret
@@ -139,10 +140,11 @@ class SyntheticTestDataset(ConcatDataset):
     Concatenated dataset of multiple synthetic datasets.
     Assumes that all datasets have the same parameters and are partially defined.
     """
+    pass
 
     def __init__(self, datasets: List[Callable], **params):
         super().__init__([ds(**params) for ds in datasets])
-        # TODO rewrite in a readable way
-        self.ground_truth = [
-            read_image((ds.ground_truth if ds.ground_truth is not None else ds.images)[i % len(ds.images)])
-            for ds in self.datasets for i in trange(len(ds))]
+    #     # TODO rewrite in a readable way
+    #     self.ground_truth = [
+    #         read_image((ds.ground_truth if ds.ground_truth is not None else ds.images)[i % len(ds.images)])
+    #         for ds in self.datasets for i in trange(len(ds))]

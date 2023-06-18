@@ -5,13 +5,13 @@ from typing import Dict, List, Union
 import numpy as np
 from torch import Tensor as T
 
-from noise2same.dataset.synthetic import SyntheticDataset
+from noise2same.dataset.synthetic import SyntheticDataset, read_image
 
 
 @dataclass
 class SyntheticPreparedDataset(SyntheticDataset):
 
-    def _get_images(self) -> Dict[str, Union[List[str], np.ndarray]]:
+    def _create_image_index(self) -> Dict[str, Union[List[str], np.ndarray]]:
         path_original = self.path / "original"
         path_noisy = self.path / f"noise{self.noise_param}" if self.fixed else path_original
         if not path_noisy.exists():
@@ -21,6 +21,11 @@ class SyntheticPreparedDataset(SyntheticDataset):
             self.fixed = False
         return {"noisy_input": sorted(list(path_noisy.glob(f"*.{self.extension}"))),
                 "ground_truth": sorted(list(path_original.glob(f"*.{self.extension}")))}
+
+    def _get_image(self, i: int) -> Dict[str, np.ndarray]:
+        ret = super()._get_image(i)
+        ret['ground_truth'] = read_image(self.image_index['ground_truth'][i])
+        return ret
 
     def add_noise(self, x: T) -> T:
         if self.fixed:

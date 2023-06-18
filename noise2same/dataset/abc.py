@@ -70,26 +70,13 @@ class AbstractNoiseDataset(Dataset, ABC):
         self._validate()
         self._validate_path()
 
-        self.path = Path(self.path)
-        if not self.path.is_dir() and self.path.suffix not in (
-            ".tif",
-            ".tiff",
-        ):
-            raise ValueError(
-                f"Incorrect path, {self.path} not a dir and {self.path.suffix} is not TIF. "
-                f"Current working dir: {Path.cwd()}"
-            )
-
-        images = self._get_images()
-        self.images = images['noisy_input']
-        self.ground_truth = images.get('ground_truth', None)
+        self.image_index = self._create_image_index()
         if self.transforms is None:
             self.transforms = []
         elif not isinstance(self.transforms, list):
             self.transforms = [self.transforms]
         self.transforms = self._compose_transforms(
-            self.transforms + self._get_post_transforms(),
-            additional_targets={"ground_truth": "image"} if self.ground_truth is not None else None
+            self.transforms + self._get_post_transforms(), additional_targets={"ground_truth": "image"}
         )
 
         # Convert mean and std to torch tensors
@@ -99,7 +86,7 @@ class AbstractNoiseDataset(Dataset, ABC):
             self.std = torch.from_numpy(np.array(self.std))
 
     def __len__(self) -> int:
-        return len(self.images)
+        return len(self.image_index)
 
     def _compose_transforms(self, *args, **kwargs) -> Union[Compose, t3d.Compose]:
         """
@@ -110,25 +97,14 @@ class AbstractNoiseDataset(Dataset, ABC):
         """
         return Compose(*args, **kwargs) if self.n_dim == 2 else t3d.Compose(*args, **kwargs)
 
-    def _apply_transforms(self, image: np.ndarray, mask: np.ndarray, ground_truth: np.ndarray = None) -> Dict[str, T]:
+    def _apply_transforms(self, image: Dict[str, Optional[np.ndarray]]) -> Dict[str, T]:
         """
         Apply transforms to both image and mask
         :param image:
         :param mask:
         :return:
         """
-        if self.n_dim == 2:
-            if ground_truth is None:
-                return self.transforms(image=image, mask=mask)
-            return self.transforms(image=image, mask=mask, ground_truth=ground_truth)
-        else:
-            ret = {
-                "image": self.transforms(image, resample=True),
-                "mask": self.transforms(mask, resample=False),
-            }
-            if ground_truth is not None:
-                ret["ground_truth"] = self.transforms(ground_truth, resample=False)
-            return ret
+        return self.transforms(**image)
 
     def _get_post_transforms(
         self,
@@ -148,7 +124,7 @@ class AbstractNoiseDataset(Dataset, ABC):
         ] if self.n_dim == 2 else [t3d.ToTensor(transpose=False)]
 
     @abstractmethod
-    def _get_images(self) -> Dict[str, Union[List[str], np.ndarray]]:
+    def _create_image_index(self) -> Dict[str, Union[List[str], np.ndarray]]:
         """
         Obtain images or their paths from file system
         :return: list of images of paths to them
@@ -156,7 +132,7 @@ class AbstractNoiseDataset(Dataset, ABC):
         raise NotImplementedError
 
     @abstractmethod
-    def _read_image(self, image_or_path: Union[str, np.ndarray]) -> np.ndarray:
+    def _get_image(self, i: int) -> Dict[str, np.ndarray]:
         """
         Read a single image from file system or preloaded array
         :param image_or_path:
@@ -165,32 +141,30 @@ class AbstractNoiseDataset(Dataset, ABC):
         # TODO split to read_image and process_image
         raise NotImplementedError
 
+    def _handle_image(self, image: Dict[str, np.ndarray]) -> Dict[str, np.ndarray]:
+        for key in image:
+            if image[key].ndim == self.n_dim:
+                image[key] = np.expand_dims(image[key], -1)
+            image[key] = image[key].astype(np.float32)
+        return image
+
     def __getitem__(self, i: int) -> Dict[str, Any]:
         """
         :param i: int, index
         :return: dict(image, mask, mean, std)
         """
-        image = self._read_image(self.images[i]).astype(np.float32)
-        # TODO move this functionality to _read_image or a separate method
-        if image.ndim == self.n_dim:
-            image = np.expand_dims(image, axis=-1 if self.channel_last else 0)
+        image = self._get_image(i)
+        image = self._handle_image(image)
 
-        ground_truth = None
-        if self.ground_truth is not None:
-            ground_truth = self._read_image(self.ground_truth[i]).astype(np.float32)
-            # TODO move this functionality to _read_image or a separate method
-            if ground_truth.ndim == self.n_dim:
-                ground_truth = np.expand_dims(ground_truth, axis=-1 if self.channel_last else 0)
-
-        mask = self._mask_like_image(image)
+        image['mask'] = self._mask_like_image(image['image'])
         # this was noise_patch in the original code, concatenation does not make any sense
         # https://github.com/divelab/Noise2Same/blob/main/models.py#L154
         # noise_mask = np.concatenate([noise, mask], axis=-1)
-        ret = self._apply_transforms(image, mask, ground_truth=ground_truth)
+        ret = self._apply_transforms(image)
         if self.standardize:
             # by default, self.mean and self.std are None, and normalization is done by patch
             ret["image"], ret["mean"], ret["std"] = self._standardize(ret["image"], self.mean, self.std)
-            if self.ground_truth is not None:
+            if 'ground_truth' in image:
                 ret["ground_truth"], _, _ = self._standardize(ret["ground_truth"], ret["mean"], ret["std"])
         else:
             # in case the data was normalized or standardized before
@@ -243,27 +217,27 @@ class AbstractNoiseDataset3DLarge(AbstractNoiseDataset, ABC):
         :param i: int, index
         :return: dict(image, mask, mean, std, crop)
         """
-        image, crop = self._read_image(self.images[i])
-        mask = self._mask_like_image(image)
-        ret = self._apply_transforms(image.astype(np.float32), mask)
+        image = self._get_image(i)
+        image = self._handle_image(image)
+        image['mask'] = self._mask_like_image(image['image'])
+        ret = self._apply_transforms(image)
         # standardization/normalization step removed since we process the full-sized image
         ret["mean"], ret["std"] = (
             # TODO can rewrite just for self.mean and std?
             torch.tensor(self.mean if self.standardize else 0).view(1, 1, 1, 1),
             torch.tensor(self.std if self.standardize else 1).view(1, 1, 1, 1),
         )
-        ret["crop"] = crop
         return ret
 
-    def _read_image(self, image_or_path: List[int]) -> Tuple[np.ndarray, List[int]]:
-        image, crop = self.tiler.crop_tile(image=self.image, crop=image_or_path)
-        return np.moveaxis(image, -1, 0), crop
+    def _get_image(self, i: int) -> Dict[str, np.ndarray]:
+        image, crop = self.tiler.crop_tile(image=self.image, crop=self.image_index['noisy_input'][i])
+        return {'image': np.moveaxis(image, -1, 0), 'ground_truth': self.ground_truth, 'crop': crop}
 
     def _read_large_image(self):
         self.image = io.imread(str(self.path / self.input_name)).astype(np.float32)
         self.ground_truth = None
 
-    def _get_images(self) -> Dict[str, Union[List[str], np.ndarray]]:
+    def _create_image_index(self) -> Dict[str, Union[List[str], np.ndarray]]:
         self._read_large_image()
 
         if len(self.image.shape) < 4:

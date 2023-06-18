@@ -1,5 +1,5 @@
 from itertools import product
-from typing import Any, List, Optional, Tuple, Union
+from typing import Any, List, Optional, Tuple, Union, Dict
 from torch import Tensor as T
 
 import albumentations as albu
@@ -87,12 +87,10 @@ def validation_transforms_2d(crop: int = 64):
 
 
 def training_augmentations_3d():
-    return t3d.Compose(
-        [
+    return [
             t3d.RandomRotate90(p=0.5, axis=(2, 3), channel_axis=(0, 1)),
             t3d.RandomFlip(p=0.5, axis=(2, 3), channel_axis=(0, 1)),
         ]
-    )
 
 
 def _raise(e):

@@ -78,7 +78,7 @@ class SIDDDataset(AbstractNoiseDataset):
     def _validate(self) -> None:
         assert self.mode in ("train", "val", "test")
 
-    def _get_images(self) -> Dict[str, Union[List[str], np.ndarray]]:
+    def _create_image_index(self) -> Dict[str, Union[List[str], np.ndarray]]:
         data_path = self.path / 'train' if self.mode == 'train' else self.path / 'val'
         input_path, gt_path = str(data_path / 'input_crops.lmdb'), str(data_path / 'gt_crops.lmdb')
         paired_paths = paired_paths_from_lmdb([input_path, gt_path], ['lq', 'gt'])
@@ -109,5 +109,5 @@ class SIDDDataset(AbstractNoiseDataset):
             'ground_truth': np.concatenate(gt_data)
         }
 
-    def _read_image(self, image_or_path: Union[str, np.ndarray]) -> np.ndarray:
-        return image_or_path
+    def _get_image(self, i: int) -> Dict[str, np.ndarray]:
+        return {'image': self.image_index['noisy_input'][i], 'ground_truth': self.image_index['ground_truth'][i]}
