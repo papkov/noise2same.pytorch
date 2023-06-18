@@ -3,7 +3,6 @@ from pathlib import Path
 from typing import List, Union, Dict
 
 import numpy as np
-from tqdm.auto import tqdm
 
 from noise2same.dataset.abc import AbstractNoiseDataset
 
@@ -38,11 +37,10 @@ class ImagenetTestDataset(AbstractNoiseDataset):
     version: int = 0  # for config compatibility
 
     def _create_image_index(self) -> Dict[str, Union[List[str], np.ndarray]]:
-        image_pairs = [np.load(p) for p in tqdm(sorted((self.path / "test").glob("*.npy")))]
         return {
-            "noisy_input": [pair[1] for pair in image_pairs],
-            "ground_truth": [pair[0] for pair in image_pairs]
+            "paths": sorted((self.path / "test").glob("*.npy")),
         }
 
     def _get_image(self, i: int) -> Dict[str, np.ndarray]:
-        return {'image': self.image_index['noisy_input'][i], 'ground_truth': self.image_index['ground_truth'][i]}
+        pair = np.load(self.image_index['paths'][i])
+        return {'image': pair[1], 'ground_truth': pair[0]}
