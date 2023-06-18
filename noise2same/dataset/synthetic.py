@@ -41,11 +41,10 @@ class SyntheticDataset(AbstractNoiseDataset):
         i = i % super().__len__()
         return super().__getitem__(i)
 
-    def _validate(self) -> bool:
+    def _validate(self) -> None:
         assert self.noise_type in ("gaussian", "poisson", "none")
         assert isinstance(self.noise_param, int) or \
                (isinstance(self.noise_param, Sequence) and len(self.noise_param) == 2)
-        return True
 
     def _noise_param(self) -> float:
         if isinstance(self.noise_param, int):

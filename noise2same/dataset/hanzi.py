@@ -14,11 +14,10 @@ class HanziDataset(AbstractNoiseDataset):
     version: int = 0  # two noisy copies exist (0, 1)
     noise_level: int = 3  # four noise levels (1, 2, 3, 4)
 
-    def _validate(self) -> bool:
+    def _validate(self) -> None:
         assert self.mode in ("training", "testing", "validation")
         assert self.noise_level in (1, 2, 3, 4)
         assert self.version in (0, 1)
-        return True
 
     def _get_images(self) -> Dict[str, Union[List[str], np.ndarray]]:
         data = np.load(self.path / f"{self.mode}.npy", mmap_mode='r')

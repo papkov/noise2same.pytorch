@@ -16,10 +16,9 @@ class ImagenetDataset(AbstractNoiseDataset):
     standardize_by_channel: bool = True
     n_channels: int = 3
 
-    def _validate(self) -> bool:
+    def _validate(self) -> None:
         assert self.mode in ("train", "val")
         assert self.version in (0, 1)
-        return True
 
     def _get_images(self) -> Dict[str, Union[List[str], np.ndarray]]:
         data = np.load(self.path / f"{self.mode}.npy", mmap_mode='r')

@@ -23,10 +23,9 @@ class FMDDataset(AbstractNoiseDataset):
     part: str = "cf_fish"
     add_blur_and_noise: bool = False
 
-    def _validate(self) -> bool:
+    def _validate(self) -> None:
         assert self.mode in ("train", "val", "test")
         assert self.part in ("cf_fish", "cf_mice", "tp_mice")
-        return True
 
     def _get_images(self) -> Dict[str, Union[List[str], np.ndarray]]:
         path = self.path / {

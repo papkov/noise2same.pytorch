@@ -25,7 +25,7 @@ class AbstractNoiseDataset(Dataset, ABC):
     Abstract noise dataset
     """
 
-    path: Union[Path, str]
+    path: Optional[Union[Path, str]] = None
     mask_percentage: float = 0.5
     pad_divisor: int = 8
     channel_last: bool = True
@@ -47,20 +47,28 @@ class AbstractNoiseDataset(Dataset, ABC):
         ]
     ] = None
 
-    def _validate(self) -> bool:
+    def _validate(self) -> None:
         """
         Check init arguments types and values
         :return: bool
         """
-        return True
+        pass
+
+    def _validate_path(self) -> None:
+        if self.path is not None:
+            self.path = Path(self.path)
+            if not self.path.is_dir():
+                raise ValueError(
+                    f"Incorrect path, {self.path} not a dir. Current working dir: {Path.cwd()}"
+                )
 
     def __post_init__(self) -> None:
         """
         Get a list of images, compose provided transforms with a list of necessary post-transforms
         :return:
         """
-        if not self._validate():
-            raise ValueError("Validation failed")
+        self._validate()
+        self._validate_path()
 
         self.path = Path(self.path)
         if not self.path.is_dir() and self.path.suffix not in (

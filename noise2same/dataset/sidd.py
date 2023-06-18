@@ -75,9 +75,8 @@ class SIDDDataset(AbstractNoiseDataset):
     standardize_by_channel: bool = True
     n_channels: int = 3
 
-    def _validate(self) -> bool:
+    def _validate(self) -> None:
         assert self.mode in ("train", "val", "test")
-        return True
 
     def _get_images(self) -> Dict[str, Union[List[str], np.ndarray]]:
         data_path = self.path / 'train' if self.mode == 'train' else self.path / 'val'

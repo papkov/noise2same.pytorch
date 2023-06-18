@@ -12,9 +12,8 @@ class BSD68Dataset(AbstractNoiseDataset):
     path: Union[Path, str] = "data/BSD68"
     mode: str = "train"
 
-    def _validate(self) -> bool:
+    def _validate(self) -> None:
         assert self.mode in ("train", "val", "test")
-        return True
 
     def _get_images(self) -> Dict[str, Union[List[str], np.ndarray]]:
         path = self.path / self.mode
