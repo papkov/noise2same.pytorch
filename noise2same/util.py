@@ -46,7 +46,7 @@ def fix_seed(seed: int = 56) -> None:
     torch.backends.cudnn.benchmark = False
 
 
-def crop_as(x: np.ndarray, gt: np.ndarray) -> np.ndarray:
+def crop_as_gt(x: np.ndarray, gt: np.ndarray) -> np.ndarray:
     """
     Crops x to gt shape evenly from each side
     (assumes even padding to remove)
@@ -54,13 +54,24 @@ def crop_as(x: np.ndarray, gt: np.ndarray) -> np.ndarray:
     :param gt:
     :return: cropped x
     """
-    diff = np.array(x.shape) - np.array(gt.shape)
+    return crop_as(x, gt.shape)
+
+
+def crop_as(x: np.ndarray, target_shape: np.shape) -> np.ndarray:
+    """
+    Crops x to gt shape evenly from each side
+    (assumes even padding to remove)
+    :param x:
+    :param target_shape:
+    :return: cropped x
+    """
+    diff = np.array(x.shape) - np.array(target_shape)
     assert np.all(diff >= 0)
     top_left = diff // 2
     bottom_right = diff - top_left
     sl = tuple(slice(tl, s - br) for tl, s, br in zip(top_left, x.shape, bottom_right))
     crop = x[sl]
-    assert crop.shape == gt.shape
+    assert crop.shape == target_shape
     return crop
 
 
@@ -103,7 +114,7 @@ def calculate_scores(
     :param kwargs: kwargs for SSIM
     :return:
     """
-    x_ = crop_as(x, gt)
+    x_ = crop_as_gt(x, gt)
     assert gt.shape == x_.shape, f"Different shapes {gt.shape}, {x_.shape}"
     if scale:
         x_ = normalize_zero_one(x_) * data_range

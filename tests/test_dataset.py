@@ -14,7 +14,7 @@ from omegaconf import OmegaConf
 from noise2same.dataset import *
 from noise2same.dataset.getter import get_test_dataset_and_gt, expand_dataset_cfg
 from noise2same.dataset.util import mask_like_image, add_noise
-from noise2same.util import crop_as
+from noise2same.util import crop_as_gt
 
 
 @pytest.fixture(scope="module", autouse=True)
@@ -22,7 +22,7 @@ def set_cwd():
     os.chdir(Path(__file__).parent.parent)  # necessary to resolve interpolations as ${hydra.runtime.cwd}
 
 
-@pytest.mark.parametrize("divisor", (2, 4, 8, 16, 32, 64))
+@pytest.mark.parametrize("divisor", (2, 4, 8, 16, 32, 64, 127))
 def test_crop_as(divisor: int):
     pad = PadIfNeeded(
         min_height=None,
@@ -33,7 +33,7 @@ def test_crop_as(divisor: int):
 
     image = np.random.uniform(size=(180, 180, 1))
     padded = pad(image=image)["image"]
-    cropped = crop_as(padded, image)
+    cropped = crop_as_gt(padded, image)
     print(padded.shape, cropped.shape)
     assert cropped.shape == image.shape
     assert np.all(cropped == image)
