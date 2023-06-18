@@ -41,9 +41,9 @@ class SSIDataset(AbstractNoiseDataset):
         self.psf = psf_kernel
 
         return {
-            "noisy_input": noisy_blurred_image[None, ...],
+            "image": noisy_blurred_image[None, ...],
             "ground_truth": image_clipped[None, ...],
         }
 
     def _get_image(self, i: int) -> Dict[str, np.ndarray]:
-        return {'image': self.image_index['noisy_input'][i], 'ground_truth': self.image_index['ground_truth'][i]}
+        return {k: v[i] for k, v in self.image_index.items()}

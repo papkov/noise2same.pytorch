@@ -77,10 +77,10 @@ class SyntheticDataset(AbstractNoiseDataset):
             cached_path = self.path / self.cached
             if cached_path.exists():
                 print(f"Cache found in {cached_path}, reading images from npy...\n")
-                return {"noisy_input": np.load(self.path / self.cached, allow_pickle=True)}
+                return {"image": np.load(self.path / self.cached, allow_pickle=True)}
             else:
                 print(f"Cache not found in {cached_path}, read images from disk\n")
-        return {"noisy_input": sorted(list(self.path.glob(f"*.{self.extension}")))}
+        return {"image": sorted(list(self.path.glob(f"*.{self.extension}")))}
 
     def add_noise(self, x: T):
         if self.noise_type == "gaussian":
@@ -91,7 +91,7 @@ class SyntheticDataset(AbstractNoiseDataset):
             return x
 
     def _get_image(self, i: int) -> Dict[str, np.ndarray]:
-        im = self.image_index['noisy_input'][i]
+        im = self.image_index['image'][i]
         im = im if isinstance(im, np.ndarray) else read_image(im)
         im = im.astype(np.float32) / 255.0
         return {'image': im, 'ground_truth': im}

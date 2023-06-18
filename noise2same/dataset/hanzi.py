@@ -22,9 +22,9 @@ class HanziDataset(AbstractNoiseDataset):
     def _create_image_index(self) -> Dict[str, Union[List[str], np.ndarray]]:
         data = np.load(self.path / f"{self.mode}.npy", mmap_mode='r')
         return {
-            "noisy_input": data[:, self.version * 4 + self.noise_level],
+            "image": data[:, self.version * 4 + self.noise_level],
             "ground_truth": data[:, 0]
         }
 
     def _get_image(self, i: int) -> Dict[str, np.ndarray]:
-        return {'image': self.image_index['noisy_input'][i], 'ground_truth': self.image_index['ground_truth'][i]}
+        return {k: v[i] for k, v in self.image_index.items()}

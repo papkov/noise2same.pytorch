@@ -26,10 +26,10 @@ class PlanariaDataset(AbstractNoiseDataset):
             data = data[: int(len(data) * self.train_size)]
         else:
             data = data[int(len(data) * self.train_size):]
-        return {'noisy_input': data}
+        return {'image': data}
 
     def _get_image(self, i: int) -> Dict[str, np.ndarray]:
-        return {'image': self.image_index['noisy_input'][i]}
+        return {'image': self.image_index['image'][i]}
 
 
 @dataclass
@@ -59,8 +59,8 @@ class PlanariaTiffDataset(AbstractNoiseDataset3DLarge):
             is_channels=True,
             crop_border=(0, self.crop_border, self.crop_border),
         )
-        return {'noisy_input': self.tiler.crops}
+        return {'image': self.tiler.crops}
 
     def _get_image(self, i: int) -> Dict[str, np.ndarray]:
-        image, crop = self.tiler.crop_tile(image=self.image, crop=self.image_index['noisy_input'][i])
+        image, crop = self.tiler.crop_tile(image=self.image, crop=self.image_index['image'][i])
         return {'image': np.moveaxis(image, -1, 0), 'ground_truth': self.ground_truth, 'crop': crop}

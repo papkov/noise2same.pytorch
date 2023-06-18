@@ -105,9 +105,9 @@ class SIDDDataset(AbstractNoiseDataset):
                 value_buf = txn.get(paired_path['gt_path'].encode('ascii'))
             gt_data.append(np.expand_dims(cv2.imdecode(np.frombuffer(value_buf, np.uint8), cv2.IMREAD_COLOR), 0))
         return {
-            'noisy_input': np.concatenate(input_data),
+            'image': np.concatenate(input_data),
             'ground_truth': np.concatenate(gt_data)
         }
 
     def _get_image(self, i: int) -> Dict[str, np.ndarray]:
-        return {'image': self.image_index['noisy_input'][i], 'ground_truth': self.image_index['ground_truth'][i]}
+        return {k: v[i] for k, v in self.image_index.items()}

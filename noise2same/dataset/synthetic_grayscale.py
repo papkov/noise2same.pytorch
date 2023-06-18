@@ -19,7 +19,7 @@ class SyntheticPreparedDataset(SyntheticDataset):
                   f"with {self.noise_type} noise {self.noise_param}")
             path_noisy = path_original
             self.fixed = False
-        return {"noisy_input": sorted(list(path_noisy.glob(f"*.{self.extension}"))),
+        return {"image": sorted(list(path_noisy.glob(f"*.{self.extension}"))),
                 "ground_truth": sorted(list(path_original.glob(f"*.{self.extension}")))}
 
     def _get_image(self, i: int) -> Dict[str, np.ndarray]:

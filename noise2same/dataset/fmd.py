@@ -48,12 +48,12 @@ class FMDDataset(AbstractNoiseDataset):
 
 
         return {
-            "noisy_input": np.concatenate(paths['raw']),
+            "image": np.concatenate(paths['raw']),
             "ground_truth": np.concatenate(paths['gt'])
         }
 
     def _get_image(self, i: int) -> Dict[str, np.ndarray]:
-        image = self.image_index['noisy_input'][i]
+        image = self.image_index['image'][i]
         # TODO understand why is it here
         self.mean = np.mean(image, keepdims=True, dtype=np.float32)[None, ...]
         self.std = np.std(image, keepdims=True, dtype=np.float32)[None, ...]

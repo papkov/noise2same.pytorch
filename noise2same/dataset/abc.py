@@ -230,7 +230,7 @@ class AbstractNoiseDataset3DLarge(AbstractNoiseDataset, ABC):
         return ret
 
     def _get_image(self, i: int) -> Dict[str, np.ndarray]:
-        image, crop = self.tiler.crop_tile(image=self.image, crop=self.image_index['noisy_input'][i])
+        image, crop = self.tiler.crop_tile(image=self.image, crop=self.image_index['image'][i])
         return {'image': np.moveaxis(image, -1, 0), 'ground_truth': self.ground_truth, 'crop': crop}
 
     def _read_large_image(self):
@@ -258,7 +258,7 @@ class AbstractNoiseDataset3DLarge(AbstractNoiseDataset, ABC):
             is_channels=True,
         )
 
-        return {'noisy_input': self.tiler.crops,
+        return {'image': self.tiler.crops,
                 # TODO make ground_truth_name a data field to read in properly in read_large_image
                 'ground_truth': self.ground_truth}
 
