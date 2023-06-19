@@ -7,6 +7,7 @@ from omegaconf import DictConfig
 from omegaconf import OmegaConf
 from torch.utils.data import Dataset
 
+from noise2same.dataset.abc import AbstractNoiseDataset3DLarge
 from noise2same.util import normalize_percentile
 from . import planaria
 
@@ -37,8 +38,12 @@ def get_test_dataset_and_gt(cfg: DictConfig) -> Tuple[Dataset, List[np.ndarray]]
     """
 
     dataset_test = instantiate(cfg.dataset_test)
-    # TODO move ground truth access into evaluation
-    ground_truth = [elem['ground_truth'] for elem in dataset_test]
+    # TODO this is a hack, should be fixed in the dataset
+    if isinstance(dataset_test, AbstractNoiseDataset3DLarge):
+        ground_truth = dataset_test.ground_truth
+    else:
+        # TODO move ground truth access into evaluation
+        ground_truth = [elem['ground_truth'] for elem in dataset_test]
     # if not isinstance(dataset_test.ground_truth[0], np.ndarray):
     #     dataset_test.ground_truth = [dataset_test._get_image(image) for image in dataset_test.ground_truth]
     return dataset_test, ground_truth
