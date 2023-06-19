@@ -15,7 +15,7 @@ from torch.utils.data import DataLoader, RandomSampler
 import evaluate
 import noise2same.trainer
 from noise2same import util
-from noise2same.dataset.getter import get_test_dataset_and_gt
+from noise2same.dataset.getter import get_test_dataset_and_gt, expand_dataset_cfg
 from noise2same.psf.psf_convolution import instantiate_psf
 
 
@@ -23,6 +23,9 @@ from noise2same.psf.psf_convolution import instantiate_psf
 def main(cfg: DictConfig) -> None:
     # trying to fix: unable to open shared memory object </torch_197398_0> in read-write mode
     # torch.multiprocessing.set_sharing_strategy("file_system")
+
+    # Expand dataset config for validation and test datasets to extend train dataset
+    expand_dataset_cfg(cfg)
 
     # Prevent from writing from the same log folder
     sleep(randint(1, 5))
