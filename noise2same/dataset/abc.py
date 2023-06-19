@@ -155,7 +155,7 @@ class AbstractNoiseDataset(Dataset, ABC):
         """
         image = self._get_image(i)
         image = self._handle_image(image)
-
+        image['shape'] = np.array(image['image'].shape)
         image['mask'] = self._mask_like_image(image['image'])
         # this was noise_patch in the original code, concatenation does not make any sense
         # https://github.com/divelab/Noise2Same/blob/main/models.py#L154

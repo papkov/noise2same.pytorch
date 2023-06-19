@@ -161,9 +161,9 @@ class Compose:
         self.target_keys = {'image', 'mask'} | self.additional_targets.keys()
 
     def __call__(self, **data):
-        out = dict()
+        out = data.copy()
         for key in data.keys() & self.target_keys:
-            ret = data[key].copy()
+            ret = out[key]
             for t in self.transforms:
                 if t is not None:
                     if self.debug:
