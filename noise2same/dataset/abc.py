@@ -135,14 +135,14 @@ class AbstractNoiseDataset(Dataset, ABC):
     def _get_image(self, i: int) -> Dict[str, np.ndarray]:
         """
         Read a single image from file system or preloaded array
-        :param image_or_path:
+        :param i:
         :return:
         """
         # TODO split to read_image and process_image
         raise NotImplementedError
 
     def _handle_image(self, image: Dict[str, np.ndarray]) -> Dict[str, np.ndarray]:
-        for key in image:
+        for key in filter(lambda k: k != 'crop', image.keys()):
             if image[key].ndim == self.n_dim:
                 image[key] = np.expand_dims(image[key], -1)
             image[key] = image[key].astype(np.float32)
