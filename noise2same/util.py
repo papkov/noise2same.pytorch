@@ -65,7 +65,12 @@ def crop_as(x: np.ndarray, target_shape: np.shape) -> np.ndarray:
     :param target_shape:
     :return: cropped x
     """
-    diff = np.array(x.shape) - np.array(target_shape)
+    try:
+        diff = np.array(x.shape) - np.array(target_shape)
+    except ValueError:
+        raise ValueError(
+            f"Shapes do not match: {x.shape} and {target_shape}"
+        )
     assert np.all(diff >= 0)
     top_left = diff // 2
     bottom_right = diff - top_left
