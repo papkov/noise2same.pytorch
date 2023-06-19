@@ -4,6 +4,7 @@ import os
 from argparse import ArgumentParser
 from pathlib import Path
 from pprint import pprint
+from typing import Dict
 
 import numpy as np
 import pandas as pd
@@ -67,9 +68,9 @@ def get_ground_truth_and_predictions(
 
 
 def get_scores(
-    ground_truth: np.ndarray,
-    predictions: np.ndarray,
-    experiment: str
+        ground_truth: np.ndarray,
+        predictions: Dict[str, np.ndarray],
+        experiment: str
 ):
     # Calculate scores
     if experiment in ("bsd68",):
@@ -110,7 +111,7 @@ def get_scores(
             for gtx, pred in zip(ground_truth, predictions["image"])
         ]
     elif experiment in ("microtubules",):
-        scores = util.calculate_scores(ground_truth, predictions, normalize_pairs=True)
+        scores = [util.calculate_scores(ground_truth, predictions["image"], normalize_pairs=True)]
     elif experiment in ("planaria",):
         scores = []
         for c in range(1, 4):

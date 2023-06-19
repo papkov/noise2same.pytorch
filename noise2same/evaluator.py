@@ -111,16 +111,16 @@ class Evaluator(object):
 
     @torch.no_grad()
     def inference_single_image_dataset(
-        self,
-        dataset: Dataset,
-        batch_size: int = 1,
-        num_workers: int = 0,
-        crop_border: int = 0,
-        device: str = "cpu",
-        half: bool = False,
-        empty_cache: bool = False,
-        key: str = "image",
-    ) -> np.ndarray:
+            self,
+            dataset: Dataset,
+            batch_size: int = 1,
+            num_workers: int = 0,
+            crop_border: int = 0,
+            device: str = "cpu",
+            half: bool = False,
+            empty_cache: bool = False,
+            key: str = "image",
+    ) -> Dict[str, np.ndarray]:
         """
         Run inference for a single image represented as Dataset
         Here, we assume that dataset was tiled and has a `tiler` attribute
@@ -195,9 +195,9 @@ class Evaluator(object):
                 torch.cuda.empty_cache()
 
         merger.merge_()
-        return dataset.tiler.crop_to_original_size(
+        return {'image': dataset.tiler.crop_to_original_size(
             merger.image["image"].cpu().numpy()[0]
-        )
+        )}
 
     @torch.no_grad()
     def inference_single_image_tensor(
