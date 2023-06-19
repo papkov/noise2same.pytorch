@@ -352,8 +352,9 @@ class Evaluator(object):
         self,
         image: Dict[str, T],
         keys: List[str]
-    ) -> Dict[str, T]:
+    ) -> Dict[str, np.ndarray]:
+        out = dict()
         for key in keys:
-            image[key] = np.moveaxis((image[key] * image['std'] + image['mean']).detach().numpy(), 1, -1)
-            image[key] = np.array([crop_as(im, sh) for im, sh in zip(image[key], image['shape'])])
-        return image
+            out[key] = np.moveaxis((image[key] * image['std'] + image['mean']).detach().numpy(), 1, -1)
+            out[key] = np.array([crop_as(im, sh) for im, sh in zip(out[key], image['shape'])])
+        return out
