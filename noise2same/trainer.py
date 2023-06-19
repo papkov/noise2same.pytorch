@@ -99,10 +99,10 @@ class Trainer(object):
 
             # Log last batch of images
             if i == len(iterator) - 1 or (self.check and i == 3):
-                images = {
-                    "input": x_in["image"],
-                    **x_out
-                }
+                x_in_images = {f"input/{k}": v for k, v in x_in.items() if k in ["image", "ground_truth"]}
+                # backslash replacement to avoid unnecessary grouping in wandb
+                x_out = {f"out/{k.replace('/', '|')}": v for k, v in x_out.items()}
+                images = {**x_in_images, **x_out}
                 images = detach_to_np(images, mean=x_in["mean"], std=x_in["std"])
                 images = normalize_zero_one_dict(images)
 
