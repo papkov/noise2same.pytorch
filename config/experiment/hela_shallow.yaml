@@ -1,0 +1,33 @@
+# @package _global_
+experiment: hela_shallow
+project: hela-shallow-stack-supervised
+
+dataset:
+  _target_: noise2same.dataset.HelaShallowDataset
+  path: ${cwd}/data/hela/
+  n_channels: 1
+  channel_id: 3
+  transforms:
+    _target_: noise2same.dataset.util.training_augmentations_2d
+    crop: 256
+  input_size: ${.transforms.crop}  # needed for some models
+
+dataset_valid:
+  mode: val
+  transforms:
+    _target_: noise2same.dataset.util.validation_transforms_2d
+    crop: 512
+  input_size: null
+
+dataset_test:
+  mode: test
+  transforms: null
+  input_size: null
+
+training:
+  steps_per_epoch: 500
+  steps: 15000
+  batch_size: 32
+  val_batch_size: 1
+  num_workers: 4
+  monitor: val_mse

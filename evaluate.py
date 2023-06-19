@@ -31,7 +31,7 @@ def get_ground_truth_and_predictions(
         dataset: Dataset = None,
         half: bool = False
 ):
-    if experiment in ("bsd68", "fmd", "hanzi", "sidd", "synthetic", "synthetic_grayscale"):
+    if experiment in ("bsd68", "fmd", "hanzi", "sidd", "synthetic", "synthetic_grayscale", "hela_shallow"):
         add_blur_and_noise = getattr(dataset, "add_blur_and_noise", False)
         if add_blur_and_noise:
             print("Validate for deconvolution")
@@ -124,6 +124,11 @@ def get_scores(
             ]
             scores.append(pd.DataFrame(scores_c).assign(c=c))
         scores = pd.concat(scores)
+    elif experiment in ("hela_shallow",):
+        scores = [
+            util.calculate_scores(gtx, pred, normalize_pairs=True)
+            for gtx, pred in zip(ground_truth, predictions["image"])
+        ]
     else:
         raise ValueError
     return scores

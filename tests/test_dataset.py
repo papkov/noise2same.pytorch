@@ -93,6 +93,7 @@ def test_noise_addition(
                           ('synthetic', ImagenetSyntheticDataset, Set14SyntheticDataset),
                           ('synthetic_grayscale', BSD400SyntheticDataset, BSD68SyntheticDataset),
                           ('ssi', SSIDataset, None),
+                          ('hela_shallow', HelaShallowDataset, HelaShallowDataset),
                           ])
 def test_dataset_instantiation(dataset_name: str, expected_dataclass: type, expected_dataclass_valid: Optional[type]):
     with initialize(version_base=None, config_path="../config/experiment", job_name="test"):
@@ -130,6 +131,7 @@ def test_dataset_instantiation(dataset_name: str, expected_dataclass: type, expe
                           ('synthetic', SyntheticTestDataset),
                           ('synthetic_grayscale', SyntheticTestDataset),
                           ('ssi', SSIDataset),
+                          ('hela_shallow', HelaShallowDataset),
                           ])
 def test_get_test_dataset_and_gt(dataset_name: str, expected_dataclass: type):
     with initialize(version_base=None, config_path="../config/experiment"):
