@@ -38,9 +38,9 @@ class ImagenetTestDataset(AbstractNoiseDataset):
 
     def _create_image_index(self) -> Dict[str, Union[List[str], np.ndarray]]:
         return {
-            "paths": sorted((self.path / "test").glob("*.npy")),
+            "image": sorted((self.path / "test").glob("*.npy")),
         }
 
     def _get_image(self, i: int) -> Dict[str, np.ndarray]:
-        pair = np.load(self.image_index['paths'][i])
+        pair = np.load(self.image_index['image'][i])
         return {'image': pair[1], 'ground_truth': pair[0]}
