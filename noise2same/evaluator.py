@@ -254,11 +254,12 @@ class Evaluator(object):
     ) -> List[Dict[str, np.ndarray]]:
         """
         Run inference for a given dataloader
-        :param loader: DataLoader
+        :param dataset: AbstractNoiseDataset
+        :param factory: Optional[TiledImageFactory]
         :param half: bool, if use half precision
         :param empty_cache: bool, if empty CUDA cache after each iteration
-        :param convolve: bool, if convolve the output with a PSF
         :param key: str, key to use for the output [image, deconv]
+        :param keep_images: bool, if add prediction arrays to result
         :return: List[Dict[key, output]]
         """
         loader = DataLoader(
