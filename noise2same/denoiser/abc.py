@@ -40,13 +40,12 @@ class Denoiser(nn.Module):
     def compute_loss(self, x_in: Dict[str, T], x_out: Dict[str, T]) -> Tuple[T, Dict[str, float]]:
         """
         Computes MSE loss between input and output images or between ground truth
-        :param x_in: input dictionary, must contain 'image' key, optionally 'gt' and 'mask' keys
+        :param x_in: input dictionary, must contain 'image' key, optionally 'ground_truth' and 'mask' keys
         :param x_out: model output dictionary, must contain 'image' key
         :return: loss tensor for backpropagation and dictionary with loss values for logging
         """
-        loss = self.compute_mse(x_in['gt' if 'gt' in x_in else 'image'], x_out['image'])
-        loss_dict = {'loss': loss.item()}
-        return loss, loss_dict
+        loss = self.compute_mse(x_in['ground_truth' if 'ground_truth' in x_in else 'image'], x_out['image'])
+        return loss, {'loss': loss.item(), 'rec_mse': loss.item()}
 
     @staticmethod
     def compute_mse(x: T, y: T, mask: Optional[T] = None) -> T:
