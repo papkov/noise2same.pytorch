@@ -15,6 +15,7 @@ dataset:
 
 dataset_test:
   transforms: null
+  input_size: null
 
 training:
   num_workers: 4

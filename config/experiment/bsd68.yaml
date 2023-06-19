@@ -11,10 +11,12 @@ dataset:
 
 dataset_valid:
   transforms: null
+  input_size: null
   mode: val
 
 dataset_test:
   transforms: null
+  input_size: null
   mode: test
 
 training:

@@ -19,6 +19,7 @@ dataset_valid:
 dataset_test:
   transforms: null
   mode: testing
+  input_size: null
 
 training:
   steps: 50000

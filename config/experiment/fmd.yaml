@@ -20,6 +20,7 @@ dataset_valid:
 dataset_test:
   transforms: null
   mode: test
+  input_size: null
 
 training:
   crop: 64

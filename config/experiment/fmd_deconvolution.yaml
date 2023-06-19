@@ -20,6 +20,7 @@ dataset_valid:
 
 dataset_test:
   transforms: null
+  input_size: null
   mode: test
 
 training:

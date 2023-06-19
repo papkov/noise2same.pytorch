@@ -27,6 +27,7 @@ dataset_test:
   # Top-level arguments override partial arguments
   transforms: null
   cached: null
+  input_size: null
   datasets:
     - _target_: noise2same.dataset.KodakSyntheticDataset
       _partial_: True

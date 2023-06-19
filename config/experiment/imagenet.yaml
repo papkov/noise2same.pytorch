@@ -20,6 +20,7 @@ dataset_valid:
 dataset_test:
   _target_: noise2same.dataset.ImagenetTestDataset
   transforms: null
+  input_size: null
 
 factory_test:
   _target_: noise2same.dataset.tiling.TiledImageFactory
