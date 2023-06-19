@@ -21,6 +21,15 @@ dataset_test:
   _target_: noise2same.dataset.ImagenetTestDataset
   transforms: null
 
+factory_test:
+  _target_: noise2same.dataset.tiling.TiledImageFactory
+  tile_size: 256
+  tile_step: 192
+  crop_border: 0
+  weight: 'pyramid'
+  batch_size: 8
+#  num_workers: ${training.num_workers}
+
 training:
   steps: 50000
   crop: 64

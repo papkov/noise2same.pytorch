@@ -1,3 +1,4 @@
+import glob
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, List, Tuple, Union
@@ -64,3 +65,23 @@ class PlanariaTiffDataset(AbstractNoiseDataset3DLarge):
     def _get_image(self, i: int) -> Dict[str, np.ndarray]:
         image, crop = self.tiler.crop_tile(image=self.image, crop=self.image_index['image'][i])
         return {'image': np.moveaxis(image, -1, 0), 'ground_truth': self.ground_truth, 'crop': crop}
+
+
+@dataclass
+class PlanariaTestDataset(AbstractNoiseDataset):
+    path: Union[Path, str] = 'data/Denoising_Planaria'
+    noise_level: int = 1  # 1, 2, 3
+
+    def _create_image_index(self) -> Dict[str, Union[List[str], np.ndarray]]:
+        gt_path = self.path / 'test_data/GT/*.tif'
+        print(gt_path)
+        files = sorted(
+            glob.glob(str(gt_path))
+        )
+        return {
+            'image': [f.replace('GT', f'condition_{self.noise_level}') for f in files],
+            'ground_truth': files
+        }
+
+    def _get_image(self, i: int) -> Dict[str, np.ndarray]:
+        return {k: tifffile.imread(v[i]) for k, v in self.image_index.items()}

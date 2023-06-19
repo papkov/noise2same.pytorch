@@ -12,6 +12,20 @@ dataset:
 dataset_valid:
   mode: val
 
+dataset_test:
+  _target_: noise2same.dataset.PlanariaTestDataset
+  noise_level: 1
+  transforms: null
+
+factory_test:
+  _target_: noise2same.dataset.TiledImageFactory
+  tile_size: [ 96, 256, 256 ]
+  tile_step: [ 96, 192, 192 ]
+  crop_border: [ 0, 32, 32 ]
+  weight: 'pyramid'
+  batch_size: 8
+#  num_workers: ${training.num_workers}
+
 training:
   steps: 50000
   crop: 64
