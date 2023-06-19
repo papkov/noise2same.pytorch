@@ -121,7 +121,7 @@ class AbstractNoiseDataset(Dataset, ABC):
                 pad_width_divisor=self.pad_divisor,
             ),
             ToTensorV2(transpose_mask=True)
-        ] if self.n_dim == 2 else [t3d.ToTensor(transpose=False)]
+        ] if self.n_dim == 2 else [t3d.ToTensor(transpose=True)]
 
     @abstractmethod
     def _create_image_index(self) -> Dict[str, Union[List[str], np.ndarray]]:
@@ -261,6 +261,15 @@ class AbstractNoiseDataset3DLarge(AbstractNoiseDataset, ABC):
         return {'image': self.tiler.crops,
                 # TODO make ground_truth_name a data field to read in properly in read_large_image
                 'ground_truth': self.ground_truth}
+
+    def _get_post_transforms(
+        self,
+    ) -> Union[List[BasicTransform], List[t3d.BaseTransform3D]]:
+        """
+        Necessary post-transforms (e.g. ToTensor)
+        :return:
+        """
+        return [t3d.ToTensor(transpose=False)]
 
 
 @dataclass
