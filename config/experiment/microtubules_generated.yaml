@@ -20,7 +20,7 @@ dataset_test:
   tile_size: 128
   tile_step: 96
 
-network:
+backbone:
   base_channels: 48
   skip_method: add
 
