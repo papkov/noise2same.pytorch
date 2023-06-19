@@ -1,17 +1,22 @@
+import time
+from functools import partial
 from typing import Dict, List, Optional, Tuple
 
 import numpy as np
 import torch
 from pytorch_toolbelt.inference.tiles import TileMerger
+from torch import Tensor as T
 from torch.cuda.amp import autocast
 from torch.utils.data import DataLoader, Dataset
 from tqdm import tqdm
-import time
 
+from noise2same.dataset.abc import AbstractNoiseDataset
 from noise2same.dataset.util import PadAndCropResizer
 from noise2same.denoiser import Denoiser
 from noise2same.backbone.unet import UNet
 from noise2same.backbone.swinir import SwinIR
+from noise2same.dataset.tiling import TiledImageFactory
+from noise2same.util import crop_as, calculate_scores
 
 
 class Evaluator(object):
@@ -230,3 +235,115 @@ class Evaluator(object):
             checkpoint["model"].pop("mask_kernel.kernel", None)
             checkpoint = checkpoint["model"]
         self.model.load_state_dict(checkpoint, strict=False)
+
+    @torch.no_grad()
+    def evaluate(
+            self,
+            dataset: AbstractNoiseDataset,
+            factory: Optional[TiledImageFactory] = None,
+            half: bool = False,
+            empty_cache: bool = False,
+            key: str = 'image',
+            keep_images: bool = False
+    ) -> List[Dict[str, np.ndarray]]:
+        """
+        Run inference for a given dataloader
+        :param loader: DataLoader
+        :param half: bool, if use half precision
+        :param empty_cache: bool, if empty CUDA cache after each iteration
+        :param convolve: bool, if convolve the output with a PSF
+        :param key: str, key to use for the output [image, deconv]
+        :return: List[Dict[key, output]]
+        """
+        loader = DataLoader(
+            dataset,
+            batch_size=1,
+            num_workers=8,
+            shuffle=False,
+            pin_memory=True,
+            drop_last=False,
+        )
+        self.model.eval()
+        outputs = []
+        iterator = tqdm(loader, desc="inference", position=0, leave=True)
+        full_inference_time, test_size = 0, 0
+        if factory is None:
+            inference = partial(self._inference_batch, half=half, empty_cache=empty_cache, key=key)
+        else:
+            inference = partial(self._inference_large_batch, factory=factory, half=half,
+                                empty_cache=empty_cache, key=key)
+        for i, batch in enumerate(iterator):
+            out, inference_time = inference(batch)
+            out = self._revert_batch(out, ['image', 'ground_truth'])
+            for j, (pred, gt) in enumerate(zip(out['image'], out['ground_truth'])):
+                scores = calculate_scores(pred, gt, multichannel=True)
+                if keep_images:
+                    scores['image'] = pred
+                outputs.append(scores)
+            full_inference_time += inference_time
+            test_size += batch['image'].shape[0]
+
+        print(f"Average inference time: {full_inference_time / test_size * 1000:.2f} ms")
+        return outputs
+
+    def _inference_large_batch(
+        self,
+        batch: Dict[str, T],
+        factory: TiledImageFactory,
+        half: bool = False,
+        empty_cache: bool = False,
+        key: str = 'image',
+    ) -> Tuple[Dict[str, np.ndarray], float]:
+        output = {'image': []}
+        full_inference_time = 0
+        for i in range(batch['image'].shape[0]):
+            image = {k: v[i] for k, v in batch.items()}
+            loader, merger = factory.produce(image)
+            iterator = tqdm(loader, desc="Predict")
+            for tile_batch in iterator:
+                pred_batch, inference_time = self._inference_batch(tile_batch, half=half, empty_cache=empty_cache,
+                                                                   key=key)
+                iterator.set_postfix(
+                    {
+                        "in_shape": tuple(tile_batch["image"].shape),
+                        "out_shape": tuple(pred_batch['image'].shape),
+                        "crop": tile_batch["crop"],
+                    }
+                )
+
+                print(tile_batch['crop'])
+                merger.integrate_batch(batch=pred_batch['image'], crop_coords=tile_batch["crop"])
+                full_inference_time += inference_time
+
+            merger.merge_()
+            output['image'].append(loader.dataset.slicer.crop_to_original_size(
+                np.moveaxis(merger.image["image"].cpu().numpy(), 0, -1)
+            ))
+        batch['image'] = torch.from_numpy(np.moveaxis(np.array(output['image']), -1, 1))
+        return batch, full_inference_time
+
+    def _inference_batch(
+        self,
+        batch: Dict[str, T],
+        half: bool = False,
+        empty_cache: bool = False,
+        key: str = 'image',
+    ) -> Tuple[Dict[str, T], float]:
+        batch = {k: v.to(self.device) if v in ['image', 'ground_truth', 'std', 'mean'] else v for k, v in batch.items()}
+        start = time.time()
+        with autocast(enabled=half):
+            batch['image'] = self.model.forward(batch['image'])[key]
+        end = time.time()
+        if empty_cache:
+            torch.cuda.empty_cache()
+        return batch, end - start
+
+    def _revert_batch(
+        self,
+        image: Dict[str, T],
+        keys: List[str]
+    ) -> Dict[str, T]:
+        for key in keys:
+            image[key] = np.moveaxis((image[key] * image['std'] + image['mean']).detach().numpy(), 1, -1)
+            image[key] = np.array([crop_as(im, sh) for im, sh in zip(image[key], image['shape'])])
+        return image
