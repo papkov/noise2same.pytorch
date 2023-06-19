@@ -317,7 +317,6 @@ class Evaluator(object):
                     }
                 )
 
-                print(tile_batch['crop'])
                 merger.integrate_batch(batch=pred_batch['image'], crop_coords=tile_batch["crop"])
                 full_inference_time += inference_time
 
