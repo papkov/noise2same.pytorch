@@ -39,7 +39,7 @@ class Noise2Same(Noise2Self):
 
     def compute_loss(self, x_in: Dict[str, T], x_out: Dict[str, T]) -> Tuple[T, Dict[str, float]]:
         bsp_mse = self.compute_mse(x_in['image'], x_out['image/masked'], mask=x_in['mask'])
-        inv_mse = self.compute_mse(x_out['image'], x_out['image/masked'])
+        inv_mse = self.compute_mse(x_out['image'], x_out['image/masked'], mask=x_in['mask'])
         rec_mse = self.compute_mse(x_in['image'], x_out['image'])
 
         loss = self.lambda_bsp * bsp_mse + self.lambda_inv * torch.sqrt(inv_mse) + self.lambda_rec * rec_mse
