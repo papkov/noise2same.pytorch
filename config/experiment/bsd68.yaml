@@ -24,5 +24,5 @@ training:
   steps: 80000
   batch_size: 32  # 64 in the paper
 
-model:
+denoiser:
   lambda_inv: 0.95
