@@ -282,7 +282,12 @@ class Evaluator(object):
             out, inference_time = inference(batch)
             out = self._revert_batch(out, ['image', 'ground_truth'])
             for j, (pred, gt) in enumerate(zip(out['image'], out['ground_truth'])):
-                scores = calculate_scores(pred, gt, multichannel=True)
+                scores = calculate_scores(
+                    pred, gt,
+                    multichannel=True,
+                    data_range=dataset.data_range if dataset.n_dim == 2 else 1,
+                    normalize_pairs=dataset.n_dim > 2
+                )
                 if keep_images:
                     scores['image'] = pred
                 outputs.append(scores)

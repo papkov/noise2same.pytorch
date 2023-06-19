@@ -13,6 +13,7 @@ class HanziDataset(AbstractNoiseDataset):
     mode: str = "training"
     version: int = 0  # two noisy copies exist (0, 1)
     noise_level: int = 3  # four noise levels (1, 2, 3, 4)
+    data_range: int = 1
 
     def _validate(self) -> None:
         assert self.mode in ("training", "testing", "validation")

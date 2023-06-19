@@ -33,6 +33,7 @@ class AbstractNoiseDataset(Dataset, ABC):
     standardize_by_channel: bool = False
     n_dim: int = 2
     n_channels: int = 1
+    data_range: int = 255
     input_size: Optional[float] = None
     mean: Optional[Union[float, np.ndarray]] = None
     std: Optional[Union[float, np.ndarray]] = None
