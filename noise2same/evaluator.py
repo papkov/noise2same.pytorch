@@ -106,6 +106,7 @@ class Evaluator(object):
 
         print(f"Average inference time: {np.mean(times) * 1000:.2f} ms")
         print(f'Dropped images rate: {errors_num / len(loader)}')
+        # TODO standardize output format
         return outputs, indices  # СТЫД
 
     @torch.no_grad()

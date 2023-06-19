@@ -39,7 +39,7 @@ def get_ground_truth_and_predictions(
         predictions, indices = evaluator.inference(loader, half=half, empty_cache=True)
         ground_truth = [ground_truth[i] for i in indices]
     elif experiment in ("microtubules",):
-        predictions, _ = evaluator.inference_single_image_dataset(
+        predictions = evaluator.inference_single_image_dataset(
             dataset, half=half, batch_size=1
         )
     elif experiment in ("planaria",):
