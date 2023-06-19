@@ -25,7 +25,7 @@ class TiledImageFactory:
         )
         dataset = TiledImageDataset(
             image=image['image'],
-            ground_truth=image['ground_truth'],
+            ground_truth=image.get('ground_truth'),
             mean=image['mean'],
             std=image['std'],
             tile_size=self.tile_size,
@@ -84,6 +84,8 @@ class TiledImageDataset(AbstractNoiseDataset):
         assert self.image is not None
         if self.image.shape[0] == self.n_channels:
             self.image = torch.moveaxis(self.image, 0, -1)
+            if self.ground_truth is not None:
+                self.ground_truth = torch.moveaxis(self.ground_truth, 0, -1)
         self.slicer = ImageSlicer(
             self.image.shape,
             tile_size=self.tile_size,
@@ -96,5 +98,7 @@ class TiledImageDataset(AbstractNoiseDataset):
 
     def _get_image(self, i: int) -> Dict[str, np.ndarray]:
         image, crop = self.slicer.crop_tile(image=self.image, crop=self.image_index['image'][i])
-        ground_truth, _ = self.slicer.crop_tile(image=self.image, crop=crop)
-        return {'image': image, 'ground_truth': ground_truth, 'crop': crop}
+        if self.ground_truth is not None:
+            ground_truth, _ = self.slicer.crop_tile(image=self.ground_truth, crop=crop)
+            return {'image': image, 'ground_truth': ground_truth, 'crop': crop}
+        return {'image': image, 'crop': crop}
