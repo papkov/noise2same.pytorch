@@ -164,7 +164,7 @@ class Trainer(object):
             # limit the number of uploaded images
             # if image is 3d, reduce it
             k: [
-                wandb.Image(im.max(0) if self.inner_model.n_dim == 3 else im)
+                wandb.Image(im.max(0) if self.inner_model.backbone.n_dim == 3 else im)
                 for im in v[:4]
             ]
             for k, v in images.items()

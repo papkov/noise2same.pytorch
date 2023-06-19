@@ -141,7 +141,7 @@ class Evaluator(object):
 
         merger = TileMerger(
             image_shape=dataset.tiler.target_shape,
-            channels=self.model.in_channels,
+            channels=self.model.backbone.in_channels,
             weight=dataset.tiler.weight,
             device=device,
             crop_border=crop_border,
