@@ -67,7 +67,8 @@ class Noise2SameDeconvolution(DeconvolutionMixin, Noise2Same):
         :return:
         """
         loss, loss_dict = super().compute_loss(x_in, x_out)
-        inv_deconv_mse = self.compute_mse(x_out['image/deconv'], x_out['image/masked/deconv'])
+        # TODO test deconvolved invariance loss without mask
+        inv_deconv_mse = self.compute_mse(x_out['image/deconv'], x_out['image/masked/deconv'], mask=x_in['mask'])
         loss_dict['inv_deconv_mse'] = inv_deconv_mse.item()
         loss = loss + self.lambda_inv_deconv * torch.sqrt(inv_deconv_mse)
 
