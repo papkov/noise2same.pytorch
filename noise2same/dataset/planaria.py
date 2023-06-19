@@ -71,10 +71,10 @@ class PlanariaTiffDataset(AbstractNoiseDataset3DLarge):
 class PlanariaTestDataset(AbstractNoiseDataset):
     path: Union[Path, str] = 'data/Denoising_Planaria'
     noise_level: int = 1  # 1, 2, 3
+    n_dim: int = 3
 
     def _create_image_index(self) -> Dict[str, Union[List[str], np.ndarray]]:
         gt_path = self.path / 'test_data/GT/*.tif'
-        print(gt_path)
         files = sorted(
             glob.glob(str(gt_path))
         )
