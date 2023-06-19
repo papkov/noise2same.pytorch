@@ -206,8 +206,8 @@ class AbstractNoiseDataset3DLarge(AbstractNoiseDataset, ABC):
     input_name: str = None
     tile_size: int = 64
     tile_step: int = 48
-    mean: float = 0
-    std: float = 1
+    mean: Optional[Union[float, np.ndarray]] = 0
+    std: Optional[Union[float, np.ndarray]] = 1
     weight: str = "pyramid"
     channel_last: bool = False
     n_dim: int = 3
@@ -215,18 +215,14 @@ class AbstractNoiseDataset3DLarge(AbstractNoiseDataset, ABC):
     def __getitem__(self, i: int) -> Dict[str, Any]:
         """
         :param i: int, index
-        :return: dict(image, mask, mean, std, crop)
+        :return: dict(image, ground_truth, mask, mean, std, crop)
         """
         image = self._get_image(i)
         image = self._handle_image(image)
         image['mask'] = self._mask_like_image(image['image'])
         ret = self._apply_transforms(image)
         # standardization/normalization step removed since we process the full-sized image
-        ret["mean"], ret["std"] = (
-            # TODO can rewrite just for self.mean and std?
-            torch.tensor(self.mean if self.standardize else 0).view(1, 1, 1, 1),
-            torch.tensor(self.std if self.standardize else 1).view(1, 1, 1, 1),
-        )
+        ret["mean"], ret["std"] = self.mean, self.std
         return ret
 
     def _get_image(self, i: int) -> Dict[str, np.ndarray]:
@@ -248,8 +244,8 @@ class AbstractNoiseDataset3DLarge(AbstractNoiseDataset, ABC):
             self.ground_truth = self.ground_truth[..., np.newaxis]
 
         if self.standardize:
-            self.mean = self.image.mean()
-            self.std = self.image.std()
+            self.mean = np.mean(self.image, keepdims=True)
+            self.std = np.std(self.image, keepdims=True)
             self.image = (self.image - self.mean) / self.std
             self.ground_truth = (self.ground_truth - self.mean) / self.std
         else:
