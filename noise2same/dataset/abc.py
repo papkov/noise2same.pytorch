@@ -86,7 +86,7 @@ class AbstractNoiseDataset(Dataset, ABC):
             self.std = torch.from_numpy(np.array(self.std))
 
     def __len__(self) -> int:
-        return len(self.image_index)
+        return len(self.image_index['image'])
 
     def _compose_transforms(self, *args, **kwargs) -> Union[Compose, t3d.Compose]:
         """
