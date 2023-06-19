@@ -53,6 +53,23 @@ def test_masked_loss_same():
     assert loss_dict_1['loss'] == loss_dict_2['loss']
 
 
+def test_different_output_in_masked_pass():
+    dnsr = denoiser.Noise2Same(
+        masking='gaussian',  # otherwise random noise in masking produces different loss
+        backbone=unet.UNet(in_channels=1, base_channels=4),
+        head=unet.RegressionHead(in_channels=4, out_channels=1),
+    )
+
+    image = np.random.uniform(size=(64, 64, 1)).astype(np.float32)
+    mask = mask_like_image(image, mask_percentage=0.5)
+
+    x = torch.from_numpy(np.rollaxis(image, -1, 0)).float()[None, ...]
+    mask = torch.from_numpy(np.rollaxis(mask, -1, 0)).float()[None, ...]
+
+    out = dnsr(x, mask)
+    assert not torch.allclose(out['image'], out['image/masked'])
+
+
 def test_deconvolution():
     psf = PSFParameter(np.ones((3, 3)) / 9)
     dnsr = denoiser.Noise2SameDeconvolution(
