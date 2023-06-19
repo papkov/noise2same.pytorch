@@ -25,6 +25,7 @@ class TiledImageFactory:
         )
         dataset = TiledImageDataset(
             image=image['image'],
+            ground_truth=image['ground_truth'],
             mean=image['mean'],
             std=image['std'],
             tile_size=self.tile_size,
@@ -60,13 +61,14 @@ class TiledImageDataset(AbstractNoiseDataset):
     crop_border: Union[int, Tuple[int]] = 0
     weight: str = 'pyramid'
     image: Union[np.ndarray, T] = None
+    ground_truth: Union[np.ndarray, T] = None
 
     def __getitem__(self, i: int) -> Dict[str, Any]:
         """
         :param i: int, index
         :return: dict(image, mask, mean, std, crop)
         """
-        image, crop = self._get_image(i)
+        image = self._get_image(i)
         image = self._handle_image(image)
         image['mask'] = self._mask_like_image(image['image'])
         ret = self._apply_transforms(image)
@@ -76,7 +78,6 @@ class TiledImageDataset(AbstractNoiseDataset):
             torch.tensor(self.mean if self.standardize else 0),
             torch.tensor(self.std if self.standardize else 1),
         )
-        ret["crop"] = crop
         return ret
 
     def _create_image_index(self) -> Dict[str, Union[List[str], np.ndarray]]:
@@ -93,6 +94,7 @@ class TiledImageDataset(AbstractNoiseDataset):
         )
         return {'image': self.slicer.crops}
 
-    def _get_image(self, i: int) -> Tuple[Dict[str, np.ndarray], List[int]]:
+    def _get_image(self, i: int) -> Dict[str, np.ndarray]:
         image, crop = self.slicer.crop_tile(image=self.image, crop=self.image_index['image'][i])
-        return {'image': image}, crop
+        ground_truth, _ = self.slicer.crop_tile(image=self.image, crop=crop)
+        return {'image': image, 'ground_truth': ground_truth, 'crop': crop}
