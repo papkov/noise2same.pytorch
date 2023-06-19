@@ -231,24 +231,30 @@ class AbstractNoiseDataset3DLarge(AbstractNoiseDataset, ABC):
 
     def _get_image(self, i: int) -> Dict[str, np.ndarray]:
         image, crop = self.tiler.crop_tile(image=self.image, crop=self.image_index['image'][i])
-        return {'image': np.moveaxis(image, -1, 0), 'ground_truth': self.ground_truth, 'crop': crop}
+        gt, _ = self.tiler.crop_tile(image=self.ground_truth, crop=crop)
+        return {'image': np.moveaxis(image, -1, 0), 'ground_truth': np.moveaxis(gt, -1, 0), 'crop': crop}
 
     def _read_large_image(self):
         self.image = io.imread(str(self.path / self.input_name)).astype(np.float32)
-        self.ground_truth = None
+        # TODO add option to read from disk
+        self.ground_truth = self.image.copy()
+        assert self.image.shape == self.ground_truth.shape, "Image and ground truth must have the same shape"
 
     def _create_image_index(self) -> Dict[str, Union[List[str], np.ndarray]]:
         self._read_large_image()
 
         if len(self.image.shape) < 4:
             self.image = self.image[..., np.newaxis]
+            self.ground_truth = self.ground_truth[..., np.newaxis]
 
         if self.standardize:
             self.mean = self.image.mean()
             self.std = self.image.std()
             self.image = (self.image - self.mean) / self.std
+            self.ground_truth = (self.ground_truth - self.mean) / self.std
         else:
             self.image = normalize_percentile(self.image)
+            self.ground_truth = normalize_percentile(self.ground_truth)
 
         self.tiler = ImageSlicer(
             self.image.shape,
@@ -260,7 +266,7 @@ class AbstractNoiseDataset3DLarge(AbstractNoiseDataset, ABC):
 
         return {'image': self.tiler.crops,
                 # TODO make ground_truth_name a data field to read in properly in read_large_image
-                'ground_truth': self.ground_truth}
+                'ground_truth': self.tiler.crops}
 
     def _get_post_transforms(
         self,
