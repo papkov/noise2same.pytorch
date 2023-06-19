@@ -40,7 +40,7 @@ def get_test_dataset_and_gt(cfg: DictConfig) -> Tuple[Dataset, List[np.ndarray]]
     dataset_test = instantiate(cfg.dataset_test)
     # TODO this is a hack, should be fixed in the dataset
     if isinstance(dataset_test, AbstractNoiseDataset3DLarge):
-        ground_truth = dataset_test.ground_truth
+        ground_truth = dataset_test.ground_truth.squeeze()
     else:
         # TODO move ground truth access into evaluation
         ground_truth = [elem['ground_truth'] for elem in dataset_test]
