@@ -184,7 +184,12 @@ class Evaluator(object):
                 }
             )
 
-            merger.integrate_batch(batch=pred_batch, crop_coords=batch["crop"])
+            try:
+                merger.integrate_batch(batch=pred_batch, crop_coords=batch["crop"])
+            except TypeError as e:
+                raise TypeError(
+                    f"Error on batch {i} with shape {batch['image'].shape}, crop {batch['crop']}"
+                ) from e
             if empty_cache:
                 torch.cuda.empty_cache()
 
