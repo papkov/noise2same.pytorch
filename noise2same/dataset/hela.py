@@ -6,11 +6,11 @@ import h5py
 import numpy as np
 
 from noise2same.dataset.abc import AbstractNoiseDataset
-
+from noise2same.util import normalize_percentile
 
 def read_h5py(path):
     with h5py.File(path, "r") as f:
-        img = np.array(f["image"])
+        img = np.array(f["image"], dtype=np.float32)
     return img
 
 
@@ -19,13 +19,14 @@ class HelaShallowDataset(AbstractNoiseDataset):
     path: Union[Path, str] = "data/hela"
     channel_id: int = 3
     mode: str = "train"
+    standardize: bool = False
 
     def __str__(self) -> str:
         return f'hela_shallow_{self.mode}_ch{self.channel_id}'
 
     def _create_image_index(self) -> Dict[str, Union[List[str], np.ndarray]]:
-        input_files = list(Path(self.path).glob(f"reconvolved/*ch{self.channel_id}.h5"))
-        gt_files = list(Path(self.path).glob(f"deconvolved/*ch{self.channel_id}.h5"))
+        input_files = sorted(list(Path(self.path).glob(f"reconvolved/*ch{self.channel_id}.h5")))
+        gt_files = sorted(list(Path(self.path).glob(f"deconvolved/*ch{self.channel_id}.h5")))
         assert len(input_files) > 0, f"no files found in {self.path}"
         assert len(input_files) == len(gt_files), f"input and gt files have different lengths"
         if self.mode == "train":
@@ -37,8 +38,8 @@ class HelaShallowDataset(AbstractNoiseDataset):
         else:
             raise ValueError(f"unknown mode {self.mode}")
 
-        return {'image': np.stack([read_h5py(f) for f in input_files]),
-                'ground_truth': np.stack([read_h5py(f) for f in gt_files])}
+        return {'image': np.stack([normalize_percentile(read_h5py(f), 0.1, 99.9) for f in input_files]),
+                'ground_truth': np.stack([normalize_percentile(read_h5py(f), 0.1, 99.9) for f in gt_files])}
 
     def get_number_of_images(self) -> int:
         return self.image_index['image'].shape[0] * self.image_index['image'].shape[1]
