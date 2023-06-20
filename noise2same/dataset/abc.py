@@ -34,6 +34,7 @@ class AbstractNoiseDataset(Dataset, ABC):
     n_dim: int = 2
     n_channels: int = 1
     data_range: int = 255
+    n_repeats: int = 1
     input_size: Optional[float] = None
     mean: Optional[Union[float, np.ndarray]] = None
     std: Optional[Union[float, np.ndarray]] = None
@@ -87,6 +88,9 @@ class AbstractNoiseDataset(Dataset, ABC):
             self.std = torch.from_numpy(np.array(self.std))
 
     def __len__(self) -> int:
+        return self.get_number_of_images() * self.n_repeats
+
+    def get_number_of_images(self) -> int:
         return len(self.image_index['image'])
 
     def _compose_transforms(self, *args, **kwargs) -> Union[Compose, t3d.Compose]:
@@ -154,6 +158,7 @@ class AbstractNoiseDataset(Dataset, ABC):
         :param i: int, index
         :return: dict(image, mask, mean, std)
         """
+        i = i % self.get_number_of_images()
         image = self._get_image(i)
         image = self._handle_image(image)
         image['shape'] = np.array(image['image'].shape)

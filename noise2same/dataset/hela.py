@@ -37,7 +37,7 @@ class HelaShallowDataset(AbstractNoiseDataset):
         return {'image': np.stack([read_h5py(f) for f in input_files]),
                 'ground_truth': np.stack([read_h5py(f) for f in gt_files])}
 
-    def __len__(self):
+    def get_number_of_images(self) -> int:
         return self.image_index['image'].shape[0] * self.image_index['image'].shape[1]
 
     def _get_image(self, i: int) -> Dict[str, np.ndarray]:

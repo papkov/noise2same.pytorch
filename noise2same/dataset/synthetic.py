@@ -34,13 +34,6 @@ class SyntheticDataset(AbstractNoiseDataset):
     n_repeats: int = 1  # repeat dataset for stable testing
     fixed: bool = False  # if True, read prepared noisy images from disk
 
-    def __len__(self):
-        return super().__len__() * self.n_repeats
-
-    def __getitem__(self, i: int) -> Dict[str, Any]:
-        i = i % super().__len__()
-        return super().__getitem__(i)
-
     def _validate(self) -> None:
         assert self.noise_type in ("gaussian", "poisson", "none")
         assert isinstance(self.noise_param, int) or \
