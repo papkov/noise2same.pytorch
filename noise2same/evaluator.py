@@ -285,10 +285,16 @@ class Evaluator(object):
             out, inference_time = inference(batch)
             out = self._revert_batch(out, ['image', 'ground_truth'])
             for j, (pred, gt) in enumerate(zip(out['image'], out['ground_truth'])):
+                if dataset.n_dim == 2:
+                    if dataset.data_range == 1:
+                        pred = pred * 255
+                        gt = gt * 255
+                    pred = np.clip(pred + 0.5, 0, 255).astype(np.uint8).astype(np.float32)
+                    gt = np.clip(gt + 0.5, 0, 255).astype(np.uint8).astype(np.float32)
                 scores = calculate_scores(
                     pred, gt,
                     multichannel=True,
-                    data_range=dataset.data_range if dataset.n_dim == 2 else 1,
+                    data_range=255.0 if dataset.n_dim > 2 else 1.0,
                     normalize_pairs=dataset.n_dim > 2,
                     metrics=metrics,
                 )
