@@ -15,11 +15,11 @@ from torch.utils.data import DataLoader, RandomSampler
 import evaluate
 import noise2same.trainer
 from noise2same import util
-from noise2same.dataset.getter import get_test_dataset_and_gt, expand_dataset_cfg
+from noise2same.dataset.getter import expand_dataset_cfg
 from noise2same.psf.psf_convolution import instantiate_psf
 
 
-@hydra.main(config_path="config", config_name="config", version_base="1.1")
+@hydra.main(config_path="config", config_name="config")
 def main(cfg: DictConfig) -> None:
     # trying to fix: unable to open shared memory object </torch_197398_0> in read-write mode
     # torch.multiprocessing.set_sharing_strategy("file_system")
@@ -115,10 +115,16 @@ def main(cfg: DictConfig) -> None:
         traceback.print_exc()
 
     if cfg.evaluate:
-        test_dataset, ground_truth = get_test_dataset_and_gt(cfg)
+        dataset_test = instantiate(cfg.dataset_test)
+        factory = instantiate(cfg.factory_test) if 'factory_test' in cfg else None
 
-        scores = evaluate.evaluate(trainer.evaluator, test_dataset, ground_truth, cfg.experiment, cwd,
-                                   Path(os.getcwd()), half=cfg.training.amp, num_workers=cfg.training.num_workers)
+        scores = evaluate.evaluate(
+            evaluator=trainer.evaluator,
+            dataset=dataset_test,
+            cfg=cfg,
+            factory=factory,
+            train_dir=os.getcwd(),
+        )
 
         if not cfg.check:
             wandb.log(scores)

@@ -4,12 +4,12 @@ import os
 from argparse import ArgumentParser
 from pathlib import Path
 from pprint import pprint
-from typing import Dict
+from typing import Dict, Optional
 
 import numpy as np
 import pandas as pd
 from hydra.utils import instantiate
-from omegaconf import OmegaConf
+from omegaconf import OmegaConf, DictConfig
 from torch.utils.data import DataLoader, Dataset
 from tqdm.auto import tqdm
 
@@ -18,6 +18,7 @@ from noise2same.dataset.getter import (
     get_planaria_dataset_and_gt,
     get_test_dataset_and_gt,
 )
+from noise2same.dataset.tiling import TiledImageFactory
 from noise2same.evaluator import Evaluator
 from noise2same.psf.psf_convolution import instantiate_psf
 
@@ -135,40 +136,31 @@ def get_scores(
 
 
 def evaluate(
-    evaluator: Evaluator,
-    dataset: Dataset,
-    ground_truth: np.ndarray,
-    experiment: str,
-    cwd: Path,
-    train_dir: Path,
-    num_workers: int = None,
-    half: bool = False,
-    save_results: bool = True,
-    verbose: bool = True,
+        evaluator: Evaluator,
+        dataset: Dataset,
+        cfg: DictConfig,
+        factory: Optional[TiledImageFactory] = None,
+        train_dir: Optional[str] = None,
+        save_results: bool = True,
+        verbose: bool = True,
 ):
-    loader = DataLoader(
-        dataset,
-        batch_size=1,  # todo customize
-        num_workers=num_workers,
-        shuffle=False,
-        pin_memory=True,
-        drop_last=False,
-    )
-
-    ground_truth, predictions = get_ground_truth_and_predictions(
-        evaluator, experiment, ground_truth, cwd, loader, dataset, half
-    )
-
-    scores = get_scores(ground_truth, predictions, experiment)
+    train_dir = train_dir or ''
+    scores = evaluator.evaluate(dataset, factory,
+                                num_workers=cfg.training.num_workers,
+                                half=cfg.training.amp,
+                                empty_cache=False,
+                                key='image',
+                                keep_images=True, )
+    predictions = {'image': [s.pop('image') for s in scores]}
     scores = pd.DataFrame(scores)
 
-    if experiment in ("synthetic", "synthetic_grayscale",):
+    if cfg.experiment in ("synthetic", "synthetic_grayscale",):
         # Label each score with its dataset name and repeat id
         scores = scores.assign(
             dataset_name=np.concatenate([[ds.name] * len(ds) for ds in dataset.datasets]),
             repeat_id=np.concatenate([np.arange(len(ds)) // (len(ds) // ds.n_repeats) for ds in dataset.datasets])
         )
-    evaluation_dir = train_dir / f'evaluate' / datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+    evaluation_dir = Path(train_dir) / f'evaluate' / datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
     evaluation_dir.mkdir(parents=True, exist_ok=True)
 
     if save_results:
@@ -176,9 +168,9 @@ def evaluate(
         scores.to_csv(evaluation_dir / "scores.csv")
         np.savez(evaluation_dir / "predictions.npz", **predictions)
 
-    if experiment in ("planaria",):
+    if cfg.experiment in ("planaria",):
         scores = scores.groupby("c").mean()
-    elif experiment in ("synthetic", "synthetic_grayscale",):
+    elif cfg.experiment in ("synthetic", "synthetic_grayscale",):
         if verbose:
             print("\nBefore averaging over repeats:")
             pprint(scores.groupby(["dataset_name", "repeat_id"]).mean())
@@ -191,7 +183,7 @@ def evaluate(
         pprint(scores)
 
     scores = scores.to_dict()
-    if experiment in ("synthetic", "synthetic_grayscale", "planaria", ):
+    if cfg.experiment in ("synthetic", "synthetic_grayscale", "planaria",):
         # Flatten scores dict as "metric.dataset" to make it compatible with wandb
         scores = {f"{metric}.{dataset_name}": score for metric, dataset_dict in scores.items()
                   for dataset_name, score in dataset_dict.items()}
@@ -220,15 +212,19 @@ def main(train_dir: Path, checkpoint: str = 'last', other_args: list = None) -> 
     backbone = instantiate(cfg.backbone)
     head = instantiate(cfg.head)
     denoiser = instantiate(cfg.denoiser, backbone=backbone, head=head, **instantiate_psf(cfg, dataset))
+    factory = instantiate(cfg.factory_test) if 'factory_test' in cfg else None
+    dataset = instantiate(cfg.dataset_test)
 
     checkpoint_path = train_dir / Path(f"checkpoints/model{'_last' if checkpoint == 'last' else ''}.pth")
 
     # Run evaluation
-    half = getattr(cfg, "amp", False)
     evaluator = Evaluator(denoiser, checkpoint_path=checkpoint_path)
     evaluate(
-        evaluator, dataset, ground_truth, cfg.experiment, cwd, train_dir, half=half,
-        num_workers=cfg.training.num_workers
+        evaluator=evaluator,
+        dataset=dataset,
+        cfg=cfg,
+        factory=factory,
+        train_dir=train_dir,
     )
 
 
