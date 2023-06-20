@@ -248,7 +248,8 @@ class Evaluator(object):
             half: bool = False,
             empty_cache: bool = False,
             key: str = 'image',
-            keep_images: bool = False
+            keep_images: bool = False,
+            metrics: Tuple[str, ...] = ("rmse", "psnr", "ssim"),
     ) -> List[Dict[str, np.ndarray]]:
         """
         Run inference for a given dataloader
@@ -258,6 +259,7 @@ class Evaluator(object):
         :param empty_cache: bool, if empty CUDA cache after each iteration
         :param key: str, key to use for the output [image, deconv]
         :param keep_images: bool, if add prediction arrays to result
+        :param metrics: tuple of metrics to calculate
         :return: List[Dict[key, output]]
         """
         loader = DataLoader(
@@ -285,7 +287,8 @@ class Evaluator(object):
                     pred, gt,
                     multichannel=True,
                     data_range=dataset.data_range if dataset.n_dim == 2 else 1,
-                    normalize_pairs=dataset.n_dim > 2
+                    normalize_pairs=dataset.n_dim > 2,
+                    metrics=metrics,
                 )
                 if keep_images:
                     scores['image'] = pred

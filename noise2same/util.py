@@ -93,16 +93,16 @@ def center_crop(x: np.ndarray, size: int = 63) -> np.ndarray:
 
 
 def calculate_scores(
-    gt: np.ndarray,
-    x: np.ndarray,
-    data_range: float = 1.0,
-    normalize_pairs: bool = False,
-    scale: bool = False,
-    clip: bool = False,
-    multichannel: bool = False,
-    prefix: str = "",
-    calculate_mi: bool = False,
-    **kwargs: Any,
+        gt: np.ndarray,
+        x: np.ndarray,
+        data_range: float = 1.0,
+        normalize_pairs: bool = False,
+        scale: bool = False,
+        clip: bool = False,
+        multichannel: bool = False,
+        prefix: str = "",
+        metrics: Tuple[str, ...] = ("rmse", "psnr", "ssim"),
+        **kwargs: Any,
 ) -> Dict[str, float]:
     """
     Calculates image reconstruction metrics
@@ -115,10 +115,22 @@ def calculate_scores(
     :param multichannel: If True, treat the last dimension of the array as channels for SSIM. Similarity
         calculations are done independently for each channel then averaged.
     :param prefix: str, prefix for metric names
-    :param calculate_mi: bool, calculate mutual information and spectral mutual information
+    :param metrics: tuple of metrics to calculate
     :param kwargs: kwargs for SSIM
     :return:
     """
+
+    metrics_fn = {
+        'rmse': lambda a, b: np.sqrt(mean_squared_error(a, b)),
+        'psnr': partial(peak_signal_noise_ratio, data_range=data_range),
+        'ssim': partial(structural_similarity, data_range=data_range, multichannel=multichannel, **kwargs),
+        'mi': mutual_information,
+        'smi': spectral_mutual_information,
+    }
+
+    for metric in metrics:
+        assert metric in metrics_fn, f"Unknown metric {metric}"
+
     x_ = crop_as_gt(x, gt)
     assert gt.shape == x_.shape, f"Different shapes {gt.shape}, {x_.shape}"
     if scale:
@@ -131,24 +143,8 @@ def calculate_scores(
     if prefix:
         prefix += "."
 
-    metrics = {
-        prefix + "rmse": np.sqrt(mean_squared_error(gt, x_)),
-        prefix + "psnr": peak_signal_noise_ratio(gt, x_, data_range=data_range),
-        prefix
-        + "ssim": structural_similarity(
-            gt, x_, data_range=data_range, multichannel=multichannel, **kwargs,
-        ),
-    }
-
-    if calculate_mi:
-        metrics.update(
-            {
-                prefix + "mi": mutual_information(gt, x_),
-                prefix + "smi": spectral_mutual_information(gt, x_),
-            }
-        )
-
-    return metrics
+    scores = {prefix + metric: metrics_fn[metric](gt, x_) for metric in metrics}
+    return scores
 
 
 # Normalization utils from Noise2Void
