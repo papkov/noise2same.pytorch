@@ -25,9 +25,12 @@ dataset_test:
   input_size: null
 
 training:
-  steps_per_epoch: 500
-  steps: 15000
+  steps_per_epoch: 100
+  steps: 10000
   batch_size: 32
   val_batch_size: 1
   num_workers: 4
   monitor: val_mse
+
+scheduler:
+  decay_steps: 2000
