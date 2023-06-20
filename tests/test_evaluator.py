@@ -25,4 +25,4 @@ def test_tiled_dataset_inference(dataset_name: str):
     factory = instantiate(cfg.factory_test)
     dataset.image_index = {k: v[:2] for k, v in dataset.image_index.items()}
     evaluator = Evaluator(Denoiser(), device='cpu')
-    _ = evaluator.evaluate(dataset, factory)
+    _ = evaluator.evaluate(dataset, factory, metrics=('rmse',))
