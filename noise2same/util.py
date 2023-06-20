@@ -330,8 +330,8 @@ def load_checkpoint_to_module(module, checkpoint_path: str):
 
 
 def detach_to_np(
-    images: Dict[str, torch.Tensor], mean: torch.Tensor, std: torch.Tensor
-) -> Dict[str, torch.Tensor]:
+        images: Dict[str, torch.Tensor], mean: torch.Tensor, std: torch.Tensor
+) -> Dict[str, np.ndarray]:
     """
     Detaches and denormalizes all tensors in the given dictionary, then converts to np.array.
     """
