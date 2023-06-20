@@ -85,6 +85,7 @@ class AbstractNoiseDataset(Dataset, ABC):
         )
 
         # Convert mean and std to torch tensors
+        # TODO setting external mean and std does not work for unknown reason (connected to mixed precision?)
         if self.mean is not None and not isinstance(self.mean, torch.Tensor):
             self.mean = torch.from_numpy(np.array(self.mean))
         if self.std is not None and not isinstance(self.std, torch.Tensor):
