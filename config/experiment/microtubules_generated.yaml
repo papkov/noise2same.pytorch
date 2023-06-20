@@ -16,9 +16,20 @@ dataset:
   input_size: ${.tile_size}  # needed for some models
 
 dataset_test:
-  transforms: null
+  _target_: noise2same.dataset.MicrotubulesTestDataset
+  path: ${cwd}/data/microtubules-simulation/
+  input_name: ground-truth.tif
+  n_dim: 3
+  n_channels: 1
+  add_blur_and_noise: True
+
+factory_test:
+  _target_: noise2same.dataset.TiledImageFactory
   tile_size: 128
   tile_step: 96
+  crop_border: 8
+  weight: 'pyramid'
+  batch_size: 8
 
 backbone:
   base_channels: 48
@@ -40,3 +51,6 @@ psf:
   pad_mode: replicate
   fft: auto
   in_channels: ${dataset.n_channels}
+
+denoiser:
+  lambda_bound: 0.1

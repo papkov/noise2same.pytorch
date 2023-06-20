@@ -121,7 +121,7 @@ def test_dataset_instantiation(dataset_name: str, expected_dataclass: type, expe
                           # ('hanzi', HanziDataset), # TODO fix memory issue
                           ('imagenet', ImagenetTestDataset),
                           ('microtubules', MicrotubulesDataset),
-                          ('microtubules_generated', MicrotubulesDataset),
+                          ('microtubules_generated', MicrotubulesTestDataset),
                           ('fmd', FMDDataset),
                           ('fmd_deconvolution', FMDDataset),
                           # ('planaria', PlanariaTestDataset), # TODO fix memory issue
