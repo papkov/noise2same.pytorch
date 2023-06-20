@@ -107,7 +107,8 @@ def test_tiled_dataset_evaluation(dataset_name: str):
         expand_dataset_cfg(cfg)
         print('\n', OmegaConf.to_yaml(cfg))
 
-    dataset = SubsetAttr(instantiate(cfg.dataset_test), range(2))
+    dataset = instantiate(cfg.dataset_test)
+    dataset = SubsetAttr(dataset, range(min(2, len(dataset))))
     factory = instantiate(cfg.factory_test) if 'factory_test' in cfg else None
     evaluator = Evaluator(Denoiser(), device='cpu')
     outputs = evaluator.evaluate(dataset, factory, metrics=('rmse',))
