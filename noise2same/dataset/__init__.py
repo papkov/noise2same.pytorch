@@ -2,7 +2,7 @@ from noise2same.dataset.bsd68 import BSD68Dataset
 from noise2same.dataset.fmd import FMDDataset
 from noise2same.dataset.hanzi import HanziDataset
 from noise2same.dataset.imagenet import ImagenetDataset, ImagenetTestDataset
-from noise2same.dataset.microtubules import MicrotubulesDataset
+from noise2same.dataset.microtubules import MicrotubulesDataset, MicrotubulesTestDataset
 from noise2same.dataset.planaria import PlanariaDataset, PlanariaTiffDataset, PlanariaTestDataset
 from noise2same.dataset.sidd import SIDDDataset
 from noise2same.dataset.ssi import SSIDataset
