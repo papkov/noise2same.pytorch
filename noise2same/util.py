@@ -71,7 +71,7 @@ def crop_as(x: np.ndarray, target_shape: np.shape) -> np.ndarray:
         raise ValueError(
             f"Shapes do not match: {x.shape} and {target_shape}"
         )
-    assert np.all(diff >= 0)
+    assert np.all(diff >= 0), f"Target shape {target_shape} is larger than {x.shape} by {diff}"
     top_left = diff // 2
     bottom_right = diff - top_left
     sl = tuple(slice(tl, s - br) for tl, s, br in zip(top_left, x.shape, bottom_right))
