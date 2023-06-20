@@ -250,6 +250,7 @@ class Evaluator(object):
             key: str = 'image',
             keep_images: bool = False,
             metrics: Tuple[str, ...] = ("rmse", "psnr", "ssim"),
+            num_workers: int = 0,
     ) -> List[Dict[str, np.ndarray]]:
         """
         Run inference for a given dataloader
@@ -260,12 +261,13 @@ class Evaluator(object):
         :param key: str, key to use for the output [image, deconv]
         :param keep_images: bool, if add prediction arrays to result
         :param metrics: tuple of metrics to calculate
+        :param num_workers: int, number of workers for DataLoader
         :return: List[Dict[key, output]]
         """
         loader = DataLoader(
             dataset,
             batch_size=1,
-            num_workers=8,
+            num_workers=num_workers,
             shuffle=False,
             pin_memory=True,
             drop_last=False,
