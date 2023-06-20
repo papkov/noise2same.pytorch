@@ -1,13 +1,11 @@
 import os
 import traceback
-from pathlib import Path
 from random import randint
 from time import sleep
 
 import hydra
 import torch
 import wandb
-from hydra.utils import get_original_cwd
 from hydra.utils import instantiate
 from omegaconf import DictConfig, OmegaConf
 from torch.utils.data import DataLoader, RandomSampler
@@ -39,7 +37,6 @@ def main(cfg: DictConfig) -> None:
     print(OmegaConf.to_yaml(cfg))
     # os.environ["CUDA_VISIBLE_DEVICES"] = f"{cfg.device}"
     print(f"Run backbone {cfg.backbone_name} on experiment {cfg.experiment}, work in {os.getcwd()}")
-    cwd = Path(get_original_cwd())
 
     # Make training deterministic
     util.fix_seed(cfg.seed)
