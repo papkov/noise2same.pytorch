@@ -341,10 +341,14 @@ class Evaluator(object):
         empty_cache: bool = False,
         key: str = 'image',
     ) -> Tuple[Dict[str, T], float]:
-        batch = {k: v.to(self.device) if v in ['image', 'ground_truth', 'std', 'mean'] else v for k, v in batch.items()}
+        batch = {k: v.to(self.device) if k in ['image', 'ground_truth', 'std', 'mean'] else v for k, v in batch.items()}
         start = time.time()
         with autocast(enabled=half):
-            batch['image'] = self.model.forward(batch['image'])[key]
+            try:
+                batch['image'] = self.model.forward(batch['image'])[key]
+            except RuntimeError as e:
+                raise RuntimeError(f"Error during inference on batch {batch['image'].shape}, "
+                                   f"half={half}, empty_cache={empty_cache}, key={key}") from e
         end = time.time()
         if empty_cache:
             torch.cuda.empty_cache()
