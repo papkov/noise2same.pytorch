@@ -140,11 +140,14 @@ class SyntheticTestDataset(ConcatDataset):
     Concatenated dataset of multiple synthetic datasets.
     Assumes that all datasets have the same parameters and are partially defined.
     """
-    pass
 
     def __init__(self, datasets: List[Callable], **params):
         super().__init__([ds(**params) for ds in datasets])
+
     #     # TODO rewrite in a readable way
     #     self.ground_truth = [
     #         read_image((ds.ground_truth if ds.ground_truth is not None else ds.images)[i % len(ds.images)])
     #         for ds in self.datasets for i in trange(len(ds))]
+
+    def __getattr__(self, item):
+        return getattr(self.datasets[0], item)
