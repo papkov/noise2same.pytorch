@@ -165,10 +165,6 @@ class AbstractNoiseDataset(Dataset, ABC):
         image = self._get_image(i)
         image = self._handle_image(image)
         image['shape'] = np.array(image['image'].shape)
-        image['mask'] = self._mask_like_image(image['image'])
-        # this was noise_patch in the original code, concatenation does not make any sense
-        # https://github.com/divelab/Noise2Same/blob/main/models.py#L154
-        # noise_mask = np.concatenate([noise, mask], axis=-1)
         ret = self._apply_transforms(image)
         if self.standardize:
             # by default, self.mean and self.std are None, and normalization is done by patch
@@ -181,12 +177,9 @@ class AbstractNoiseDataset(Dataset, ABC):
             ret["mean"] = torch.tensor(0).view((1,) * ret["image"].ndim)
             ret["std"] = torch.tensor(1).view((1,) * ret["image"].ndim)
 
+        # TODO make mask optional
+        ret['mask'] = mask_like_image(ret['image'], mask_percentage=self.mask_percentage, channels_last=False)
         return ret
-
-    def _mask_like_image(self, image: np.ndarray) -> np.ndarray:
-        return mask_like_image(
-            image, mask_percentage=self.mask_percentage, channels_last=self.channel_last
-        )
 
     def _standardize(self, image: T, mean: Optional[T] = None, std: Optional[T] = None) -> Tuple[T, T, T]:
         """
