@@ -16,7 +16,7 @@ from noise2same.denoiser import Denoiser
 from noise2same.backbone.unet import UNet
 from noise2same.backbone.swinir import SwinIR
 from noise2same.dataset.tiling import TiledImageFactory
-from noise2same.util import crop_as, calculate_scores
+from noise2same.util import crop_as, calculate_scores, detach_to_np
 
 
 class Evaluator(object):
@@ -57,14 +57,12 @@ class Evaluator(object):
         loader: DataLoader,
         half: bool = False,
         empty_cache: bool = False,
-        key: str = "image",
     ) -> Tuple[List[Dict[str, np.ndarray]], List[int]]:
         """
         Run inference for a given dataloader
         :param loader: DataLoader
         :param half: bool, if use half precision
         :param empty_cache: bool, if empty CUDA cache after each iteration
-        :param key: str, key to use for the output [image, deconv]
         :return: List[Dict[key, output]]
         """
         self.model.eval()
@@ -79,9 +77,9 @@ class Evaluator(object):
                 batch = {k: v.to(self.device) for k, v in batch.items()}
                 start = time.time()
                 with autocast(enabled=half):
-                    x_out = self.model.forward(batch["image"])[key] * batch["std"] + batch["mean"]
+                    x_out = self.model.forward(batch["image"])
 
-                x_out = {"image": np.moveaxis(x_out.detach().cpu().numpy(), 1, -1)}
+                x_out = detach_to_np(x_out, batch["mean"], batch["std"])
 
                 end = time.time()
                 times.append(end - start)
@@ -89,7 +87,7 @@ class Evaluator(object):
                 outputs.append(x_out)
                 iterator.set_postfix(
                     {
-                        "shape": x_out["image"].shape,
+                        "shape": batch["image"].shape,
                         "reserved": torch.cuda.memory_reserved(0) / (1024 ** 2),
                         "allocated": torch.cuda.memory_allocated(0) / (1024 ** 2),
                     }
@@ -350,12 +348,11 @@ class Evaluator(object):
         return batch, end - start
 
     def _revert_batch(
-        self,
-        image: Dict[str, T],
-        keys: List[str]
+            self,
+            batch: Dict[str, T],
+            keys: List[str]
     ) -> Dict[str, np.ndarray]:
-        out = dict()
-        for key in keys:
-            out[key] = np.moveaxis((image[key] * image['std'] + image['mean']).detach().numpy(), 1, -1)
-            out[key] = np.array([crop_as(im, sh) for im, sh in zip(out[key], image['shape'])])
+        out = detach_to_np({k: batch[k] for k in keys}, batch['mean'], batch['std'])
+        for k, v in out.items():
+            out[k] = np.array([crop_as(im, sh) for im, sh in zip(v, batch['shape'])])
         return out
