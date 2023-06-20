@@ -10,6 +10,9 @@ seed: 56
 check: False
 evaluate: True
 
+denoiser:
+  _target_: noise2same.denoiser.Denoiser
+
 training:
   steps_per_epoch: 1000
   steps: 50000

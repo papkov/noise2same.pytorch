@@ -1,3 +1,0 @@
-# @package _global_
-denoiser:
-  _target_: noise2same.denoiser.Denoiser
