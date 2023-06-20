@@ -10,6 +10,16 @@ from torch.utils.data import DataLoader
 from noise2same.dataset.getter import expand_dataset_cfg
 from noise2same.denoiser import Denoiser
 from noise2same.evaluator import Evaluator
+from torch.utils.data import Subset
+
+
+class SubsetAttr(Subset):
+    """
+    Wrapper for Subset that allows to access attributes of the wrapped dataset.
+    """
+
+    def __getattr__(self, item):
+        return getattr(self.dataset, item)
 
 
 @pytest.fixture(scope="module", autouse=True)
@@ -97,8 +107,8 @@ def test_tiled_dataset_evaluation(dataset_name: str):
         expand_dataset_cfg(cfg)
         print('\n', OmegaConf.to_yaml(cfg))
 
-    dataset = instantiate(cfg.dataset_test)
-    factory = instantiate(cfg.factory_test)
-    dataset.image_index = {k: v[:2] for k, v in dataset.image_index.items()}
+    dataset = SubsetAttr(instantiate(cfg.dataset_test), range(2))
+    factory = instantiate(cfg.factory_test) if 'factory_test' in cfg else None
     evaluator = Evaluator(Denoiser(), device='cpu')
-    _ = evaluator.evaluate(dataset, factory, metrics=('rmse',))
+    outputs = evaluator.evaluate(dataset, factory, metrics=('rmse',))
+    assert outputs is not None
