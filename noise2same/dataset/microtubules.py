@@ -20,6 +20,9 @@ class MicrotubulesDataset(AbstractNoiseDataset3DLarge):
     input_name: str = "input.tif"
     add_blur_and_noise: bool = False
 
+    def __str__(self) -> str:
+        return f'microtubules_train_{self.input_name}'
+
     def _read_large_image(self):
         self.image = io.imread(str(self.path / self.input_name)).astype(np.float32)
         self.ground_truth = normalize_percentile(io.imread(str(self.path / 'ground-truth.tif')).astype(np.float32),
@@ -44,6 +47,9 @@ class MicrotubulesTestDataset(AbstractNoiseDataset):
     path: Union[Path, str] = "data/microtubules-simulation"
     input_name: str = "input.tif"
     add_blur_and_noise: bool = False
+
+    def __str__(self) -> str:
+        return f'microtubules_test_{self.input_name}'
 
     def _create_image_index(self) -> Dict[str, Union[List[str], np.ndarray]]:
         # TODO remove duplicate code

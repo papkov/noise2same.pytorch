@@ -63,6 +63,9 @@ class TiledImageDataset(AbstractNoiseDataset):
     image: Union[np.ndarray, T] = None
     ground_truth: Union[np.ndarray, T] = None
 
+    def __str__(self) -> str:
+        return f'tiled_image_dataset'
+
     def __getitem__(self, i: int) -> Dict[str, Any]:
         """
         :param i: int, index

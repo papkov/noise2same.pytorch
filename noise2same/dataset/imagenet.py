@@ -15,6 +15,9 @@ class ImagenetDataset(AbstractNoiseDataset):
     standardize_by_channel: bool = True
     n_channels: int = 3
 
+    def __str__(self) -> str:
+        return f'imagenet_{self.mode}_{self.version}'
+
     def _validate(self) -> None:
         assert self.mode in ("train", "val")
         assert self.version in (0, 1)
@@ -35,6 +38,9 @@ class ImagenetTestDataset(AbstractNoiseDataset):
     path: Union[Path, str] = "data/ImageNet"
     standardize_by_channel: bool = True
     version: int = 0  # for config compatibility
+
+    def __str__(self) -> str:
+        return f'imagenet_test_{self.version}'
 
     def _create_image_index(self) -> Dict[str, Union[List[str], np.ndarray]]:
         return {

@@ -12,6 +12,9 @@ class BSD68Dataset(AbstractNoiseDataset):
     path: Union[Path, str] = "data/BSD68"
     mode: str = "train"
 
+    def __str__(self) -> str:
+        return f'bsd68_mixed_{self.mode}'
+
     def _validate(self) -> None:
         assert self.mode in ("train", "val", "test")
 

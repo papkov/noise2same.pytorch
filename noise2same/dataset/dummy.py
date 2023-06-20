@@ -12,6 +12,9 @@ class DummyDataset3DLarge(AbstractNoiseDataset3DLarge):
     image_size: int = 256
     path: str = "."
 
+    def __str__(self) -> str:
+        return 'dummy_3D'
+
     def _read_large_image(self):
         if self.image is None:
             shape = (self.image_size,) * self.n_dim

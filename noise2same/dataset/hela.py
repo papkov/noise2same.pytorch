@@ -20,6 +20,9 @@ class HelaShallowDataset(AbstractNoiseDataset):
     channel_id: int = 3
     mode: str = "train"
 
+    def __str__(self) -> str:
+        return f'hela_shallow_{self.mode}_ch{self.channel_id}'
+
     def _create_image_index(self) -> Dict[str, Union[List[str], np.ndarray]]:
         input_files = list(Path(self.path).glob(f"reconvolved/*ch{self.channel_id}.h5"))
         gt_files = list(Path(self.path).glob(f"deconvolved/*ch{self.channel_id}.h5"))

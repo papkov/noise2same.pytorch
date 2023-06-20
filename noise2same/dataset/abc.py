@@ -49,6 +49,9 @@ class AbstractNoiseDataset(Dataset, ABC):
         ]
     ] = None
 
+    def __str__(self) -> str:
+        return 'dataset'
+
     def _validate(self) -> None:
         """
         Check init arguments types and values

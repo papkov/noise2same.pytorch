@@ -20,6 +20,9 @@ class SSIDataset(AbstractNoiseDataset):
     standardize_by_channel: bool = True
     input_name: str = "drosophila"
 
+    def __str__(self) -> str:
+        return f'ssi_{self.input_name}'
+
     def _create_image_index(self) -> Dict[str, Union[List[str], np.ndarray]]:
         try:
             files = [f for f in self.path.iterdir() if f.is_file()]

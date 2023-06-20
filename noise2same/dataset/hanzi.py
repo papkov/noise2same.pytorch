@@ -15,6 +15,9 @@ class HanziDataset(AbstractNoiseDataset):
     noise_level: int = 3  # four noise levels (1, 2, 3, 4)
     data_range: int = 1
 
+    def __str__(self) -> str:
+        return f'hanzi_{self.mode}_{self.version}_{self.noise_level}'
+
     def _validate(self) -> None:
         assert self.mode in ("training", "testing", "validation")
         assert self.noise_level in (1, 2, 3, 4)

@@ -21,6 +21,9 @@ class PlanariaDataset(AbstractNoiseDataset):
     channel_last: bool = False
     n_dim: int = 3
 
+    def __str__(self) -> str:
+        return f'planaria_{self.mode}'
+
     def _create_image_index(self) -> Dict[str, Union[List[str], np.ndarray]]:
         data = np.load(self.path / "train_data/data_label.npz", mmap_mode='r')["X"].astype(np.float32)
         if self.mode == "train":
@@ -39,6 +42,9 @@ class PlanariaTiffDataset(AbstractNoiseDataset3DLarge):
     tile_step: int = 192
     crop_border: int = 32
     weight: str = "pyramid"
+
+    def __str__(self) -> str:
+        return f'planaria_tiled'
 
     def _create_image_index(self) -> Dict[str, Union[List[str], np.ndarray]]:
         self.image = tifffile.imread(self.path)[..., None]
@@ -72,6 +78,9 @@ class PlanariaTestDataset(AbstractNoiseDataset):
     path: Union[Path, str] = 'data/Denoising_Planaria'
     noise_level: int = 1  # 1, 2, 3
     n_dim: int = 3
+
+    def __str__(self) -> str:
+        return f'planaria_test_c{self.noise_level}'
 
     def _create_image_index(self) -> Dict[str, Union[List[str], np.ndarray]]:
         gt_path = self.path / 'test_data/GT/*.tif'

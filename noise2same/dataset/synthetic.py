@@ -34,6 +34,9 @@ class SyntheticDataset(AbstractNoiseDataset):
     n_repeats: int = 1  # repeat dataset for stable testing
     fixed: bool = False  # if True, read prepared noisy images from disk
 
+    def __str__(self) -> str:
+        return f'synthetic_srgb_{self.name}_{self.noise_type}_{self.noise_param}'
+
     def _validate(self) -> None:
         assert self.noise_type in ("gaussian", "poisson", "none")
         assert isinstance(self.noise_param, int) or \

@@ -23,6 +23,9 @@ class FMDDataset(AbstractNoiseDataset):
     part: str = "cf_fish"
     add_blur_and_noise: bool = False
 
+    def __str__(self) -> str:
+        return f'fmd_{self.mode}_{self.part}{"_deconv" if self.add_blur_and_noise else ""}'
+
     def _validate(self) -> None:
         assert self.mode in ("train", "val", "test")
         assert self.part in ("cf_fish", "cf_mice", "tp_mice")

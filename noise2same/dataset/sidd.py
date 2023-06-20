@@ -75,6 +75,9 @@ class SIDDDataset(AbstractNoiseDataset):
     standardize_by_channel: bool = True
     n_channels: int = 3
 
+    def __str__(self) -> str:
+        return f'sidd_{self.mode}'
+
     def _validate(self) -> None:
         assert self.mode in ("train", "val", "test")
 

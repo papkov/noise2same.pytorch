@@ -112,6 +112,7 @@ def test_dataset_instantiation(dataset_name: str, expected_dataclass: type, expe
 
         dataset = instantiate(cfg.dataset)
         assert isinstance(dataset, expected_dataclass)
+        assert str(dataset) is not None and str(dataset) != 'dataset'
         train_image = dataset[0]
         assert train_image is not None
 
@@ -145,6 +146,7 @@ def test_get_test_dataset_and_gt(dataset_name: str, expected_dataclass: type):
 
     dataset, gt = get_test_dataset_and_gt(cfg)
     assert isinstance(dataset, expected_dataclass)
+    assert str(dataset) is not None and str(dataset) != 'dataset'
     assert gt is not None
     noisy_image, gt_image = dataset[0], gt[0]
     assert noisy_image is not None
