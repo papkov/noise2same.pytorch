@@ -1,13 +1,13 @@
 from itertools import product
-from typing import Any, List, Optional, Tuple, Union, Dict
-from torch import Tensor as T
+from typing import Any, List, Optional, Tuple, Union
 
 import albumentations as albu
 import numpy as np
+import torch
 from numpy.random.mtrand import normal, uniform
 from scipy.signal import convolve, convolve2d
 from skimage.exposure import rescale_intensity
-from skimage.util import random_noise
+from torch import Tensor as T
 
 from noise2same.dataset import transforms as t3d
 from noise2same.psf.microscope_psf import SimpleMicroscopePSF
@@ -46,19 +46,25 @@ def get_stratified_coords(
 
 
 def mask_like_image(
-    image: np.ndarray, mask_percentage: float = 0.5, channels_last: bool = True
-) -> np.ndarray:
+        image: Union[np.ndarray, T], mask_percentage: float = 0.5, channels_last: bool = True
+) -> Union[np.ndarray, T]:
     """
     Generates a stratified mask of image.shape
-    :param image: ndarray, reference image to mask
+    :param image: ndarray or tensor, reference image to mask
     :param mask_percentage: float, percentage of pixels to mask, default 0.5%
     :param channels_last: bool, true to process image as channel-last (256, 256, 3)
-    :return: ndarray, mask
+    :return: ndarray or tensor, mask
     """
     # todo understand generator_val
     # https://github.com/divelab/Noise2Same/blob/8cdbfef5c475b9f999dcb1a942649af7026c887b/models.py#L130
-    mask = np.zeros_like(image)
-    n_channels = image.shape[-1 if channels_last else 0]
+    if isinstance(image, np.ndarray):
+        mask = np.zeros_like(image)
+        n_channels = image.shape[-1 if channels_last else 0]
+    elif isinstance(image, T):
+        mask = torch.zeros_like(image)
+        n_channels = image.shape[0]
+    else:
+        raise TypeError(f"Unknown type of image: {type(image)}")
     channel_shape = image.shape[:-1] if channels_last else image.shape[1:]
     n_dim = len(channel_shape)
     # I think, here comes a mistake in original implementation (np.sqrt used both for 2D and 3D images)
