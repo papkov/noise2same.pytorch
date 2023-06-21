@@ -168,7 +168,7 @@ def evaluate(
         scores.to_csv(evaluation_dir / "scores.csv")
         np.savez(evaluation_dir / "predictions.npz", **predictions)
 
-    if verbose:
+    if verbose and any(ds.n_repeats > 1 for ds in datasets):
         print("\nBefore averaging over repeats:")
         pprint(scores.groupby(["dataset_name", "repeat_id"]).mean())
     scores = scores.groupby("dataset_name").mean().drop(columns="repeat_id")
