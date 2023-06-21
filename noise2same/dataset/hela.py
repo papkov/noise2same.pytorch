@@ -48,3 +48,17 @@ class HelaShallowDataset(AbstractNoiseDataset):
         image_id = i // self.image_index['image'].shape[1]
         plane_id = i % self.image_index['image'].shape[1]
         return {k: v[image_id, plane_id] for k, v in self.image_index.items()}
+
+
+@dataclass
+class HelaDataset(HelaShallowDataset):
+    n_dim = 3
+
+    def __str__(self) -> str:
+        return f'hela_{self.mode}_ch{self.channel_id}'
+
+    def get_number_of_images(self) -> int:
+        return self.image_index['image'].shape[0]
+
+    def _get_image(self, i: int) -> Dict[str, np.ndarray]:
+        return {k: v[i] for k, v in self.image_index.items()}
