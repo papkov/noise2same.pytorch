@@ -14,11 +14,9 @@ Array = Union[ndarray, T]
 @dataclass
 class BaseTransform3D(ABC):
     p: float = 0.5
-    axis: Ints = 0
     seed: int = 43
-    k: int = 0
     done: bool = False
-    channel_axis: Optional[Ints] = None
+    channel_axis: Optional[Ints] = (0, 1)  # this assumes CxDxWxH, for DxWxHxC use (0, 3)
 
     def __post_init__(self):
         np.random.seed(self.seed)
@@ -53,8 +51,9 @@ class BaseTransform3D(ABC):
                 return x
 
 
+@dataclass
 class RandomFlip(BaseTransform3D):
-    channel_axis: Ints = (0, 1)
+    axis: Ints = 0  # axis to apply transform, can be resampled
 
     def resample(self, x: ndarray) -> None:
         dims = np.arange(x.ndim)
@@ -68,8 +67,10 @@ class RandomFlip(BaseTransform3D):
         return np.flip(x, axis=self.axis).copy()
 
 
+@dataclass
 class RandomRotate90(BaseTransform3D):
-    channel_axis: Ints = (0, 1)
+    axis: Ints = 0  # axis to apply transform, can be resampled
+    k: int = 0  # transform parameter (e.g., rotation repeats), can be resampled
 
     def apply(self, x: ndarray) -> ndarray:
         return np.rot90(x, k=self.k, axes=self.axis).copy()
@@ -84,9 +85,10 @@ class RandomRotate90(BaseTransform3D):
         self.axis = (dims[a], dims[a - 1])
 
 
+@dataclass
 class RandomCrop(BaseTransform3D):
     p: float = 1
-    patch_size: Union[None, int, Tuple[int, ...]] = 64
+    patch_size: Optional[Union[int, Tuple[int, ...]]] = 64
     start: Optional[Union[int, List[int]]] = None
 
     def patch_tuple(self, x: Array) -> Tuple[int, ...]:
@@ -107,7 +109,8 @@ class RandomCrop(BaseTransform3D):
                 for i, s in enumerate(x.shape)
             )
         else:
-            assert len(self.patch_size) == x.squeeze().n_dim
+            assert len(self.patch_size) == len(x.shape) - 1, f"Patch size {self.patch_size} " \
+                                                             f"must have the same dimension as input {x.shape}"
             return self.patch_size
 
     def slice(self, x: Array) -> Tuple[slice, ...]:
@@ -129,7 +132,7 @@ class RandomCrop(BaseTransform3D):
     def resample(self, x: ndarray) -> None:
         patch_size = self.patch_tuple(x)
         self.start = [
-            np.random.choice(s - p) if p is not None else p
+            np.random.choice(s - p + 1) if p is not None else p
             for s, p in zip(x.shape, patch_size)
         ]
 
@@ -138,7 +141,9 @@ class RandomCrop(BaseTransform3D):
         return x[s]
 
 
+@dataclass
 class CenterCrop(RandomCrop):
+
     def slice(self, x: Array) -> Tuple[slice, ...]:
         patch_size = self.patch_tuple(x)
         center = [s // 2 if p is not None else p for s, p in zip(x.shape, patch_size)]
@@ -162,13 +167,13 @@ class Compose:
 
     def __call__(self, **data):
         out = data.copy()
-        for key in data.keys() & self.target_keys:
+        for i, key in enumerate(data.keys() & self.target_keys):
             ret = out[key]
             for t in self.transforms:
                 if t is not None:
                     if self.debug:
                         print(f"Apply {t}")
-                    ret = t(ret, resample=key == 'image')
+                    ret = t(ret, resample=i == 0)
             out[key] = ret
         return out
 
