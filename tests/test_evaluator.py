@@ -7,6 +7,7 @@ from hydra.utils import instantiate
 from omegaconf import OmegaConf
 from torch.utils.data import DataLoader
 
+from evaluate import evaluate
 from noise2same.dataset.getter import expand_dataset_cfg
 from noise2same.denoiser import Denoiser
 from noise2same.evaluator import Evaluator
@@ -20,6 +21,9 @@ class SubsetAttr(Subset):
 
     def __getattr__(self, item):
         return getattr(self.dataset, item)
+
+    def __str__(self) -> str:
+        return str(self.dataset)
 
 
 @pytest.fixture(scope="module", autouse=True)
@@ -112,4 +116,26 @@ def test_tiled_dataset_evaluation(dataset_name: str):
     factory = instantiate(cfg.factory_test) if 'factory_test' in cfg else None
     evaluator = Evaluator(Denoiser(), device='cpu')
     outputs = evaluator.evaluate(dataset, factory, metrics=('rmse',))
+    assert outputs is not None
+
+
+@pytest.mark.parametrize('dataset_name', ['bsd68', 'synthetic', 'imagenet'])
+def test_full_evaluation(dataset_name: str):
+    with initialize(version_base=None, config_path="../config/experiment"):
+        overrides = ['+backbone_name=unet', '+backbone.depth=3', '+training.amp=True',
+                     '+training.num_workers=8', '+cwd=${hydra.runtime.cwd}']
+        if dataset_name == 'synthetic':
+            # Do not use cache for testing because of memory issues
+            overrides.append('dataset.cached=null')
+
+        cfg = compose(config_name=dataset_name, return_hydra_config=True, overrides=overrides)
+        OmegaConf.resolve(cfg)  # resolves interpolations as ${hydra.runtime.cwd}
+        expand_dataset_cfg(cfg)
+        print('\n', OmegaConf.to_yaml(cfg))
+
+    dataset = instantiate(cfg.dataset_test)
+    dataset = SubsetAttr(dataset, range(min(2, len(dataset))))
+    factory = instantiate(cfg.factory_test) if 'factory_test' in cfg else None
+    evaluator = Evaluator(Denoiser(), device='cpu')
+    outputs = evaluate(evaluator, dataset, cfg, factory)
     assert outputs is not None
