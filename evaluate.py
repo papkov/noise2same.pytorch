@@ -16,7 +16,6 @@ from tqdm.auto import tqdm
 from noise2same import util
 from noise2same.dataset.getter import (
     get_planaria_dataset_and_gt,
-    get_test_dataset_and_gt,
 )
 from noise2same.dataset.tiling import TiledImageFactory
 from noise2same.evaluator import Evaluator
@@ -197,11 +196,6 @@ def main(train_dir: Path, checkpoint: str = 'last', other_args: list = None) -> 
     cwd = Path(os.getcwd())
     cfg.cwd = cwd
     OmegaConf.resolve(cfg)
-
-    dataset, ground_truth = None, None
-    if cfg.experiment not in ("planaria",):
-        # For some datasets we need custom loading
-        dataset, ground_truth = get_test_dataset_and_gt(cfg)
 
     # Model
     backbone = instantiate(cfg.backbone)

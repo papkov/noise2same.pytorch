@@ -32,25 +32,6 @@ def expand_dataset_cfg(cfg: DictConfig) -> None:
                     cfg[dataset_key] = OmegaConf.merge(cfg.dataset, cfg[dataset_key])
 
 
-def get_test_dataset_and_gt(cfg: DictConfig) -> Tuple[Dataset, List[np.ndarray]]:
-    """
-    Collect test dataset and ground truth specified in the configuration
-    :param cfg: DictConfig, training/evaluation configuration object
-    :return: Tuple[Dataset, np.ndarray]
-    """
-
-    dataset_test = instantiate(cfg.dataset_test)
-    # TODO this is a hack, should be fixed in the dataset
-    if isinstance(dataset_test, AbstractNoiseDataset3DLarge):
-        ground_truth = dataset_test.ground_truth.squeeze()
-    else:
-        # TODO move ground truth access into evaluation
-        ground_truth = [elem['ground_truth'].numpy().squeeze() for elem in dataset_test]
-    # if not isinstance(dataset_test.ground_truth[0], np.ndarray):
-    #     dataset_test.ground_truth = [dataset_test._get_image(image) for image in dataset_test.ground_truth]
-    return dataset_test, ground_truth
-
-
 def get_planaria_dataset_and_gt(filename_gt: str) -> Tuple[Dict[str, Dataset], np.ndarray]:
     """
     Collect Planaria dataset and ground truth

@@ -11,7 +11,7 @@ from hydra.utils import instantiate
 from omegaconf import OmegaConf
 
 from noise2same.dataset import *
-from noise2same.dataset.getter import get_test_dataset_and_gt, expand_dataset_cfg
+from noise2same.dataset.getter import expand_dataset_cfg
 from noise2same.dataset.util import mask_like_image, add_noise
 from noise2same.util import crop_as_gt
 
@@ -124,44 +124,7 @@ def test_dataset_instantiation(
         dataset = instantiate(cfg.dataset)
         assert isinstance(dataset, expected_dataclass)
         assert str(dataset) is not None and str(dataset) != 'dataset'
-        train_image = dataset[0]
-        assert train_image is not None
-
-
-@pytest.mark.parametrize('dataset_name,expected_dataclass',
-                         [('bsd68', BSD68Dataset),
-                          # ('hanzi', HanziDataset), # TODO fix memory issue
-                          ('imagenet', ImagenetTestDataset),
-                          ('microtubules', MicrotubulesDataset),
-                          ('microtubules_generated', MicrotubulesTestDataset),
-                          ('fmd', FMDDataset),
-                          ('fmd_deconvolution', FMDDataset),
-                          # ('planaria', PlanariaTestDataset), # TODO fix memory issue
-                          # ('sidd', SIDDDataset), # TODO move dataset
-                          ('synthetic', SyntheticTestDataset),
-                          ('synthetic_grayscale', SyntheticTestDataset),
-                          ('ssi', SSIDataset),
-                          ('hela_shallow', HelaShallowDataset),
-                          ])
-def test_get_test_dataset_and_gt(dataset_name: str, expected_dataclass: type):
-    with initialize(version_base=None, config_path="../config/experiment"):
-        overrides = ['+backbone_name=unet', '+backbone.depth=3', '+cwd=${hydra.runtime.cwd}']
-        if dataset_name == 'synthetic':
-            # Do not use cache for testing because of memory issues
-            overrides.append('dataset.cached=null')
-
-        cfg = compose(config_name=dataset_name, return_hydra_config=True, overrides=overrides)
-        OmegaConf.resolve(cfg)  # resolves interpolations as ${hydra.runtime.cwd}
-        expand_dataset_cfg(cfg)
-        print('\n', OmegaConf.to_yaml(cfg))
-
-    dataset, gt = get_test_dataset_and_gt(cfg)
-    assert isinstance(dataset, expected_dataclass)
-    assert str(dataset) is not None and str(dataset) != 'dataset'
-    assert gt is not None
-    noisy_image, gt_image = dataset[0], gt[0]
-    assert noisy_image is not None
-    assert gt_image is not None
+        assert dataset[0] is not None
 
 
 @pytest.mark.parametrize('n_repeats', (1, 5, 10))
