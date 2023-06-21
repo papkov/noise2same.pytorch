@@ -78,25 +78,39 @@ def mask_like_image(
     return mask
 
 
-def training_augmentations_2d(crop: int = 64):
+def training_augmentations_2d(crop: int = 64) -> List[albu.BasicTransform]:
     return [
-            albu.RandomCrop(width=crop, height=crop, p=1),
-            albu.RandomRotate90(p=0.5),
-            albu.Flip(p=0.5),
-        ]
+        albu.RandomCrop(width=crop, height=crop, p=1),
+        albu.RandomRotate90(p=0.5),
+        albu.Flip(p=0.5),
+    ]
 
 
-def validation_transforms_2d(crop: int = 64):
+def validation_transforms_2d(crop: int = 64) -> List[albu.BasicTransform]:
     return [
-            albu.CenterCrop(width=crop, height=crop, p=1)
-        ]
+        albu.CenterCrop(width=crop, height=crop, p=1)
+    ]
 
 
-def training_augmentations_3d():
-    return [
-            t3d.RandomRotate90(p=0.5, axis=(2, 3), channel_axis=(0, 1)),
-            t3d.RandomFlip(p=0.5, axis=(2, 3), channel_axis=(0, 1)),
-        ]
+def training_augmentations_3d(
+        crop: Optional[Union[int, Tuple[int, ...]]] = None,
+        channel_axis: Optional[Union[int, Tuple[int, ...]]] = (0, 1),
+) -> List[t3d.BaseTransform3D]:
+    transforms = [
+        t3d.RandomRotate90(p=0.5, axis=(2, 3), channel_axis=channel_axis),
+        t3d.RandomFlip(p=0.5, axis=(2, 3), channel_axis=channel_axis),
+    ]
+    if crop is not None:
+        # prepend transforms list with random crop if needed
+        transforms = [t3d.RandomCrop(patch_size=crop)] + transforms
+    return transforms
+
+
+def validation_transforms_3d(
+        crop: Optional[Union[int, Tuple[int, ...]]] = None,
+        channel_axis: Optional[Union[int, Tuple[int, ...]]] = (0, 1),
+) -> List[t3d.BaseTransform3D]:
+    return [t3d.CenterCrop(patch_size=crop, channel_axis=channel_axis)]
 
 
 def _raise(e):
