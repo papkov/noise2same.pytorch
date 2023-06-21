@@ -17,6 +17,7 @@ from noise2same import util
 from noise2same.dataset.getter import (
     get_planaria_dataset_and_gt,
 )
+from noise2same.dataset.abc import AbstractNoiseDataset
 from noise2same.dataset.tiling import TiledImageFactory
 from noise2same.evaluator import Evaluator
 from noise2same.psf.psf_convolution import instantiate_psf
@@ -136,7 +137,7 @@ def get_scores(
 
 def evaluate(
         evaluator: Evaluator,
-        dataset: Dataset,
+        dataset: AbstractNoiseDataset,
         cfg: DictConfig,
         factory: Optional[TiledImageFactory] = None,
         train_dir: Optional[str] = None,
