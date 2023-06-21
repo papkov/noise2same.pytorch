@@ -110,7 +110,6 @@ class AbstractNoiseDataset(Dataset, ABC):
         """
         Apply transforms to both image and mask
         :param image:
-        :param mask:
         :return:
         """
         return self.transforms(**image)
@@ -222,10 +221,11 @@ class AbstractNoiseDataset3DLarge(AbstractNoiseDataset, ABC):
         """
         image = self._get_image(i)
         image = self._handle_image(image)
-        image['mask'] = self._mask_like_image(image['image'])
         ret = self._apply_transforms(image)
         # standardization/normalization step removed since we process the full-sized image
         ret["mean"], ret["std"] = self.mean, self.std
+        # TODO make mask optional
+        ret['mask'] = mask_like_image(ret['image'], mask_percentage=self.mask_percentage, channels_last=False)
         return ret
 
     def _get_image(self, i: int) -> Dict[str, np.ndarray]:

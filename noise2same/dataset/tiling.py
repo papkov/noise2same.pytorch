@@ -1,15 +1,16 @@
 from dataclasses import dataclass
 from typing import Dict, Union, List, Tuple, Any, Iterable, Optional
 
-from albumentations import BasicTransform, Compose
-from torch.utils.data import DataLoader
-from torch import Tensor as T
-import torch
 import numpy as np
-
+import torch
+from albumentations import BasicTransform, Compose
 from pytorch_toolbelt.inference.tiles import ImageSlicer, TileMerger
-from noise2same.dataset.abc import AbstractNoiseDataset
+from torch import Tensor as T
+from torch.utils.data import DataLoader
+
 from noise2same.dataset import transforms as t3d
+from noise2same.dataset.abc import AbstractNoiseDataset
+from noise2same.dataset.util import mask_like_image
 
 
 @dataclass
@@ -87,7 +88,6 @@ class TiledImageDataset(AbstractNoiseDataset):
         # TODO unify with the original getitem and remove
         image = self._get_image(i)
         image = self._handle_image(image)
-        image['mask'] = self._mask_like_image(image['image'])
         ret = self._apply_transforms(image)
         # standardization/normalization step removed since we process the full-sized image
         ret["mean"], ret["std"] = (
@@ -95,6 +95,9 @@ class TiledImageDataset(AbstractNoiseDataset):
             torch.tensor(self.mean if self.standardize else 0),
             torch.tensor(self.std if self.standardize else 1),
         )
+
+        # TODO make mask optional
+        ret['mask'] = mask_like_image(ret['image'], mask_percentage=self.mask_percentage, channels_last=False)
         return ret
 
     def _create_image_index(self) -> Dict[str, Union[List[str], np.ndarray]]:
