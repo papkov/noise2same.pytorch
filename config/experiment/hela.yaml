@@ -6,17 +6,20 @@ dataset:
   _target_: noise2same.dataset.HelaDataset
   path: ${cwd}/data/hela/
   n_channels: 1
+  n_dim: 3
   channel_id: 3
   transforms:
     _target_: noise2same.dataset.util.training_augmentations_3d
-    crop: [ 30, 256, 256 ]
+    crop: [ 30, 128, 128 ]
+    channel_axis: [ 0, 3 ]
   input_size: ${.transforms.crop}  # needed for some models
 
 dataset_valid:
   mode: val
   transforms:
     _target_: noise2same.dataset.util.validation_transforms_3d
-    crop: [ 30, 512, 512 ]
+    crop: [ 30, 256, 256 ]
+    channel_axis: [ 0, 3 ]
   input_size: null
 
 dataset_test:
@@ -26,9 +29,9 @@ dataset_test:
 
 factory_test:
   _target_: noise2same.dataset.TiledImageFactory
-  tile_size: 128
-  tile_step: 96
-  crop_border: 8
+  tile_size: [ 30, 256, 256 ]
+  tile_step: [ 30, 192, 192 ]
+  crop_border: [ 0, 32, 32 ]
   weight: 'pyramid'
   batch_size: 8
 
@@ -39,7 +42,7 @@ backbone:
 training:
   steps_per_epoch: 100
   steps: 10000
-  batch_size: 32
+  batch_size: 8
   val_batch_size: 1
   num_workers: 4
   monitor: rec_mse
