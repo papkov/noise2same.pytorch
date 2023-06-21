@@ -10,7 +10,7 @@ dataset:
   channel_id: 3
   transforms:
     _target_: noise2same.dataset.util.training_augmentations_3d
-    crop: [ 30, 128, 128 ]
+    crop: [ 32, 128, 128 ]
     channel_axis: [ 0, 3 ]
   input_size: ${.transforms.crop}  # needed for some models
 
@@ -18,7 +18,7 @@ dataset_valid:
   mode: val
   transforms:
     _target_: noise2same.dataset.util.validation_transforms_3d
-    crop: [ 30, 256, 256 ]
+    crop: [ 32, 256, 256 ]
     channel_axis: [ 0, 3 ]
   input_size: null
 
@@ -29,9 +29,9 @@ dataset_test:
 
 factory_test:
   _target_: noise2same.dataset.TiledImageFactory
-  tile_size: [ 30, 256, 256 ]
-  tile_step: [ 30, 192, 192 ]
-  crop_border: [ 0, 32, 32 ]
+  tile_size: [ 32, 256, 256 ]
+  tile_step: [ 32, 192, 192 ]
+  crop_border: [ 0, 16, 16 ]
   weight: 'pyramid'
   batch_size: 8
 

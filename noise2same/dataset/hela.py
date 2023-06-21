@@ -54,6 +54,14 @@ class HelaShallowDataset(AbstractNoiseDataset):
 class HelaDataset(HelaShallowDataset):
     n_dim = 3
 
+    def _create_image_index(self) -> Dict[str, Union[List[str], np.ndarray]]:
+        image_index = super()._create_image_index()
+
+        # TODO replace with PadIfNeeded for 3D data
+        image_index = {k: np.pad(v, ((0, 0), (1, 1), (0, 0), (0, 0)), mode='reflect')
+                       for k, v in image_index.items()}
+        return image_index
+
     def __str__(self) -> str:
         return f'hela_{self.mode}_ch{self.channel_id}'
 
