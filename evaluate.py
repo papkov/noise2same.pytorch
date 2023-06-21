@@ -142,6 +142,7 @@ def evaluate(
         train_dir: Optional[str] = None,
         save_results: bool = True,
         verbose: bool = True,
+        keep_images: bool = False,
 ):
     train_dir = train_dir or ''
     scores = evaluator.evaluate(dataset, factory,
@@ -149,7 +150,8 @@ def evaluate(
                                 half=cfg.training.amp,
                                 empty_cache=False,
                                 key='image',
-                                keep_images=True, )
+                                keep_images=keep_images,
+                                )
     predictions = {'image': [s.pop('image') for s in scores]}
     scores = pd.DataFrame(scores)
 
