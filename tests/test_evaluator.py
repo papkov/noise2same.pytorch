@@ -134,7 +134,8 @@ def test_full_evaluation(dataset_name: str):
         print('\n', OmegaConf.to_yaml(cfg))
 
     dataset = instantiate(cfg.dataset_test)
-    dataset = SubsetAttr(dataset, range(min(2, len(dataset))))
+    if not dataset_name == 'synthetic':
+        dataset = SubsetAttr(dataset, range(min(2, len(dataset))))
     factory = instantiate(cfg.factory_test) if 'factory_test' in cfg else None
     evaluator = Evaluator(Denoiser(), device='cpu')
     outputs = evaluate(evaluator, dataset, cfg, factory)
