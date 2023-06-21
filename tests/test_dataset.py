@@ -78,37 +78,48 @@ def test_noise_addition(
     assert image.dtype == noisy.dtype
 
 
-@pytest.mark.parametrize('dataset_name,expected_dataclass,expected_dataclass_valid',
-                         [('bsd68', BSD68Dataset, BSD68Dataset),
-                          # ('hanzi', HanziDataset, HanziDataset), # TODO fix memory issue
-                          # ('imagenet', ImagenetDataset, ImagenetDataset), # TODO fix memory issue
-                          ('microtubules', MicrotubulesDataset, None),
-                          ('microtubules_generated', MicrotubulesDataset, None),
-                          ('fmd', FMDDataset, FMDDataset),
-                          ('fmd_deconvolution', FMDDataset, FMDDataset),
-                          # ('planaria', PlanariaDataset, PlanariaDataset), # TODO fix memory issue
-                          # ('sidd', SIDDDataset, SIDDDataset), # TODO move dataset
-                          ('synthetic', ImagenetSyntheticDataset, Set14SyntheticDataset),
-                          ('synthetic_grayscale', BSD400SyntheticDataset, BSD68SyntheticDataset),
-                          ('ssi', SSIDataset, None),
-                          ('hela_shallow', HelaShallowDataset, HelaShallowDataset),
+@pytest.mark.parametrize('dataset_name,expected_dataclass,expected_dataclass_valid,expected_dataclass_test',
+                         [('bsd68', BSD68Dataset, BSD68Dataset, BSD68Dataset),
+                          # ('hanzi', HanziDataset, HanziDataset, HanziDataset), # TODO fix memory issue
+                          # ('imagenet', ImagenetDataset, ImagenetDataset, ImagenetTestDataset), # TODO fix memory issue
+                          ('microtubules', MicrotubulesDataset, None, MicrotubulesDataset),
+                          ('microtubules_generated', MicrotubulesDataset, None, MicrotubulesTestDataset),
+                          ('fmd', FMDDataset, FMDDataset, FMDDataset),
+                          ('fmd_deconvolution', FMDDataset, FMDDataset, FMDDataset),
+                          # ('planaria', PlanariaDataset, PlanariaDataset, PlanariaTestDataset), # TODO fix memory issue
+                          # ('sidd', SIDDDataset, SIDDDataset, SIDDDataset), # TODO move dataset
+                          ('synthetic', ImagenetSyntheticDataset, Set14SyntheticDataset, SyntheticTestDataset),
+                          ('synthetic_grayscale', BSD400SyntheticDataset, BSD68SyntheticDataset, SyntheticTestDataset),
+                          ('ssi', SSIDataset, None, SSIDataset),
+                          ('hela_shallow', HelaShallowDataset, HelaShallowDataset, HelaShallowDataset),
+                          ('hela', HelaDataset, HelaDataset, HelaDataset),
                           ])
-def test_dataset_instantiation(dataset_name: str, expected_dataclass: type, expected_dataclass_valid: Optional[type]):
+def test_dataset_instantiation(
+        dataset_name: str,
+        expected_dataclass: type,
+        expected_dataclass_valid: Optional[type],
+        expected_dataclass_test: Optional[type]
+):
     with initialize(version_base=None, config_path="../config/experiment", job_name="test"):
         cfg = compose(config_name=dataset_name, return_hydra_config=True, overrides=["+cwd=${hydra.runtime.cwd}"])
         OmegaConf.resolve(cfg)  # resolves interpolations as ${hydra.runtime.cwd}
         expand_dataset_cfg(cfg)
+
+        if 'cached' in cfg.dataset:
+            # Do not use cache for testing because of memory issues
+            cfg.dataset.cached = ''
+
         print('\n', OmegaConf.to_yaml(cfg))
 
         if 'dataset_valid' in cfg:
             dataset_valid = instantiate(cfg.dataset_valid)
             assert isinstance(dataset_valid, expected_dataclass_valid)
-            val_image = dataset_valid[0]
-            assert val_image is not None
+            assert dataset_valid[0] is not None
 
-        if 'cached' in cfg.dataset:
-            # Do not use cache for testing because of memory issues
-            cfg.dataset.cached = ''
+        if 'dataset_test' in cfg:
+            dataset_test = instantiate(cfg.dataset_test)
+            assert isinstance(dataset_test, expected_dataclass_test)
+            assert dataset_test[0] is not None
 
         dataset = instantiate(cfg.dataset)
         assert isinstance(dataset, expected_dataclass)

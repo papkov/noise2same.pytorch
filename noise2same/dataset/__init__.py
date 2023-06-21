@@ -10,4 +10,4 @@ from noise2same.dataset.synthetic import ImagenetSyntheticDataset, KodakSyntheti
     BSD300SyntheticDataset, SyntheticTestDataset
 from noise2same.dataset.synthetic_grayscale import BSD400SyntheticDataset, BSD68SyntheticDataset, Set12SyntheticDataset
 from noise2same.dataset.tiling import TiledImageFactory, TiledImageDataset
-from noise2same.dataset.hela import HelaShallowDataset
+from noise2same.dataset.hela import HelaShallowDataset, HelaDataset

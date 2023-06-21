@@ -65,7 +65,7 @@ def test_regular_dataset_inference(dataset_name: str):
         assert np.allclose(pred, orig)
 
 
-@pytest.mark.parametrize('dataset_name', ['imagenet', 'planaria'])
+@pytest.mark.parametrize('dataset_name', ['imagenet', 'planaria', 'hela'])
 def test_tiled_dataset_inference(dataset_name: str):
     with initialize(version_base=None, config_path="../config/experiment"):
         overrides = ['+backbone_name=unet', '+backbone.depth=3', '+cwd=${hydra.runtime.cwd}']
@@ -98,7 +98,7 @@ def test_tiled_dataset_inference(dataset_name: str):
         assert np.allclose(pred, orig)
 
 
-@pytest.mark.parametrize('dataset_name', ['imagenet', 'planaria'])
+@pytest.mark.parametrize('dataset_name', ['imagenet', 'planaria', 'hela'])
 def test_tiled_dataset_evaluation(dataset_name: str):
     with initialize(version_base=None, config_path="../config/experiment"):
         overrides = ['+backbone_name=unet', '+backbone.depth=3', '+cwd=${hydra.runtime.cwd}']
