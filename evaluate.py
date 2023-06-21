@@ -197,12 +197,11 @@ def main(train_dir: Path, checkpoint: str = 'last', other_args: list = None) -> 
     cfg.cwd = cwd
     OmegaConf.resolve(cfg)
 
-    # Model
     backbone = instantiate(cfg.backbone)
     head = instantiate(cfg.head)
-    denoiser = instantiate(cfg.denoiser, backbone=backbone, head=head, **instantiate_psf(cfg, dataset))
     factory = instantiate(cfg.factory_test) if 'factory_test' in cfg else None
     dataset = instantiate(cfg.dataset_test)
+    denoiser = instantiate(cfg.denoiser, backbone=backbone, head=head, **instantiate_psf(cfg, dataset))
 
     checkpoint_path = train_dir / Path(f"checkpoints/model{'_last' if checkpoint == 'last' else ''}.pth")
 
