@@ -1,6 +1,7 @@
 from dataclasses import dataclass
-from typing import Dict, Union, List, Tuple, Any, Iterable
+from typing import Dict, Union, List, Tuple, Any, Iterable, Optional
 
+from albumentations import BasicTransform, Compose
 from torch.utils.data import DataLoader
 from torch import Tensor as T
 import torch
@@ -8,6 +9,7 @@ import numpy as np
 
 from pytorch_toolbelt.inference.tiles import ImageSlicer, TileMerger
 from noise2same.dataset.abc import AbstractNoiseDataset
+from noise2same.dataset import transforms as t3d
 
 
 @dataclass
@@ -18,6 +20,16 @@ class TiledImageFactory:
     weight: str = 'pyramid'
     batch_size: int = 1
     num_workers: int = 8
+    transforms: Optional[
+        Union[
+            List[BasicTransform],
+            Compose,
+            List[Compose],
+            List[t3d.BaseTransform3D],
+            t3d.Compose,
+            List[t3d.Compose],
+        ]
+    ] = None
 
     def produce(self, image: Dict[str, Union[np.ndarray, T]]) -> Tuple[DataLoader, TileMerger]:
         self.tile_size, self.tile_step, self.crop_border = map(
@@ -33,7 +45,8 @@ class TiledImageFactory:
             crop_border=self.crop_border,
             weight=self.weight,
             n_channels=image['image'].shape[0],
-            n_dim=len(image['shape']) - 1
+            n_dim=len(image['shape']) - 1,
+            transforms=self.transforms
         )
         loader = DataLoader(
             dataset,
