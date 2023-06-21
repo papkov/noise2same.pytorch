@@ -10,7 +10,7 @@ import numpy as np
 import pandas as pd
 from hydra.utils import instantiate
 from omegaconf import OmegaConf, DictConfig
-from torch.utils.data import DataLoader, Dataset
+from torch.utils.data import DataLoader, Dataset, ConcatDataset
 from tqdm.auto import tqdm
 
 from noise2same import util
@@ -154,12 +154,12 @@ def evaluate(
     predictions = {'image': [s.pop('image') for s in scores]}
     scores = pd.DataFrame(scores)
 
-    if cfg.experiment in ("synthetic", "synthetic_grayscale",):
-        # Label each score with its dataset name and repeat id
-        scores = scores.assign(
-            dataset_name=np.concatenate([[ds.name] * len(ds) for ds in dataset.datasets]),
-            repeat_id=np.concatenate([np.arange(len(ds)) // (len(ds) // ds.n_repeats) for ds in dataset.datasets])
-        )
+    # Label each score with its dataset name and repeat id
+    datasets = [dataset] if not isinstance(dataset, ConcatDataset) else dataset.datasets
+    scores = scores.assign(
+        dataset_name=np.concatenate([[str(ds)] * len(ds) for ds in datasets]),
+        repeat_id=np.concatenate([np.arange(len(ds)) // (len(ds) // ds.n_repeats) for ds in datasets])
+    )
     evaluation_dir = Path(train_dir) / f'evaluate' / datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
     evaluation_dir.mkdir(parents=True, exist_ok=True)
 
@@ -168,22 +168,17 @@ def evaluate(
         scores.to_csv(evaluation_dir / "scores.csv")
         np.savez(evaluation_dir / "predictions.npz", **predictions)
 
-    if cfg.experiment in ("planaria",):
-        scores = scores.groupby("c").mean()
-    elif cfg.experiment in ("synthetic", "synthetic_grayscale",):
-        if verbose:
-            print("\nBefore averaging over repeats:")
-            pprint(scores.groupby(["dataset_name", "repeat_id"]).mean())
-        scores = scores.groupby("dataset_name").mean().drop(columns="repeat_id")
-    else:
-        scores = scores.mean()
+    if verbose:
+        print("\nBefore averaging over repeats:")
+        pprint(scores.groupby(["dataset_name", "repeat_id"]).mean())
+    scores = scores.groupby("dataset_name").mean().drop(columns="repeat_id")
 
     if verbose:
         print("\nEvaluation results:")
         pprint(scores)
 
     scores = scores.to_dict()
-    if cfg.experiment in ("synthetic", "synthetic_grayscale", "planaria",):
+    if isinstance(dataset, ConcatDataset):
         # Flatten scores dict as "metric.dataset" to make it compatible with wandb
         scores = {f"{metric}.{dataset_name}": score for metric, dataset_dict in scores.items()
                   for dataset_name, score in dataset_dict.items()}
