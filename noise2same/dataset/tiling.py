@@ -84,6 +84,7 @@ class TiledImageDataset(AbstractNoiseDataset):
         :param i: int, index
         :return: dict(image, mask, mean, std, crop)
         """
+        # TODO unify with the original getitem and remove
         image = self._get_image(i)
         image = self._handle_image(image)
         image['mask'] = self._mask_like_image(image['image'])
