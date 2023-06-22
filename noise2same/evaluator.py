@@ -1,6 +1,6 @@
 import time
 from functools import partial
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple, Union
 
 import numpy as np
 import torch
@@ -251,7 +251,7 @@ class Evaluator(object):
             keep_images: bool = False,
             metrics: Tuple[str, ...] = ("rmse", "psnr", "ssim"),
             num_workers: int = 0,
-    ) -> List[Dict[str, np.ndarray]]:
+    ) -> List[Dict[str, Union[float, np.ndarray]]]:
         """
         Run inference for a given dataloader
         :param dataset: AbstractNoiseDataset
