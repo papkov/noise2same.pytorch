@@ -140,6 +140,7 @@ def evaluate(
         dataset: AbstractNoiseDataset,
         cfg: DictConfig,
         factory: Optional[TiledImageFactory] = None,
+        key: str = 'image',
         train_dir: Optional[str] = None,
         save_results: bool = True,
         verbose: bool = True,
@@ -150,7 +151,7 @@ def evaluate(
                                 num_workers=cfg.training.num_workers,
                                 half=cfg.training.amp,
                                 empty_cache=False,
-                                key='image',
+                                key=key,
                                 keep_images=keep_images,
                                 )
     scores = pd.DataFrame(scores)
@@ -168,7 +169,7 @@ def evaluate(
         print("Saving results to", evaluation_dir)
         scores.to_csv(evaluation_dir / "scores.csv")
         if keep_images:
-            predictions = {'image': [s.pop('image', None) for s in scores]}
+            predictions = {key: [s.pop(key, None) for s in scores]}
             np.savez(evaluation_dir / "predictions.npz", **predictions)
 
     if verbose and any(ds.n_repeats > 1 for ds in datasets):
