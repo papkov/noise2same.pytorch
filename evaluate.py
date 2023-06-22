@@ -153,7 +153,6 @@ def evaluate(
                                 key='image',
                                 keep_images=keep_images,
                                 )
-    predictions = {'image': [s.pop('image') for s in scores]}
     scores = pd.DataFrame(scores)
 
     # Label each score with its dataset name and repeat id
@@ -168,7 +167,9 @@ def evaluate(
     if save_results:
         print("Saving results to", evaluation_dir)
         scores.to_csv(evaluation_dir / "scores.csv")
-        np.savez(evaluation_dir / "predictions.npz", **predictions)
+        if keep_images:
+            predictions = {'image': [s.pop('image', None) for s in scores]}
+            np.savez(evaluation_dir / "predictions.npz", **predictions)
 
     if verbose and any(ds.n_repeats > 1 for ds in datasets):
         print("\nBefore averaging over repeats:")
