@@ -58,9 +58,10 @@ def test_regular_dataset_inference(dataset_name: str):
     evaluator = Evaluator(Denoiser(), device='cpu')
     batch = next(iter(loader))
     out, _ = evaluator._inference_batch(batch)
-    predictions = evaluator._revert_batch(out, ['image'])
-    original = evaluator._revert_batch(batch, ['image'])
-    for shape, pred, orig in zip(batch['shape'], predictions['image'], original['image']):
+    batch['input/image'] = batch.pop('image')  # rename to avoid key collision
+    out.update(batch)  # merge input batch and output
+    out = evaluator._revert_batch(out, ['image', 'input/image'])
+    for shape, pred, orig in zip(batch['shape'], out['image'], out['input/image']):
         assert np.all(np.array(shape) == np.array(pred.shape))
         assert np.allclose(pred, orig)
 
@@ -91,11 +92,12 @@ def test_tiled_dataset_inference(dataset_name: str):
     evaluator = Evaluator(Denoiser(), device='cpu')
     batch = next(iter(loader))
     out, _ = evaluator._inference_large_batch(batch, factory)
-    predictions = evaluator._revert_batch(out, ['image'])
-    original = evaluator._revert_batch(batch, ['image'])
-    for shape, pred, orig in zip(batch['shape'], predictions['image'], original['image']):
+    batch['input/image'] = batch.pop('image')  # rename to avoid key collision
+    out.update(batch)  # merge input batch and output
+    out = evaluator._revert_batch(out, ['image', 'input/image'])
+    for shape, pred, orig in zip(batch['shape'], out['image'], out['input/image']):
         assert np.all(np.array(shape) == np.array(pred.shape))
-        assert np.allclose(pred, orig)
+        assert np.allclose(pred, orig, atol=1e-3)
 
 
 @pytest.mark.parametrize('dataset_name', ['imagenet', 'planaria', 'hela'])

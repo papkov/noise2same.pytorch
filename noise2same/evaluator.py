@@ -1,4 +1,5 @@
 import time
+from collections import defaultdict
 from functools import partial
 from typing import Dict, List, Optional, Tuple, Union
 
@@ -10,12 +11,12 @@ from torch.cuda.amp import autocast
 from torch.utils.data import DataLoader, Dataset
 from tqdm import tqdm
 
+from noise2same.backbone.swinir import SwinIR
+from noise2same.backbone.unet import UNet
 from noise2same.dataset.abc import AbstractNoiseDataset
+from noise2same.dataset.tiling import TiledImageFactory
 from noise2same.dataset.util import PadAndCropResizer
 from noise2same.denoiser import Denoiser
-from noise2same.backbone.unet import UNet
-from noise2same.backbone.swinir import SwinIR
-from noise2same.dataset.tiling import TiledImageFactory
 from noise2same.util import crop_as, calculate_scores, detach_to_np
 
 
@@ -277,14 +278,17 @@ class Evaluator(object):
         iterator = tqdm(loader, desc="inference", position=0, leave=True)
         full_inference_time, test_size = 0, 0
         if factory is None:
-            inference = partial(self._inference_batch, half=half, empty_cache=empty_cache, key=key)
+            inference = partial(self._inference_batch, half=half, empty_cache=empty_cache)
         else:
             inference = partial(self._inference_large_batch, factory=factory, half=half,
-                                empty_cache=empty_cache, key=key)
+                                empty_cache=empty_cache, keys=(key,))
         for i, batch in enumerate(iterator):
             out, inference_time = inference(batch)
-            out = self._revert_batch(out, ['image', 'ground_truth'])
-            for j, (pred, gt) in enumerate(zip(out['image'], out['ground_truth'])):
+            batch['input/image'] = batch.pop('image')  # rename to avoid key collision
+            # TODO might not be optimal to copy the batch. Consider popping the keys
+            out.update(batch)  # merge input batch and output
+            out = self._revert_batch(out, [key, 'ground_truth'])
+            for j, (pred, gt) in enumerate(zip(out[key], out['ground_truth'])):
                 if dataset.n_dim == 2:
                     if dataset.data_range == 1:
                         pred = pred * 255
@@ -299,64 +303,81 @@ class Evaluator(object):
                     metrics=metrics,
                 )
                 if keep_images:
-                    scores['image'] = pred
+                    scores[key] = pred
                 outputs.append(scores)
             full_inference_time += inference_time
-            test_size += batch['image'].shape[0]
+            test_size += batch['ground_truth'].shape[0]
 
         print(f"Average inference time: {full_inference_time / test_size * 1000:.2f} ms")
         return outputs
 
     def _inference_large_batch(
-        self,
-        batch: Dict[str, T],
-        factory: TiledImageFactory,
-        half: bool = False,
-        empty_cache: bool = False,
-        key: str = 'image',
-    ) -> Tuple[Dict[str, np.ndarray], float]:
-        output = {'image': []}
+            self,
+            batch: Dict[str, T],
+            factory: TiledImageFactory,
+            half: bool = False,
+            empty_cache: bool = False,
+            keys: Tuple[str, ...] = ('image',)
+    ) -> Tuple[Dict[str, T], float]:
+        """
+        Run inference for a batch of large images. They are split into tiles and then merged back.
+        :param batch: batch of large images
+        :param factory: tiling factory that produces a tiled dataset and a merger
+        :param half: bool, use half precision
+        :param empty_cache: bool, empty CUDA cache after each iteration
+        :param keys: tuple of keys to merge and return
+        :return:
+        """
+        output = defaultdict(list)
         full_inference_time = 0
         for i in range(batch['image'].shape[0]):
             image = {k: v[i] for k, v in batch.items()}
-            loader, merger = factory.produce(image)
+            loader, merger = factory.produce(image, keys)
             iterator = tqdm(loader, desc="Predict")
             for tile_batch in iterator:
-                pred_batch, inference_time = self._inference_batch(tile_batch, half=half, empty_cache=empty_cache,
-                                                                   key=key)
+                pred_batch, inference_time = self._inference_batch(tile_batch, half=half, empty_cache=empty_cache)
                 iterator.set_postfix(
                     {
                         "in_shape": tuple(tile_batch["image"].shape),
                         "out_shape": tuple(pred_batch['image'].shape),
                         "crop": tile_batch["crop"],
+                        "keys": tuple(pred_batch.keys()),
                     }
                 )
 
-                merger.integrate_batch(batch=pred_batch['image'], crop_coords=tile_batch["crop"])
+                merger.integrate_batch_dict(batch={k: v for k, v in pred_batch.items() if k in keys},
+                                            crop_coords=tile_batch["crop"])
                 full_inference_time += inference_time
 
             merger.merge_()
-            output['image'].append(loader.dataset.slicer.crop_to_original_size(
-                np.moveaxis(merger.image["image"].cpu().numpy(), 0, -1)
-            ))
-        batch['image'] = torch.from_numpy(np.moveaxis(np.array(output['image']), -1, 1))
-        return batch, full_inference_time
+
+            def _crop_tensor_to_original_size(tensor: T) -> T:
+                # TODO crop to original without moving axes?
+                tensor = torch.moveaxis(tensor, 0, -1)
+                tensor = loader.dataset.slicer.crop_to_original_size(tensor)
+                tensor = torch.moveaxis(tensor, -1, 0)
+                return tensor
+
+            for key in keys:
+                output[key].append(_crop_tensor_to_original_size(merger.image[key].cpu()))
+
+        # stack tensors in the batch dimension
+        output = {k: torch.stack(v) for k, v in output.items()}
+        return output, full_inference_time
 
     def _inference_batch(
         self,
         batch: Dict[str, T],
         half: bool = False,
         empty_cache: bool = False,
-        key: str = 'image',
     ) -> Tuple[Dict[str, T], float]:
         start = time.time()
-        out = batch.copy()
         with autocast(enabled=half):
             try:
-                out['image'] = self.model.forward(batch['image'].to(self.device))[key]
+                out = self.model.forward(batch['image'].to(self.device))
             except RuntimeError as e:
-                raise RuntimeError(f"Error during inference on batch {out['image'].shape}, "
-                                   f"half={half}, empty_cache={empty_cache}, key={key}") from e
+                raise RuntimeError(f"Error during inference on batch {batch['image'].shape}, "
+                                   f"half={half}, empty_cache={empty_cache}") from e
         end = time.time()
         if empty_cache:
             torch.cuda.empty_cache()
