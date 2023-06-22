@@ -55,7 +55,7 @@ class SyntheticDataset(AbstractNoiseDataset):
 
         Adopted from Neighbor2Neighbor https://github.com/TaoHuang2018/Neighbor2Neighbor/blob/2fff2978/train.py#L115
         """
-        noise = torch.FloatTensor(x.shape).normal_(mean=0.0, std=self._noise_param() / 255.0)
+        noise = torch.FloatTensor(x.shape).normal_(mean=0.0, std=self._noise_param())
         return x + noise
 
     def add_poisson(self, x: T) -> T:
@@ -89,7 +89,6 @@ class SyntheticDataset(AbstractNoiseDataset):
     def _get_image(self, i: int) -> Dict[str, np.ndarray]:
         im = self.image_index['image'][i]
         im = im if isinstance(im, np.ndarray) else read_image(im)
-        im = im.astype(np.float32) / 255.0
         return {'image': im, 'ground_truth': im}
 
     def _apply_transforms(self, image: Dict[str, Optional[np.ndarray]]) -> Dict[str, T]:
