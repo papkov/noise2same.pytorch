@@ -32,10 +32,17 @@ class TiledImageFactory:
         ]
     ] = None
 
-    def produce(self, image: Dict[str, Union[np.ndarray, T]]) -> Tuple[DataLoader, TileMerger]:
+    def produce(self,
+                image: Dict[str, Union[np.ndarray, T]],
+                keys: Optional[Tuple[str, ...]] = None) -> Tuple[DataLoader, TileMerger]:
         self.tile_size, self.tile_step, self.crop_border = map(
             lambda x: tuple(x) if isinstance(x, Iterable) else x, (self.tile_size, self.tile_step, self.crop_border)
         )
+        """
+        Produce a data loader for tiled dataset and a merger to combine tiles back into image
+        :param image: dict with 'image' to tile and its parameters ('shape', 'mean', 'std')
+        :param keys: keys to use for merging the output
+        """
         dataset = TiledImageDataset(
             image=image['image'],
             ground_truth=image.get('ground_truth'),
@@ -64,6 +71,7 @@ class TiledImageFactory:
             device=image['image'].device,
             crop_border=self.crop_border if isinstance(self.crop_border, int) else self.crop_border[0],
             default_value=0,
+            keys=keys,
         )
         return loader, merger
 
