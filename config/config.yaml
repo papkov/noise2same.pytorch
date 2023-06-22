@@ -8,7 +8,9 @@ project: noise2same
 device: 0
 seed: 56
 check: False
-evaluate: True
+
+evaluate:
+  key: image
 
 denoiser:
   _target_: noise2same.denoiser.Denoiser

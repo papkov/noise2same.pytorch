@@ -111,7 +111,7 @@ def main(cfg: DictConfig) -> None:
             wandb.run.summary["error"] = "RuntimeError"
         traceback.print_exc()
 
-    if cfg.evaluate:
+    if 'evaluate' in cfg:
         dataset_test = instantiate(cfg.dataset_test)
         factory = instantiate(cfg.factory_test) if 'factory_test' in cfg else None
 
