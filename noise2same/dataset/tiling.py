@@ -92,8 +92,8 @@ class TiledImageDataset(AbstractNoiseDataset):
         # standardization/normalization step removed since we process the full-sized image
         ret["mean"], ret["std"] = (
             # TODO can rewrite just for self.mean and std?
-            torch.tensor(self.mean if self.standardize else 0),
-            torch.tensor(self.std if self.standardize else 1),
+            self.mean if self.standardize else torch.tensor(0).view((1,) * ret["image"].ndim),
+            self.std if self.standardize else torch.tensor(1).view((1,) * ret["image"].ndim),
         )
 
         # TODO make mask optional
