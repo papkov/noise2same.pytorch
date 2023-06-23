@@ -1,0 +1,65 @@
+# @package _global_
+experiment: hela
+project: hela-supervised
+
+evaluate:
+  key: image/deconv
+
+dataset:
+  _target_: noise2same.dataset.HelaDataset
+  path: ${cwd}/data/hela/
+  n_channels: 1
+  n_dim: 3
+  channel_id: 3
+  transforms:
+    _target_: noise2same.dataset.util.training_augmentations_3d
+    crop: [ 32, 256, 256 ]
+    channel_axis: [ 0, 3 ]
+  input_size: ${.transforms.crop}  # needed for some models
+
+dataset_valid:
+  mode: val
+  transforms:
+    _target_: noise2same.dataset.util.validation_transforms_3d
+    crop: [ 32, 512, 512 ]
+    channel_axis: [ 0, 3 ]
+  input_size: null
+
+dataset_test:
+  mode: test
+  transforms: null
+  input_size: null
+
+factory_test:
+  _target_: noise2same.dataset.TiledImageFactory
+  tile_size: [ 32, 256, 256 ]
+  tile_step: [ 32, 192, 192 ]
+  crop_border: [ 0, 16, 16 ]
+  weight: 'pyramid'
+  batch_size: 8
+
+backbone:
+  base_channels: 48
+  skip_method: add
+
+training:
+  steps_per_epoch: 100
+  steps: 10000
+  batch_size: 4
+  val_batch_size: 1
+  num_workers: 8
+  monitor: rec_mse
+
+scheduler:
+  decay_steps: 2000
+
+psf:
+  _target_: noise2same.psf.psf_convolution.PSFParameter
+  kernel_psf: # this can be substituted by a PSF from dataset
+    _target_: noise2same.psf.psf_convolution.read_psf
+    path: ${cwd}/data/hela/psf/dec_average-psf.h5
+    key: image
+    downscale_factors: [ 5, 3, 3 ]
+  pad_mode: replicate
+  fft: auto
+  in_channels: ${dataset.n_channels}
