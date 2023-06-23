@@ -1,15 +1,17 @@
+import logging
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Union, Sequence, Tuple, Optional
+from typing import Callable, Dict, List, Union, Sequence, Tuple, Optional
 
 import numpy as np
 import torch
 from PIL import Image
 from torch import tensor as T
+from torch.utils.data import ConcatDataset
 
 from noise2same.dataset.abc import AbstractNoiseDataset
-from torch.utils.data import ConcatDataset
-from tqdm.auto import trange
+
+log = logging.getLogger(__name__)
 
 
 def read_image(path: Union[str, Path]) -> np.ndarray:
@@ -72,10 +74,10 @@ class SyntheticDataset(AbstractNoiseDataset):
         if self.cached:
             cached_path = self.path / self.cached
             if cached_path.exists():
-                print(f"Cache found in {cached_path}, reading images from npy...\n")
+                log.info(f"Cache found in {cached_path}, reading images from npy...")
                 return {"image": np.load(self.path / self.cached, allow_pickle=True)}
             else:
-                print(f"Cache not found in {cached_path}, read images from disk\n")
+                log.info(f"Cache not found in {cached_path}, read images from disk.")
         return {"image": sorted(list(self.path.glob(f"*.{self.extension}")))}
 
     def add_noise(self, x: T):

@@ -18,6 +18,9 @@ from skimage.metrics import (
     peak_signal_noise_ratio,
     structural_similarity,
 )
+import logging
+
+log = logging.getLogger(__name__)
 
 
 def clean_plot(ax: np.ndarray) -> None:
@@ -320,7 +323,7 @@ def load_checkpoint_to_module(module, checkpoint_path: str):
         try:
             getattr(module, attr).load_state_dict(state_dict)
         except AttributeError:
-            print(
+            log.warning(
                 f"Attribute {attr} is present in the checkpoint but absent in the class, do not load"
             )
 

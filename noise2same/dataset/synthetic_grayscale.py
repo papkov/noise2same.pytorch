@@ -1,3 +1,4 @@
+import logging
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, List, Union
@@ -7,6 +8,8 @@ from torch import Tensor as T
 
 from noise2same.dataset.synthetic import SyntheticDataset, read_image
 
+log = logging.getLogger(__name__)
+
 
 @dataclass
 class SyntheticPreparedDataset(SyntheticDataset):
@@ -15,8 +18,8 @@ class SyntheticPreparedDataset(SyntheticDataset):
         path_original = self.path / "original"
         path_noisy = self.path / f"noise{self.noise_param}" if self.fixed else path_original
         if not path_noisy.exists():
-            print(f"Path {path_noisy} does not exist, generate random images "
-                  f"with {self.noise_type} noise {self.noise_param}")
+            log.info(f"Path {path_noisy} does not exist, generate random images "
+                     f"with {self.noise_type} noise {self.noise_param}")
             path_noisy = path_original
             self.fixed = False
         return {"image": sorted(list(path_noisy.glob(f"*.{self.extension}"))),

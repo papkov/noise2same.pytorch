@@ -27,8 +27,7 @@ class SSIDataset(AbstractNoiseDataset):
         try:
             files = [f for f in self.path.iterdir() if f.is_file()]
         except FileNotFoundError as e:
-            print("File not found, cwd:", os.getcwd())
-            raise e
+            raise FileNotFoundError(f"File not found in cwd {os.getcwd()}") from e
 
         filename = [f.name for f in files if self.input_name in f.name][0]
         filepath = self.path / filename

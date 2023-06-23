@@ -1,9 +1,10 @@
 import datetime
 import glob
+import logging
 import os
 from argparse import ArgumentParser
 from pathlib import Path
-from pprint import pprint
+from pprint import pformat
 from typing import Dict, Optional
 
 import numpy as np
@@ -14,13 +15,15 @@ from torch.utils.data import DataLoader, Dataset, ConcatDataset
 from tqdm.auto import tqdm
 
 from noise2same import util
+from noise2same.dataset.abc import AbstractNoiseDataset
 from noise2same.dataset.getter import (
     get_planaria_dataset_and_gt,
 )
-from noise2same.dataset.abc import AbstractNoiseDataset
 from noise2same.dataset.tiling import TiledImageFactory
 from noise2same.evaluator import Evaluator
 from noise2same.psf.psf_convolution import instantiate_psf
+
+log = logging.getLogger(__name__)
 
 
 def get_ground_truth_and_predictions(
@@ -35,7 +38,7 @@ def get_ground_truth_and_predictions(
     if experiment in ("bsd68", "fmd", "hanzi", "sidd", "synthetic", "synthetic_grayscale", "hela_shallow"):
         add_blur_and_noise = getattr(dataset, "add_blur_and_noise", False)
         if add_blur_and_noise:
-            print("Validate for deconvolution")
+            log.info("Validate for deconvolution")
         predictions, _ = evaluator.inference(loader, half=half)
     elif experiment in ("imagenet",):
         predictions, indices = evaluator.inference(loader, half=half, empty_cache=True)
@@ -166,20 +169,19 @@ def evaluate(
     evaluation_dir.mkdir(parents=True, exist_ok=True)
 
     if save_results:
-        print("Saving results to", evaluation_dir)
+        log.info("Saving results to", evaluation_dir)
         scores.to_csv(evaluation_dir / "scores.csv")
         if keep_images:
             predictions = {key: [s.pop(key, None) for s in scores]}
             np.savez(evaluation_dir / "predictions.npz", **predictions)
 
     if verbose and any(ds.n_repeats > 1 for ds in datasets):
-        print("\nBefore averaging over repeats:")
-        pprint(scores.groupby(["dataset_name", "repeat_id"]).mean())
+        log.info("\nBefore averaging over repeats:\n" +
+                 pformat(scores.groupby(["dataset_name", "repeat_id"]).mean()))
     scores = scores.groupby("dataset_name").mean().drop(columns="repeat_id")
 
     if verbose:
-        print("\nEvaluation results:")
-        pprint(scores)
+        log.info("\nEvaluation results:\n" + pformat(scores))
 
     scores = scores.to_dict()
     if isinstance(dataset, ConcatDataset):
@@ -196,10 +198,9 @@ def main(train_dir: Path, checkpoint: str = 'last', other_args: list = None) -> 
 
     # os.environ["CUDA_VISIBLE_DEVICES"] = f"{cfg.device}"
 
-    print(f"Evaluate backbone {cfg.backbone_name} on experiment {cfg.experiment}, work in {train_dir}")
+    log.info(f"Evaluate backbone {cfg.backbone_name} on experiment {cfg.experiment}, work in {train_dir}")
 
-    cwd = Path(os.getcwd())
-    cfg.cwd = cwd
+    cfg.cwd = Path(os.getcwd())
     OmegaConf.resolve(cfg)
 
     backbone = instantiate(cfg.backbone)

@@ -1,3 +1,4 @@
+import logging
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing import List, Optional, Tuple, Union, Dict
@@ -9,6 +10,8 @@ from torch import Tensor as T
 
 Ints = Union[int, Tuple[int, ...], List[int]]
 Array = Union[ndarray, T]
+
+log = logging.getLogger(__name__)
 
 
 @dataclass
@@ -172,7 +175,7 @@ class Compose:
             for t in self.transforms:
                 if t is not None:
                     if self.debug:
-                        print(f"Apply {t}")
+                        logging.debug(f"Apply {t}")
                     ret = t(ret, resample=i == 0)
             out[key] = ret
         return out

@@ -15,9 +15,12 @@ import noise2same.trainer
 from noise2same import util
 from noise2same.dataset.getter import expand_dataset_cfg
 from noise2same.psf.psf_convolution import instantiate_psf
+import logging
+
+log = logging.getLogger(__name__)
 
 
-@hydra.main(config_path="config", config_name="config")
+@hydra.main(config_path="config", config_name="config", version_base='1.1')
 def main(cfg: DictConfig) -> None:
     # trying to fix: unable to open shared memory object </torch_197398_0> in read-write mode
     # torch.multiprocessing.set_sharing_strategy("file_system")
@@ -31,12 +34,12 @@ def main(cfg: DictConfig) -> None:
     # Check if all necessary arguments are specified
     for arg in ["backbone", "experiment", "denoiser"]:
         if arg not in cfg.keys():
-            print(f"Please specify a {arg} with `+{arg}=name`")
+            log.info(f"Please specify a {arg} with `+{arg}=name`")
             return
 
-    print(OmegaConf.to_yaml(cfg))
+    log.info(OmegaConf.to_yaml(cfg))
     # os.environ["CUDA_VISIBLE_DEVICES"] = f"{cfg.device}"
-    print(f"Run backbone {cfg.backbone_name} on experiment {cfg.experiment}, work in {os.getcwd()}")
+    log.info(f"Run backbone {cfg.backbone_name} on experiment {cfg.experiment}, work in {os.getcwd()}")
 
     # Make training deterministic
     util.fix_seed(cfg.seed)
@@ -82,7 +85,7 @@ def main(cfg: DictConfig) -> None:
     denoiser = instantiate(cfg.denoiser, backbone=backbone, head=head, **instantiate_psf(cfg, dataset_train))
 
     if torch.cuda.device_count() > 1:
-        print(f'Using data parallel with {torch.cuda.device_count()} GPUs')
+        log.info(f'Using data parallel with {torch.cuda.device_count()} GPUs')
         denoiser = torch.nn.DataParallel(denoiser)
 
     # Optimization
@@ -105,7 +108,7 @@ def main(cfg: DictConfig) -> None:
     try:
         _ = trainer.fit(n_epochs, loader_train, loader_valid)
     except KeyboardInterrupt:
-        print("Training interrupted")
+        log.info("Training interrupted")
     except RuntimeError:
         if not cfg.check:
             wandb.run.summary["error"] = "RuntimeError"

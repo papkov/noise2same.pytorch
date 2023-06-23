@@ -1,16 +1,19 @@
 # translated from
 # https://github.com/divelab/Noise2Same/blob/main/network.py
 # https://github.com/divelab/Noise2Same/blob/main/resnet_module.py
+import logging
 from typing import Tuple
 
 import torch
 from torch import Tensor as T
 from torch import nn
 
+log = logging.getLogger(__name__)
+
 
 class RegressionHead(nn.Sequential):
     def __init__(
-        self, in_channels: int, out_channels: int, n_dim: int = 2, kernel_size: int = 1
+            self, in_channels: int, out_channels: int, n_dim: int = 2, kernel_size: int = 1
     ):
         """
         Denoising regression head BN-ReLU-Conv
@@ -234,7 +237,7 @@ class UNet(nn.Module):
         self.decoding_block_sizes = decoding_block_sizes
         self.downsampling = downsampling
         self.skip_method = skip_method
-        print(f"Use {self.skip_method} skip method")
+        logging.debug(f"Use {self.skip_method} skip method")
 
         conv = nn.Conv2d if n_dim == 2 else nn.Conv3d
         conv_transpose = nn.ConvTranspose2d if n_dim == 2 else nn.ConvTranspose3d
@@ -322,23 +325,18 @@ class UNet(nn.Module):
     def forward(self, x: T) -> T:
         encoder_outputs = []
         x = self.conv_first(x)
-        # print("First conv", x.shape)
         x = self.encoder_blocks[0](x)
-        # print("Encoder 0", x.shape)
 
         for i, encoder_block in enumerate(self.encoder_blocks[1:]):
             encoder_outputs.append(x)
             x = encoder_block(x)
-            # print(f"Encoder {i+1}", x.shape)
 
         x = self.bottom_block(x)
-        # print("Bottom", x.shape)
 
         for i, (upsampling_block, decoder_block, skip) in enumerate(
             zip(self.upsampling_blocks, self.decoder_blocks, encoder_outputs[::-1])
         ):
             x = upsampling_block(x)
-            # print(f"Upsampling {i}", x.shape)
             if self.skip_method == "add":
                 x.add_(skip)
             elif self.skip_method in ("cat", "concat"):
@@ -346,8 +344,5 @@ class UNet(nn.Module):
             else:
                 raise ValueError
             x = decoder_block(x)
-            # print(f"Decoder {i}", x.shape)
 
-        # x = self.conv_last(x)
-        # print("Last conv", x.shape)
         return x

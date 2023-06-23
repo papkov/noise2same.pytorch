@@ -1,3 +1,4 @@
+import logging
 from collections import Counter
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
@@ -16,6 +17,8 @@ from noise2same.util import (
     load_checkpoint_to_module,
     normalize_zero_one_dict,
 )
+
+log = logging.getLogger(__name__)
 
 
 class Trainer(object):
@@ -210,20 +213,20 @@ class Trainer(object):
 
                 # Save best model
                 if self.monitor not in loss:
-                    print(
+                    log.info(
                         f"Nothing to monitor! {self.monitor} not in recorded losses {list(loss.keys())}"
                     )
                     continue
 
                 if loss[self.monitor] < best_loss:
-                    print(
+                    log.info(
                         f"Saved best model by {self.monitor}: {loss[self.monitor]:.4e} < {best_loss:.4e}"
                     )
                     self.save_model()
                     best_loss = loss[self.monitor]
 
         except KeyboardInterrupt:
-            print("Interrupted")
+            log.info("Interrupted")
 
         return history
 

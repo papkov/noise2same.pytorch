@@ -1,3 +1,4 @@
+import logging
 import time
 from collections import defaultdict
 from functools import partial
@@ -18,6 +19,8 @@ from noise2same.dataset.tiling import TiledImageFactory
 from noise2same.dataset.util import PadAndCropResizer
 from noise2same.denoiser import Denoiser
 from noise2same.util import crop_as, calculate_scores, detach_to_np
+
+log = logging.getLogger(__name__)
 
 
 class Evaluator(object):
@@ -98,13 +101,13 @@ class Evaluator(object):
                     torch.cuda.empty_cache()
             except RuntimeError:
                 errors_num += 1
-                print('Skipping image ', i)
+                log.info('Skipping image ', i)
                 pass
             else:
                 indices.append(i)
 
-        print(f"Average inference time: {np.mean(times) * 1000:.2f} ms")
-        print(f'Dropped images rate: {errors_num / len(loader)}')
+        log.info(f"Average inference time: {np.mean(times) * 1000:.2f} ms")
+        log.info(f'Dropped images rate: {errors_num / len(loader)}')
         # TODO standardize output format
         return outputs, indices  # СТЫД
 
@@ -146,7 +149,7 @@ class Evaluator(object):
             crop_border=crop_border,
             default_value=0,
         )
-        # print(f'Created merger for image {merger.image.shape}')
+        # log.info(f'Created merger for image {merger.image.shape}')
 
         iterator = dataset
         if batch_size > 1:
@@ -308,7 +311,7 @@ class Evaluator(object):
             full_inference_time += inference_time
             test_size += batch['ground_truth'].shape[0]
 
-        print(f"Average inference time: {full_inference_time / test_size * 1000:.2f} ms")
+        log.info(f"Average inference time: {full_inference_time / test_size * 1000:.2f} ms")
         return outputs
 
     def _inference_large_batch(

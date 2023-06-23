@@ -12,6 +12,9 @@ from noise2same.dataset.util import (
     normalize,
 )
 from noise2same.util import normalize_percentile
+import logging
+
+log = logging.getLogger(__name__)
 
 
 @dataclass
@@ -28,7 +31,7 @@ class MicrotubulesDataset(AbstractNoiseDataset3DLarge):
         self.ground_truth = normalize_percentile(io.imread(str(self.path / 'ground-truth.tif')).astype(np.float32),
                                                  0.1, 99.9)
         if self.add_blur_and_noise:
-            print(f"Generating blur and noise for {self.input_name}")
+            log.info(f"Generating blur and noise for {self.input_name}")
             # self.image = normalize_percentile(self.image, 0.1, 99.9)
             self.image = normalize(self.image)
             # TODO parametrize
@@ -57,7 +60,7 @@ class MicrotubulesTestDataset(AbstractNoiseDataset):
         ground_truth = normalize_percentile(io.imread(str(self.path / 'ground-truth.tif')).astype(np.float32),
                                             0.1, 99.9)
         if self.add_blur_and_noise:
-            print(f"Generating blur and noise for {self.input_name}")
+            log.info(f"Generating blur and noise for {self.input_name}")
             # self.image = normalize_percentile(self.image, 0.1, 99.9)
             image = normalize(image)
             # TODO parametrize
