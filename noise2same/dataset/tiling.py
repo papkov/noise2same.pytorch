@@ -10,7 +10,6 @@ from torch.utils.data import DataLoader
 
 from noise2same.dataset import transforms as t3d
 from noise2same.dataset.abc import AbstractNoiseDataset
-from noise2same.dataset.util import mask_like_image
 
 
 @dataclass
