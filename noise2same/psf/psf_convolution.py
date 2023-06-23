@@ -1,19 +1,20 @@
 from functools import partial
 from pathlib import Path
-from typing import Dict, Optional, Union
+from typing import Dict, Optional, Tuple, Union
 
 import h5py
 import numpy as np
 import torch
 import torch.nn.functional as f
+from hydra.utils import instantiate
+from omegaconf import DictConfig
 from skimage import io
+from skimage.transform import downscale_local_mean
 from torch import nn
+from torch.utils.data import Dataset
 
 from noise2same.psf.fft_conv import FFTConv2d, FFTConv3d, fft_conv
 from noise2same.util import center_crop
-from omegaconf import DictConfig
-from torch.utils.data import Dataset
-from hydra.utils import instantiate
 
 
 class PSF(nn.Module):
@@ -145,24 +146,33 @@ class PSFParameter(nn.Module):
 
 
 def read_psf(
-    path: Union[Path, str], psf_size: Optional[int] = None, normalize: bool = True
+        path: Union[Path, str],
+        key: str = 'psf',
+        center_crop_size: Optional[int] = None,
+        downscale_factors: Optional[Tuple[int, ...]] = None,
+        normalize: bool = True,
 ) -> np.ndarray:
     """
     Reads PSF from .h5 or .tif file
     :param path: absolute path to file
-    :param psf_size: int, optional, crop PSF to a cube of this size if provided
+    :param key: str, key to read PSF from .h5 file
+    :param center_crop_size: int, optional, crop PSF to a cube of this size if provided
+    :param downscale_factors: tuple of int, optional, step to downscale PSF
     :param normalize: bool, is divide PSF by its sum
     :return: PSF as numpy array
     """
     path = str(path)
     if path.endswith(".h5"):
         with h5py.File(path, "r") as f:
-            psf = f["psf"]
+            psf = np.array(f[key], dtype=np.float32)
     else:
         psf = io.imread(path)
 
-    if psf_size is not None:
-        psf = center_crop(psf, psf_size)
+    if downscale_factors is not None:
+        psf = downscale_local_mean(psf, factors=tuple(downscale_factors))
+
+    if center_crop_size is not None:
+        psf = center_crop(psf, center_crop_size)
 
     if normalize:
         psf /= psf.sum()
