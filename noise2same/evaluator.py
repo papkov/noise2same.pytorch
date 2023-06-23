@@ -303,6 +303,7 @@ class Evaluator(object):
                     multichannel=True,
                     data_range=255.0 if dataset.n_dim > 2 else 1.0,
                     normalize_pairs=dataset.n_dim > 2,
+                    gaussuan_weights=True,
                     metrics=metrics,
                 )
                 if keep_images:
