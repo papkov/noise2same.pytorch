@@ -180,8 +180,8 @@ class AbstractNoiseDataset(Dataset, ABC):
         else:
             # in case the data was normalized or standardized before
             # TODO less ugly way to do this
-            ret["mean"] = torch.tensor(0).view((1,) * ret["image"].ndim)
-            ret["std"] = torch.tensor(1).view((1,) * ret["image"].ndim)
+            ret["mean"] = self.mean if self.mean is not None else torch.tensor(0).view((1,) * ret["image"].ndim)
+            ret["std"] = self.std if self.std is not None else torch.tensor(1).view((1,) * ret["image"].ndim)
 
         # TODO make mask optional
         ret['mask'] = mask_like_image(ret['image'], mask_percentage=self.mask_percentage, channels_last=False)

@@ -82,31 +82,12 @@ class TiledImageDataset(AbstractNoiseDataset):
     tile_step: Union[int, Tuple[int]] = 192
     crop_border: Union[int, Tuple[int]] = 0
     weight: str = 'pyramid'
+    standardize: bool = False
     image: Union[np.ndarray, T] = None
     ground_truth: Union[np.ndarray, T] = None
 
     def __str__(self) -> str:
         return f'tiled_image_dataset'
-
-    def __getitem__(self, i: int) -> Dict[str, Any]:
-        """
-        :param i: int, index
-        :return: dict(image, mask, mean, std, crop)
-        """
-        # TODO unify with the original getitem and remove
-        image = self._get_image(i)
-        image = self._handle_image(image)
-        ret = self._apply_transforms(image)
-        # standardization/normalization step removed since we process the full-sized image
-        ret["mean"], ret["std"] = (
-            # TODO can rewrite just for self.mean and std?
-            self.mean if self.standardize else torch.tensor(0).view((1,) * ret["image"].ndim),
-            self.std if self.standardize else torch.tensor(1).view((1,) * ret["image"].ndim),
-        )
-
-        # TODO make mask optional
-        ret['mask'] = mask_like_image(ret['image'], mask_percentage=self.mask_percentage, channels_last=False)
-        return ret
 
     def _create_image_index(self) -> Dict[str, Union[List[str], np.ndarray]]:
         assert self.image is not None
