@@ -143,7 +143,6 @@ def evaluate(
         dataset: AbstractNoiseDataset,
         cfg: DictConfig,
         factory: Optional[TiledImageFactory] = None,
-        key: str = 'image',
         train_dir: Optional[str] = None,
         save_results: bool = True,
         verbose: bool = True,
@@ -156,7 +155,7 @@ def evaluate(
                                 num_workers=cfg.training.num_workers,
                                 half=cfg.training.amp,
                                 empty_cache=False,
-                                key=key,
+                                key=cfg.evaluate.key,
                                 keep_images=keep_images,
                                 metrics=metrics,
                                 )
@@ -175,7 +174,7 @@ def evaluate(
         log.info(f"Saving results to {evaluation_dir / 'scores.csv'}")
         scores.to_csv(evaluation_dir / "scores.csv")
         if keep_images:
-            predictions = {key: [s.pop(key, None) for s in scores]}
+            predictions = {cfg.evaluate.key: [s.pop(cfg.evaluate.key, None) for s in scores]}
             np.savez(evaluation_dir / "predictions.npz", **predictions)
 
     if verbose and any(ds.n_repeats > 1 for ds in datasets):

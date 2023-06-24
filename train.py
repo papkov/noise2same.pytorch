@@ -123,7 +123,6 @@ def main(cfg: DictConfig) -> None:
             cfg=cfg,
             factory=factory,
             train_dir=os.getcwd(),
-            key=cfg.evaluate.key,
         )
 
         if not cfg.check:
