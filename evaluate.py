@@ -231,4 +231,12 @@ if __name__ == "__main__":
     parser.add_argument("--checkpoint", choices=["last", "best"],
                         default="last", help="The checkpoint to evaluate, 'last' or 'best'")
     args, unknown_args = parser.parse_known_args()
+
+    logging.basicConfig(format='%(process)d-%(levelname)s-%(message)s', level=logging.INFO,
+                        filename=f'{args.train_dir}/evaluate.log')
+    log.addHandler(logging.StreamHandler())
+    log.setLevel(logging.INFO)
+    log.info('Start evaluation')
+
+    util.register_config_resolvers()
     main(Path(args.train_dir), args.checkpoint, unknown_args)
