@@ -61,6 +61,7 @@ def mask_like_image(
         mask = np.zeros_like(image)
         n_channels = image.shape[-1 if channels_last else 0]
     elif isinstance(image, T):
+        assert not channels_last, "Channels last not supported for torch.Tensor"
         mask = torch.zeros_like(image)
         n_channels = image.shape[0]
     else:
