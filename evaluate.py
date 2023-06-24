@@ -5,7 +5,7 @@ import os
 from argparse import ArgumentParser
 from pathlib import Path
 from pprint import pformat
-from typing import Dict, Optional
+from typing import Dict, Optional, Tuple
 
 import numpy as np
 import pandas as pd
@@ -148,6 +148,7 @@ def evaluate(
         save_results: bool = True,
         verbose: bool = True,
         keep_images: bool = False,
+        metrics: Tuple[str, ...] = ("rmse", "psnr", "ssim"),
 ):
     train_dir = train_dir or ''
     log.info(f"Evaluate dataset{str(dataset)} for key {key} in train_dir {train_dir}")
@@ -157,6 +158,7 @@ def evaluate(
                                 empty_cache=False,
                                 key=key,
                                 keep_images=keep_images,
+                                metrics=metrics,
                                 )
     scores = pd.DataFrame(scores)
 
