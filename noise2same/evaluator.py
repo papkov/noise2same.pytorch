@@ -299,9 +299,9 @@ class Evaluator(object):
                     pred = np.clip(pred + 0.5, 0, 255).astype(np.uint8).astype(np.float32)
                     gt = np.clip(gt + 0.5, 0, 255).astype(np.uint8).astype(np.float32)
                 scores = calculate_scores(
-                    pred, gt,
+                    gt, pred,
                     multichannel=True,
-                    data_range=255.0 if dataset.n_dim > 2 else 1.0,
+                    data_range=255.0 if dataset.n_dim == 2 else 1.0,
                     normalize_pairs=dataset.n_dim > 2,
                     gaussuan_weights=True,
                     metrics=metrics,
