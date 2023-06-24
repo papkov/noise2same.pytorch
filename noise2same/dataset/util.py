@@ -252,6 +252,9 @@ def add_microscope_blur_2d(
 def add_microscope_blur_3d(image, size: int = 17):
     psf = SimpleMicroscopePSF()
     psf_xyz_array = psf.generate_xyz_psf(dxy=0.406, dz=0.406, xy_size=size, z_size=size)
+    dim_delta = len(image.shape) - len(psf_xyz_array.shape)
+    if dim_delta > 0:
+        psf_xyz_array = psf_xyz_array[(None,) * dim_delta]
     psf_kernel = psf_xyz_array
     psf_kernel /= psf_kernel.sum()
     return convolve(image, psf_kernel, mode="same"), psf_kernel
