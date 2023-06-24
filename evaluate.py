@@ -150,6 +150,7 @@ def evaluate(
         keep_images: bool = False,
 ):
     train_dir = train_dir or ''
+    log.info(f"Evaluate dataset{str(dataset)} for key {key} in train_dir {train_dir}")
     scores = evaluator.evaluate(dataset, factory,
                                 num_workers=cfg.training.num_workers,
                                 half=cfg.training.amp,
@@ -169,7 +170,7 @@ def evaluate(
     evaluation_dir.mkdir(parents=True, exist_ok=True)
 
     if save_results:
-        log.info("Saving results to", evaluation_dir)
+        log.info(f"Saving results to {evaluation_dir / 'scores.csv'}")
         scores.to_csv(evaluation_dir / "scores.csv")
         if keep_images:
             predictions = {key: [s.pop(key, None) for s in scores]}
