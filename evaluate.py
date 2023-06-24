@@ -187,10 +187,9 @@ def evaluate(
         log.info("\nEvaluation results:\n" + pformat(scores))
 
     scores = scores.to_dict()
-    if isinstance(dataset, ConcatDataset):
-        # Flatten scores dict as "metric.dataset" to make it compatible with wandb
-        scores = {f"{metric}.{dataset_name}": score for metric, dataset_dict in scores.items()
-                  for dataset_name, score in dataset_dict.items()}
+    # Flatten scores dict as "metric.dataset" to make it compatible with wandb
+    scores = {f"{metric}.{dataset_name}": score for metric, dataset_dict in scores.items()
+              for dataset_name, score in dataset_dict.items()}
     return scores
 
 
