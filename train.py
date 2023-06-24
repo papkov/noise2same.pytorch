@@ -45,6 +45,8 @@ def main(cfg: DictConfig) -> None:
     if not cfg.check:
         wandb.init(project=cfg.project, config=util.flatten_config(cfg), settings=wandb.Settings(start_method="fork"))
         wandb.run.summary.update({'training_dir': os.getcwd()})
+    else:
+        os.environ["HYDRA_FULL_ERROR"] = "1"
 
     # Data
     dataset_train = instantiate(cfg.dataset)
