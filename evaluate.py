@@ -151,7 +151,7 @@ def evaluate(
         metrics: Tuple[str, ...] = ("rmse", "psnr", "ssim"),
 ):
     train_dir = train_dir or ''
-    log.info(f"Evaluate dataset{str(dataset)} for key {key} in train_dir {train_dir}")
+    log.info(f"Evaluate dataset {str(dataset)} for key {cfg.evaluate.key} in train_dir {train_dir}")
     scores = evaluator.evaluate(dataset, factory,
                                 num_workers=cfg.training.num_workers,
                                 half=cfg.training.amp,
@@ -204,6 +204,7 @@ def main(train_dir: Path, checkpoint: str = 'last', other_args: list = None) -> 
 
     cfg.cwd = Path(os.getcwd())
     OmegaConf.resolve(cfg)
+    log.info(OmegaConf.to_yaml(cfg))
 
     backbone = instantiate(cfg.backbone)
     head = instantiate(cfg.head)
@@ -215,12 +216,13 @@ def main(train_dir: Path, checkpoint: str = 'last', other_args: list = None) -> 
 
     # Run evaluation
     evaluator = Evaluator(denoiser, checkpoint_path=checkpoint_path)
-    evaluate(
+    _ = evaluate(
         evaluator=evaluator,
         dataset=dataset,
         cfg=cfg,
         factory=factory,
         train_dir=train_dir,
+        verbose=True,
     )
 
 
