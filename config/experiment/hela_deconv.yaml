@@ -7,7 +7,7 @@ evaluate:
 
 dataset:
   _target_: noise2same.dataset.HelaDataset
-  path: ${cwd}/data/hela/
+  path: ${cwd}/data/hela/deconvolved
   n_channels: 1
   n_dim: 3
   channel_id: 3
@@ -16,6 +16,7 @@ dataset:
     crop: [ 32, 256, 256 ]
     channel_axis: [ 0, 3 ]
   input_size: ${.transforms.crop}  # needed for some models
+  add_blur_and_noise: True
 
 dataset_valid:
   mode: val
@@ -55,11 +56,11 @@ scheduler:
 
 psf:
   _target_: noise2same.psf.psf_convolution.PSFParameter
-  kernel_psf: # this can be substituted by a PSF from dataset
-    _target_: noise2same.psf.psf_convolution.read_psf
-    path: ${cwd}/data/hela/psf/dec_average-psf.h5
-    key: image
-    downscale_factors: [ 5, 3, 3 ]
+  #  kernel_psf: # this can be substituted by a PSF from dataset
+  #    _target_: noise2same.psf.psf_convolution.read_psf
+  #    path: ${cwd}/data/hela/psf/dec_average-psf.h5
+  #    key: image
+  #    downscale_factors: [ 5, 3, 3 ]
   pad_mode: replicate
   fft: auto
   in_channels: ${dataset.n_channels}

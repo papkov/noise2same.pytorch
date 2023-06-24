@@ -4,7 +4,7 @@ project: hela-supervised
 
 dataset:
   _target_: noise2same.dataset.HelaDataset
-  path: ${cwd}/data/hela/
+  path: ${cwd}/data/hela/reconvolved
   n_channels: 1
   n_dim: 3
   channel_id: 3
