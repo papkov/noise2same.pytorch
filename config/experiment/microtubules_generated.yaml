@@ -1,6 +1,8 @@
 # @package _global_
 experiment: microtubules
-evaluate: True
+
+evaluate:
+  key: image/deconv
 
 dataset:
   _target_: noise2same.dataset.MicrotubulesDataset
