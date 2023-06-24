@@ -142,3 +142,5 @@ def test_full_evaluation(dataset_name: str):
     evaluator = Evaluator(Denoiser(), device='cpu')
     outputs = evaluate(evaluator, dataset, cfg, factory)
     assert outputs is not None
+    for k, v in outputs['psnr'].items():
+        assert v > 0
