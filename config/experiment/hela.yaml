@@ -44,7 +44,6 @@ training:
   steps: 10000
   batch_size: 8
   val_batch_size: 1
-  num_workers: 8
   monitor: rec_mse
 
 scheduler:
