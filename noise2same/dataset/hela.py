@@ -58,7 +58,7 @@ class HelaDataset(HelaShallowDataset):
         image_index = super()._create_image_index()
 
         # TODO replace with PadIfNeeded for 3D data
-        image_index = {k: np.pad(v, ((0, 0), (1, 1), (0, 0), (0, 0)), mode='reflect')
+        image_index = {k: np.pad(v, ((0, 0), (1, 1), (0, 0), (0, 0)), mode='constant')
                        for k, v in image_index.items()}
         return image_index
 
