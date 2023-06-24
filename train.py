@@ -28,9 +28,6 @@ def main(cfg: DictConfig) -> None:
     # Expand dataset config for validation and test datasets to extend train dataset
     expand_dataset_cfg(cfg)
 
-    # Prevent from writing from the same log folder
-    sleep(randint(1, 5))
-
     # Check if all necessary arguments are specified
     for arg in ["backbone", "experiment", "denoiser"]:
         if arg not in cfg.keys():

@@ -1,6 +1,6 @@
 hydra:
   run:
-    dir: results/${experiment}/${backbone_name}/${hydra.job.name}/${now:%Y-%m-%d_%H-%M-%S}
+    dir: results/${experiment}/${backbone_name}/${hydra.job.name}/${now:%Y-%m-%d_%H-%M-%S}_${suffix:}
 
 cwd: ${hydra:runtime.cwd}
 
