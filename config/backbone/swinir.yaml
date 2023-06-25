@@ -3,6 +3,7 @@ backbone_name: swinir
 
 backbone:
   _target_: noise2same.backbone.swinir.SwinIR
+  in_channels: ${dataset.n_channels}
   embed_dim: 96
   upscale: 1
   window_size: 8
