@@ -16,6 +16,7 @@ from tqdm.auto import tqdm
 
 from noise2same import util
 from noise2same.dataset.abc import AbstractNoiseDataset
+from noise2same.dataset.getter import expand_dataset_cfg
 from noise2same.dataset.getter import (
     get_planaria_dataset_and_gt,
 )
@@ -203,6 +204,8 @@ def main(train_dir: Path, checkpoint: str = 'last', other_args: list = None) -> 
 
     cfg.cwd = Path(os.getcwd())
     OmegaConf.resolve(cfg)
+    # Expand dataset config for validation and test datasets to extend train dataset
+    expand_dataset_cfg(cfg)
     log.info(OmegaConf.to_yaml(cfg))
 
     backbone = instantiate(cfg.backbone)
