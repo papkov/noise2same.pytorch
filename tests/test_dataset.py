@@ -105,9 +105,9 @@ def test_dataset_instantiation(
         OmegaConf.resolve(cfg)  # resolves interpolations as ${hydra.runtime.cwd}
         expand_dataset_cfg(cfg)
 
-        if 'cached' in cfg.dataset:
+        if 'cached' in cfg.dataset_train:
             # Do not use cache for testing because of memory issues
-            cfg.dataset.cached = ''
+            cfg.dataset_train.cached = ''
 
         print('\n', OmegaConf.to_yaml(cfg))
 
@@ -121,7 +121,7 @@ def test_dataset_instantiation(
             assert isinstance(dataset_test, expected_dataclass_test)
             assert dataset_test[0] is not None
 
-        dataset = instantiate(cfg.dataset)
+        dataset = instantiate(cfg.dataset_train)
         assert isinstance(dataset, expected_dataclass)
         assert str(dataset) is not None and str(dataset) != 'dataset'
         assert dataset[0] is not None

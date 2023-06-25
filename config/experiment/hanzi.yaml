@@ -1,14 +1,18 @@
 # @package _global_
 experiment: hanzi
+
 dataset:
   _target_: noise2same.dataset.HanziDataset
   path: ${cwd}/data/Hanzi/tiles/
   version: 0
   noise_level: 3
+
+dataset_train:
+  mode: training
   transforms:
     _target_: noise2same.dataset.util.training_augmentations_2d
     crop: 64
-  input_size: ${.transforms.crop}  # needed for some models
+    input_size: ${.transforms.crop}  # needed for some models
 
 dataset_valid:
   mode: validation
@@ -17,9 +21,7 @@ dataset_valid:
     crop: 64
 
 dataset_test:
-  transforms: null
   mode: testing
-  input_size: null
 
 training:
   steps: 50000

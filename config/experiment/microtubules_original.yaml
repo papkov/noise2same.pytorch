@@ -10,6 +10,8 @@ dataset:
   input_name: input.tif
   n_dim: 3
   n_channels: 1
+
+dataset_train:
   tile_size: 64
   tile_step: 64  # to prevent overlap
   transforms:
@@ -17,7 +19,6 @@ dataset:
   input_size: ${.tile_size}  # needed for some models
 
 dataset_test:
-  transforms: null
   tile_size: 128
   tile_step: 128
 

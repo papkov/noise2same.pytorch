@@ -4,25 +4,23 @@ experiment: bsd68
 dataset:
   _target_: noise2same.dataset.BSD68Dataset
   path: ${cwd}/data/BSD68/
+
+dataset_train:
+  mode: train
   transforms:
     _target_: noise2same.dataset.util.training_augmentations_2d
-    crop: 128
+    crop: 128  # 64 in Noise2Same paper
   input_size: ${.transforms.crop}  # needed for some models
 
 dataset_valid:
-  transforms: null
-  input_size: null
   mode: val
 
 dataset_test:
-  transforms: null
-  input_size: null
   mode: test
 
 training:
-  crop: 128  # 64 in the paper
   steps: 80000
-  batch_size: 32  # 64 in the paper
+  batch_size: 32  # 64 in Noise2Same paper
 
 # For Noise2Same
 #denoiser:

@@ -1,25 +1,26 @@
 # @package _global_
 experiment: ssi
 
-evaluate: True
+evaluate:
+  key: image/deconv
 
 dataset:
   _target_: noise2same.dataset.SSIDataset
   path: ${cwd}/data/ssi/
   input_name: drosophila
   n_channels: 1
+
+dataset_train:
   transforms:
     _target_: noise2same.dataset.util.training_augmentations_2d
-    crop: 64
+    crop: 128
   input_size: ${.transforms.crop}  # needed for some models
 
 dataset_test:
   transforms: null
-  input_size: null
 
 training:
   num_workers: 4
-  crop: 128
   steps_per_epoch: 30
   steps: 3000
   batch_size: 16
@@ -28,7 +29,6 @@ training:
 
 scheduler:
   decay_steps: 5e2  # how many steps to decrease by decay rate
-
 
 psf:
   _target_: noise2same.psf.psf_convolution.PSFParameter

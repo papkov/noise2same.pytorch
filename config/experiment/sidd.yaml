@@ -5,6 +5,8 @@ dataset:
   _target_: noise2same.dataset.SIDDDataset
   path: ${cwd}/data/SIDD-NAFNet/
   n_channels: 3
+
+dataset_train:
   transforms:
     _target_: noise2same.dataset.util.training_augmentations_2d
     crop: 64

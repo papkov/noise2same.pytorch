@@ -10,9 +10,11 @@ dataset:
   input_name: ground-truth.tif
   n_dim: 3
   n_channels: 1
+  add_blur_and_noise: True
+
+dataset_train:
   tile_size: 64
   tile_step: 48
-  add_blur_and_noise: True
   transforms:
     _target_: noise2same.dataset.util.training_augmentations_3d
   input_size: ${.tile_size}  # needed for some models

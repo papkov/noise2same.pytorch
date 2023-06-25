@@ -2,16 +2,20 @@
 experiment: imagenet
 
 dataset:
-  _target_: noise2same.dataset.ImagenetDataset
   path: ${cwd}/data/ImageNet/
   n_channels: 3
   version: 0
+
+dataset_train:
+  _target_: noise2same.dataset.ImagenetDataset
+  mode: train
   transforms:
     _target_: noise2same.dataset.util.training_augmentations_2d
     crop: 64
   input_size: ${.transforms.crop}  # needed for some models
 
 dataset_valid:
+  _target_: noise2same.dataset.ImagenetDataset
   mode: val
   transforms:
     _target_: noise2same.dataset.util.validation_transforms_2d
@@ -19,8 +23,6 @@ dataset_valid:
 
 dataset_test:
   _target_: noise2same.dataset.ImagenetTestDataset
-  transforms: null
-  input_size: null
 
 factory_test:
   _target_: noise2same.dataset.tiling.TiledImageFactory

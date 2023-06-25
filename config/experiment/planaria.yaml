@@ -2,20 +2,23 @@
 experiment: planaria
 
 dataset:
-  _target_: noise2same.dataset.PlanariaDataset
   path: ${cwd}/data/Denoising_Planaria/
   n_dim: 3
+
+dataset_train:
+  _target_: noise2same.dataset.PlanariaDataset
+  mode: train
   transforms:
     _target_: noise2same.dataset.util.training_augmentations_3d
   input_size: 64  # needed for some models
 
 dataset_valid:
+  _target_: noise2same.dataset.PlanariaDataset
   mode: val
 
 dataset_test:
   _target_: noise2same.dataset.PlanariaTestDataset
   noise_level: 1
-  transforms: null
 
 factory_test:
   _target_: noise2same.dataset.TiledImageFactory

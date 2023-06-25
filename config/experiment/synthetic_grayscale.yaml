@@ -2,11 +2,13 @@
 experiment: synthetic_grayscale
 
 dataset:
-  _target_: noise2same.dataset.BSD400SyntheticDataset
-  path: ${cwd}/data/BSD400/
   noise_type: gaussian
   noise_param: 25
   standardize: True
+
+dataset_train:
+  _target_: noise2same.dataset.BSD400SyntheticDataset
+  path: ${cwd}/data/BSD400/
   transforms:
     _target_: noise2same.dataset.util.training_augmentations_2d
     crop: 64
@@ -22,9 +24,6 @@ dataset_valid:
 
 dataset_test:
   _target_: noise2same.dataset.SyntheticTestDataset
-  # Top-level arguments override partial arguments
-  transforms: null
-  input_size: null
   datasets:
     - _target_: noise2same.dataset.BSD68SyntheticDataset
       _partial_: True

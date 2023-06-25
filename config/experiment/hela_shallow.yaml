@@ -7,6 +7,9 @@ dataset:
   path: ${cwd}/data/hela/reconvolved
   n_channels: 1
   channel_id: 3
+
+dataset_train:
+  mode: train
   transforms:
     _target_: noise2same.dataset.util.training_augmentations_2d
     crop: 256
@@ -17,12 +20,9 @@ dataset_valid:
   transforms:
     _target_: noise2same.dataset.util.validation_transforms_2d
     crop: 512
-  input_size: null
 
 dataset_test:
   mode: test
-  transforms: null
-  input_size: null
 
 training:
   steps_per_epoch: 100

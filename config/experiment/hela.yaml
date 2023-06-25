@@ -8,6 +8,9 @@ dataset:
   n_channels: 1
   n_dim: 3
   channel_id: 3
+
+dataset_train:
+  mode: train
   transforms:
     _target_: noise2same.dataset.util.training_augmentations_3d
     crop: [ 32, 256, 256 ]
@@ -20,12 +23,9 @@ dataset_valid:
     _target_: noise2same.dataset.util.validation_transforms_3d
     crop: [ 32, 512, 512 ]
     channel_axis: [ 0, 3 ]
-  input_size: null
 
 dataset_test:
   mode: test
-  transforms: null
-  input_size: null
 
 factory_test:
   _target_: noise2same.dataset.TiledImageFactory

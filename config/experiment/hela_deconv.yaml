@@ -11,12 +11,14 @@ dataset:
   n_channels: 1
   n_dim: 3
   channel_id: 3
+  add_blur_and_noise: True
+
+dataset_train:
   transforms:
     _target_: noise2same.dataset.util.training_augmentations_3d
     crop: [ 32, 256, 256 ]
     channel_axis: [ 0, 3 ]
   input_size: ${.transforms.crop}  # needed for some models
-  add_blur_and_noise: True
 
 dataset_valid:
   mode: val
@@ -28,8 +30,6 @@ dataset_valid:
 
 dataset_test:
   mode: test
-  transforms: null
-  input_size: null
 
 factory_test:
   _target_: noise2same.dataset.TiledImageFactory

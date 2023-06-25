@@ -49,7 +49,7 @@ def main(cfg: DictConfig) -> None:
         os.environ["HYDRA_FULL_ERROR"] = "1"
 
     # Data
-    dataset_train = instantiate(cfg.dataset)
+    dataset_train = instantiate(cfg.dataset_train)
     dataset_valid = instantiate(cfg.dataset_valid) if 'dataset_valid' in cfg else None
 
     num_samples = cfg.training.batch_size * cfg.training.steps_per_epoch
