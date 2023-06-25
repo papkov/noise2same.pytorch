@@ -6,6 +6,7 @@ from hydra import initialize, compose
 from hydra.utils import instantiate
 from omegaconf import OmegaConf
 from torch.nn import Identity
+import torch
 
 from noise2same.backbone import unet, swinia, swinir
 from noise2same.util import register_config_resolvers
@@ -34,3 +35,8 @@ def test_backbone(backbone_name, expected_backbone, expected_head):
     head = instantiate(cfg.head)
     assert isinstance(backbone, expected_backbone)
     assert isinstance(head, expected_head)
+
+    x = torch.randn(1, 1, 64, 64)
+    x = backbone(x)
+    x = head(x)
+    assert x.shape == (1, 1, 64, 64)
