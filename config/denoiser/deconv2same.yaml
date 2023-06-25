@@ -10,3 +10,6 @@ denoiser:
   lambda_inv: 2.0
   lambda_bsp: 0.0
   lambda_inv_deconv: 0.0
+  masked_inv_deconv: true
+  regularization_key: image
+  lambda_bound: 0.1

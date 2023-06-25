@@ -52,9 +52,10 @@ class Noise2Same(Noise2Self):
 
 
 class Noise2SameDeconvolution(DeconvolutionMixin, Noise2Same):
-    def __init__(self, lambda_inv_deconv: float = 0.0, **kwargs: Any):
+    def __init__(self, lambda_inv_deconv: float = 0.0, masked_inv_deconv: bool = True, **kwargs: Any):
         super().__init__(**kwargs)
         self.lambda_inv_deconv = lambda_inv_deconv
+        self.masked_inv_deconv = masked_inv_deconv
 
     def compute_loss(self, x_in: Dict[str, T], x_out: Dict[str, T]) -> Tuple[T, Dict[str, float]]:
         """
@@ -68,7 +69,8 @@ class Noise2SameDeconvolution(DeconvolutionMixin, Noise2Same):
         """
         loss, loss_dict = super().compute_loss(x_in, x_out)
         # TODO test deconvolved invariance loss without mask
-        inv_deconv_mse = self.compute_mse(x_out['image/deconv'], x_out['image/masked/deconv'], mask=x_in['mask'])
+        inv_deconv_mse = self.compute_mse(x_out['image/deconv'], x_out['image/masked/deconv'],
+                                          mask=x_in['mask'] if self.masked_inv_deconv else None)
         loss_dict['inv_deconv_mse'] = inv_deconv_mse.item()
         loss = loss + self.lambda_inv_deconv * torch.sqrt(inv_deconv_mse)
 
