@@ -1,7 +1,9 @@
 import os
 from pathlib import Path
+from typing import List, Tuple, Union
 
 import pytest
+import torch
 from hydra import initialize, compose
 from hydra.utils import instantiate
 from omegaconf import OmegaConf
@@ -10,6 +12,8 @@ import torch
 
 from noise2same.backbone import unet, swinia, swinir
 from noise2same.util import register_config_resolvers
+
+Ints = Union[int, Tuple[int, ...]]
 
 
 @pytest.fixture(scope="module", autouse=True)
@@ -40,3 +44,23 @@ def test_backbone(backbone_name, expected_backbone, expected_head):
     x = backbone(x)
     x = head(x)
     assert x.shape == (1, 1, 64, 64)
+
+
+@pytest.mark.parametrize('downsampling', [('conv', 'conv'), ('conv', 'res'), ('res', 'res')])
+@pytest.mark.parametrize('shape,factor',
+                         [((4, 4, 4), 2),
+                          ((4, 4, 4), [2, 2]),
+                          # fails because of the downsampling factor is larger than the input depth
+                          pytest.param((2, 4, 4), [2, 2], marks=pytest.mark.xfail),
+                          # passes because only one depth downsampling
+                          ((2, 4, 4), [(1, 2, 2), 2]),
+                          ])
+def test_factor_unet(downsampling: Tuple[str, ...], shape: Tuple[int, ...], factor: Union[int, List[Ints]]):
+    backbone = unet.UNet(in_channels=1, n_dim=3, downsampling_factor=factor, downsampling=downsampling)
+    print(backbone)
+    head = unet.RegressionHead(in_channels=96, n_dim=3, out_channels=1)
+
+    x = torch.randn(2, 1, *shape)
+    x = backbone(x)
+    x = head(x)
+    assert x.shape == (2, 1) + shape

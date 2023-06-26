@@ -2,19 +2,19 @@
 # https://github.com/divelab/Noise2Same/blob/main/network.py
 # https://github.com/divelab/Noise2Same/blob/main/resnet_module.py
 import logging
-from typing import Tuple
+from typing import Tuple, Optional, List, Union
 
 import torch
 from torch import Tensor as T
 from torch import nn
 
+Ints = Union[int, Tuple[int, ...]]
+
 log = logging.getLogger(__name__)
 
 
 class RegressionHead(nn.Sequential):
-    def __init__(
-            self, in_channels: int, out_channels: int, n_dim: int = 2, kernel_size: int = 1
-    ):
+    def __init__(self, in_channels: int, out_channels: int, n_dim: int = 2, kernel_size: int = 1):
         """
         Denoising regression head BN-ReLU-Conv
 
@@ -42,23 +42,22 @@ class RegressionHead(nn.Sequential):
 
 class ResidualUnit(nn.Module):
     def __init__(
-        self,
-        in_channels: int,
-        out_channels: int,
-        n_dim: int = 2,
-        kernel_size: int = 3,
-        downsample: bool = False,
+            self,
+            in_channels: int,
+            out_channels: int,
+            n_dim: int = 2,
+            kernel_size: int = 3,
+            downsampling_factor: Optional[Tuple[int, ...]] = None,
     ):
         super().__init__()
         self.in_channels = in_channels
         self.out_channels = out_channels
         self.n_dim = n_dim
         self.kernel_size = kernel_size
-        self.downsample = downsample
+        self.downsampling_factor = downsampling_factor
 
         bn = nn.BatchNorm2d if n_dim == 2 else nn.BatchNorm3d
         conv = nn.Conv2d if n_dim == 2 else nn.Conv3d
-        stride = 2 if downsample else 1
 
         self.act = nn.ReLU(inplace=True)
         # todo parametrize as in the original repo (bn momentum is inverse)
@@ -68,7 +67,7 @@ class ResidualUnit(nn.Module):
             out_channels=out_channels,
             kernel_size=1,
             padding=0,
-            stride=stride,
+            stride=downsampling_factor or 1,
             bias=False,
         )
 
@@ -76,9 +75,9 @@ class ResidualUnit(nn.Module):
             conv(
                 in_channels=in_channels,
                 out_channels=out_channels,
-                kernel_size=2 if downsample else kernel_size,
-                padding=0 if downsample else kernel_size // 2,
-                stride=stride,
+                kernel_size=downsampling_factor or kernel_size,
+                padding=0 if downsampling_factor is not None else kernel_size // 2,
+                stride=downsampling_factor or 1,
                 bias=False,
             ),
             bn(out_channels),
@@ -97,7 +96,7 @@ class ResidualUnit(nn.Module):
         shortcut = x
         x = self.bn(x)
         x = self.act(x)
-        if self.in_channels != self.out_channels or self.downsample:
+        if self.in_channels != self.out_channels or self.downsampling_factor is not None:
             shortcut = self.conv_shortcut(x)
         x = self.layers(x)
         return x + shortcut
@@ -105,20 +104,20 @@ class ResidualUnit(nn.Module):
 
 class ResidualBlock(nn.Module):
     def __init__(
-        self,
-        in_channels: int,
-        out_channels: int,
-        block_size: int = 1,
-        n_dim: int = 2,
-        kernel_size: int = 3,
-        downsample: bool = False,
+            self,
+            in_channels: int,
+            out_channels: int,
+            block_size: int = 1,
+            n_dim: int = 2,
+            kernel_size: int = 3,
+            downsampling_factor: Optional[Tuple[int, ...]] = None,
     ):
         super().__init__()
         self.in_channels = in_channels
         self.out_channels = out_channels
         self.n_dim = n_dim
         self.kernel_size = kernel_size
-        self.downsample = downsample
+        self.downsampling_factor = downsampling_factor
         self.block_size = block_size
 
         self.block = nn.Sequential(
@@ -128,7 +127,7 @@ class ResidualBlock(nn.Module):
                     out_channels=out_channels,
                     n_dim=n_dim,
                     kernel_size=kernel_size,
-                    downsample=downsample if i == 0 else False,
+                    downsampling_factor=downsampling_factor if i == 0 else None,
                 )
                 for i in range(0, block_size)
             ]
@@ -140,13 +139,14 @@ class ResidualBlock(nn.Module):
 
 class EncoderBlock(nn.Module):
     def __init__(
-        self,
-        in_channels: int,
-        out_channels: int,
-        block_size: int = 1,
-        n_dim: int = 2,
-        kernel_size: int = 3,
-        downsampling: str = "conv",
+            self,
+            in_channels: int,
+            out_channels: int,
+            block_size: int = 1,
+            n_dim: int = 2,
+            kernel_size: int = 3,
+            downsampling: str = "conv",
+            downsampling_factor: Ints = 2,
     ):
         super().__init__()
         self.in_channels = in_channels
@@ -154,6 +154,10 @@ class EncoderBlock(nn.Module):
         self.n_dim = n_dim
         self.kernel_size = kernel_size
         self.block_size = block_size
+
+        if isinstance(downsampling_factor, int):
+            downsampling_factor = (downsampling_factor,) * n_dim
+        assert len(downsampling_factor) == n_dim
 
         conv = nn.Conv2d if n_dim == 2 else nn.Conv3d
 
@@ -164,18 +168,19 @@ class EncoderBlock(nn.Module):
                 n_dim=n_dim,
                 kernel_size=kernel_size,
                 block_size=1,
-                downsample=True,
+                downsampling_factor=downsampling_factor,
             )
         elif downsampling == "conv":
             downsampling_block = conv(
                 in_channels=in_channels,
                 out_channels=out_channels,
-                kernel_size=2,
-                stride=2,
+                kernel_size=downsampling_factor,
+                stride=downsampling_factor,
                 bias=True,
             )
+        # TODO pooling
         else:
-            raise ValueError("downsampling should be `res`. `conv`, `pool`")
+            raise ValueError("downsampling should be `res`, `conv`")
 
         self.block = nn.Sequential(
             downsampling_block,
@@ -184,7 +189,6 @@ class EncoderBlock(nn.Module):
                 out_channels=out_channels,
                 n_dim=n_dim,
                 block_size=block_size,
-                downsample=False,
                 kernel_size=kernel_size,
             ),
         )
@@ -204,6 +208,7 @@ class UNet(nn.Module):
             encoding_block_sizes: Tuple[int, ...] = (1, 1, 0),
             decoding_block_sizes: Tuple[int, ...] = (1, 1),
             downsampling: Tuple[str, ...] = ("conv", "conv"),
+            downsampling_factor: Union[int, List[Ints]] = 2,
             skip_method: str = "concat",
             **kwargs,
     ):
@@ -229,6 +234,10 @@ class UNet(nn.Module):
         assert depth == len(downsampling) + 1
         assert skip_method in ["add", "concat", "cat"]
 
+        if isinstance(downsampling_factor, int):
+            downsampling_factor = [downsampling_factor] * len(downsampling)
+        assert len(downsampling_factor) == len(downsampling)
+
         self.in_channels = in_channels
         self.n_dim = n_dim
         self.depth = depth
@@ -236,6 +245,7 @@ class UNet(nn.Module):
         self.encoding_block_sizes = encoding_block_sizes
         self.decoding_block_sizes = decoding_block_sizes
         self.downsampling = downsampling
+        self.downsampling_factor = downsampling_factor
         self.skip_method = skip_method
         logging.debug(f"Use {self.skip_method} skip method")
 
@@ -281,6 +291,7 @@ class UNet(nn.Module):
                     kernel_size=kernel_size,
                     block_size=encoding_block_sizes[i - 1],
                     downsampling=downsampling[i - 2],
+                    downsampling_factor=downsampling_factor[i - 2],
                 )
             )
 
@@ -305,8 +316,8 @@ class UNet(nn.Module):
                 conv_transpose(
                     in_channels=in_channels,
                     out_channels=out_channels,
-                    kernel_size=2,
-                    stride=2,
+                    kernel_size=downsampling_factor[i - 1],
+                    stride=downsampling_factor[i - 1],
                     bias=True,
                 )
             )

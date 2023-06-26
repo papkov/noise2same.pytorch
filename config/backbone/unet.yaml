@@ -11,6 +11,7 @@ backbone:
   encoding_block_sizes: [ 1, 1, 0 ]
   decoding_block_sizes: [ 1, 1 ]
   downsampling: [ conv, conv ]
+  downsampling_factor: [ 2, 2 ]
   skip_method: concat
   pad_divisor: ${eval:2 ** ${.depth}}  # used in dataset config
 
