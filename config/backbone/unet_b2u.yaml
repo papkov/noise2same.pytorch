@@ -1,0 +1,17 @@
+# @package _global_
+backbone_name: unet_b2u
+
+backbone:
+  _target_: noise2same.backbone.unet_b2u.UNetB2U
+  in_channels: ${dataset.n_channels}
+  n_dim: ${dataset.n_dim}
+  base_channels: 24
+  kernel_size: 3
+  depth: 3
+  factor: 2
+  #  factor: [[1, 2, 2], 2, [1, 2, 2]]  # downsample once in Z
+  leak_slope: 0.1
+  pad_divisor: ${eval:2 ** ${.depth}}  # used in dataset config
+
+head:
+  _target_: torch.nn.Identity
