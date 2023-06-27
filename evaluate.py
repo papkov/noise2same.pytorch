@@ -188,7 +188,8 @@ def evaluate(
 
     scores = scores.to_dict()
     # Flatten scores dict as "metric.dataset" to make it compatible with wandb
-    scores = {f"{metric}.{dataset_name}": score for metric, dataset_dict in scores.items()
+    scores = {f"{metric}{'.'+dataset_name if len(datasets) > 1 else ''}": score
+              for metric, dataset_dict in scores.items()
               for dataset_name, score in dataset_dict.items()}
     return scores
 
