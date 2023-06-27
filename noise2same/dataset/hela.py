@@ -52,13 +52,12 @@ class HelaShallowDataset(AbstractNoiseDataset):
         else:
             raise ValueError(f"unknown mode {self.mode}")
 
-        image_index = {'image': [read_h5py(f) for f in input_files],
-                       'ground_truth': [normalize_percentile(read_h5py(f), 0.1, 99.9) for f in gt_files]}
+        image_index = {'image': [normalize(read_h5py(f)) for f in input_files],
+                       'ground_truth': [normalize(read_h5py(f)) for f in gt_files]}
 
         if self.add_blur_and_noise:
             for i, _ in enumerate(image_index['image']):
                 log.info(f"Generating blur and noise for image {i} in {self.mode} stack")
-                image_index['image'][i] = normalize(image_index['image'][i])
                 image_index['image'][i], self.psf = add_microscope_blur_3d(image_index['image'][i], size=17)
                 image_index['image'][i] = add_noise(image_index['image'][i],
                                                     alpha=0.001, sigma=0.01, quant_bits=10)
