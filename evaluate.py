@@ -160,6 +160,8 @@ def evaluate(
                                 keep_images=keep_images,
                                 metrics=metrics,
                                 )
+    # TODO do not create a list of None if there are no images
+    predictions = {cfg.evaluate.key: [s.pop(cfg.evaluate.key, None) for s in scores]}
     scores = pd.DataFrame(scores)
 
     # Label each score with its dataset name and repeat id
@@ -175,7 +177,6 @@ def evaluate(
         log.info(f"Saving results to {evaluation_dir / 'scores.csv'}")
         scores.to_csv(evaluation_dir / "scores.csv")
         if keep_images:
-            predictions = {cfg.evaluate.key: [s.pop(cfg.evaluate.key, None) for s in scores]}
             np.savez(evaluation_dir / "predictions.npz", **predictions)
 
     if verbose and any(ds.n_repeats > 1 for ds in datasets):
