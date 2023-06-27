@@ -140,7 +140,7 @@ def calculate_scores(
     if scale:
         x_ = normalize_zero_one(x_) * data_range
     if normalize_pairs:
-        gt, x_ = normalize_min_mse(gt, x_)
+        x_ = normalize_min_mse(gt, x_)
     if clip:
         x_ = np.clip(x_, 0, data_range)
 
@@ -222,22 +222,17 @@ def normalize_zero_one_dict(images: Dict[str, np.ndarray]) -> Dict[str, np.ndarr
     return {k: normalize_zero_one(v) for k, v in images.items()}
 
 
-def normalize_min_mse(gt: np.ndarray, x: np.ndarray, normalize_gt: bool = True):
+def normalize_min_mse(gt: np.ndarray, x: np.ndarray) -> np.ndarray:
     """
     Normalizes and affinely scales an image pair such that the MSE is minimized
     :param gt: ndarray, the ground truth image
     :param x: ndarray, the image that will be affinely scaled
-    :param normalize_gt: bool, set to True of gt image should be normalized (default)
     :return: gt_scaled, x_scaled
     """
-    if normalize_gt:
-        gt = normalize_percentile(gt, 0.1, 99.9, clip=False).astype(
-            np.float32, copy=False
-        )
     x = x.astype(np.float32, copy=False) - np.mean(x)
     gt = gt.astype(np.float32, copy=False) - np.mean(gt)
     scale = np.cov(x.flatten(), gt.flatten())[0, 1] / np.var(x.flatten())
-    return gt, scale * x
+    return scale * x
 
 
 def plot_3d(im: ndarray) -> None:
