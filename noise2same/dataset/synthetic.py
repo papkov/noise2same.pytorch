@@ -50,7 +50,7 @@ class SyntheticDataset(AbstractNoiseDataset):
         else:
             return np.random.uniform(low=self.noise_param[0], high=self.noise_param[1])
 
-    def add_gaussian(self, x: T) -> T:
+    def _add_gaussian(self, x: T) -> T:
         """
         Add gaussian noise to image
         :param x: image [0, 1]
@@ -60,7 +60,7 @@ class SyntheticDataset(AbstractNoiseDataset):
         noise = torch.FloatTensor(x.shape).normal_(mean=0.0, std=self._noise_param())
         return x + noise
 
-    def add_poisson(self, x: T) -> T:
+    def _add_poisson(self, x: T) -> T:
         """
         Add gaussian noise to image
         :param x: image [0, 1]
@@ -80,11 +80,11 @@ class SyntheticDataset(AbstractNoiseDataset):
                 log.info(f"Cache not found in {cached_path}, read images from disk.")
         return {"image": sorted(list(self.path.glob(f"*.{self.extension}")))}
 
-    def add_noise(self, x: T):
+    def _add_noise(self, x: T):
         if self.noise_type == "gaussian":
-            return self.add_gaussian(x)
+            return self._add_gaussian(x)
         elif self.noise_type == "poisson":
-            return self.add_poisson(x)
+            return self._add_poisson(x)
         else:
             return x
 
@@ -96,7 +96,7 @@ class SyntheticDataset(AbstractNoiseDataset):
     def _apply_transforms(self, image: Dict[str, Optional[np.ndarray]]) -> Dict[str, T]:
         ret = super()._apply_transforms(image)
         # Add noise on a cropped image (much faster than on the full one)
-        ret["image"] = self.add_noise(ret["image"])
+        ret["image"] = self._add_noise(ret["image"])
         return ret
 
 

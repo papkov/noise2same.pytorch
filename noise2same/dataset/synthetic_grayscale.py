@@ -30,10 +30,10 @@ class SyntheticPreparedDataset(SyntheticDataset):
         ret['ground_truth'] = read_image(self.image_index['ground_truth'][i])
         return ret
 
-    def add_noise(self, x: T) -> T:
+    def _add_noise(self, x: T) -> T:
         if self.fixed:
             return x
-        return super().add_noise(x)
+        return super()._add_noise(x)
 
 
 @dataclass
