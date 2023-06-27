@@ -94,10 +94,13 @@ class DeconvolutionMixin:
         out.update(out_convolved)
         return out
 
+    def inference(self, x: T) -> Dict[str, T]:
+        return super().forward(x)
+
     def compute_regularization_loss(
-        self,
-        x_in: Dict[str, T],
-        x_out: Dict[str, T],
+            self,
+            x_in: Dict[str, T],
+            x_out: Dict[str, T],
     ) -> Tuple[T, Dict[str, float]]:
 
         x = x_out[self.regularization_key] * x_in['std'] + x_in['mean']
