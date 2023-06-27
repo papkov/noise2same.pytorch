@@ -227,6 +227,7 @@ def main(train_dir: Path, checkpoint: str = 'last', other_args: list = None) -> 
         factory=factory,
         train_dir=train_dir,
         verbose=True,
+        keep_images=True,
     )
 
 
