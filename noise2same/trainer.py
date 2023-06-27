@@ -143,9 +143,12 @@ class Trainer(object):
                 break
 
             if i == len(iterator) - 1 or (self.check and i == 3):
+                # backslash replacement to avoid unnecessary grouping in wandb
+                x_out = {f"val/out|{k.replace('/', '|')}": v for k, v in x_out.items()}
                 images = {
-                    "val_input": x_in["image"],
-                    "val_out_raw": x_out["image"],
+                    'val/input': x_in['image'],
+                    'val/ground_truth': x_in['ground_truth'],
+                    **x_out
                 }
                 images = detach_to_np(images, mean=x_in["mean"], std=x_in["std"])
                 images = normalize_zero_one_dict(images)
