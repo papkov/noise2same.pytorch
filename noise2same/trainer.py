@@ -147,9 +147,10 @@ class Trainer(object):
                 x_out = {f"val/out|{k.replace('/', '|')}": v for k, v in x_out.items()}
                 images = {
                     'val/input': x_in['image'],
-                    'val/ground_truth': x_in['ground_truth'],
                     **x_out
                 }
+                if 'ground_truth' in x_in:
+                    images['val/ground_truth'] = x_in['ground_truth']
                 images = detach_to_np(images, mean=x_in["mean"], std=x_in["std"])
                 images = normalize_zero_one_dict(images)
         if len(val_mse_log) > 0:
