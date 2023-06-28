@@ -30,7 +30,6 @@ class Trainer(object):
             device: str = "cuda",
             checkpoint_path: str = "checkpoints",
             monitor: str = "val_rec_mse",
-            experiment: str = None,
             check: bool = False,
             wandb_log: bool = True,
             amp: bool = False,
@@ -43,7 +42,6 @@ class Trainer(object):
         self.device = device
         self.checkpoint_path = Path(checkpoint_path)
         self.monitor = monitor
-        self.experiment = experiment
         self.check = check
         if check:
             wandb_log = False

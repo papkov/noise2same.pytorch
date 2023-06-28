@@ -94,7 +94,6 @@ def main(cfg: DictConfig) -> None:
         scheduler=scheduler,
         check=cfg.check,
         monitor=cfg.training.monitor,
-        experiment=cfg.experiment,
         amp=cfg.training.amp,
     )
 
