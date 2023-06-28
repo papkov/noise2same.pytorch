@@ -288,7 +288,7 @@ def concat_projections_3d(im: ndarray, projection_func: callable = np.max) -> nd
     for i, s in enumerate(im.shape):
         p = projection_func(im, axis=i)
         if i == 2:
-            p = np.rot90(p)
+            p = np.transpose(p)
         ps = tuple(slice(0 + sh, d + sh) for d, sh in zip(p.shape, shifts[i]))
         projections[ps] = p
     return projections
