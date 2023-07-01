@@ -10,7 +10,7 @@ backbone:
   depths: [ 6, 6, 6, 6, 6, 6 ]
   num_heads: [ 6, 6, 6, 6, 6, 6 ]
   pad_divisor: ${.window_size}  # used in dataset config
-  input_size: ${eval:${ceil:${dataset.input_size} / ${.pad_divisor}} * ${.pad_divisor}}
+  input_size: ${eval:${ceil:${dataset_train.input_size} / ${.pad_divisor}} * ${.pad_divisor}}
 
 head:
   _target_: torch.nn.Identity
