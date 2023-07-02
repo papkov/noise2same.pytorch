@@ -11,8 +11,22 @@ from torch import Tensor as T
 
 from noise2same.dataset import transforms as t3d
 from noise2same.psf.microscope_psf import SimpleMicroscopePSF
+from torch.utils.data import Subset
+
 
 Ints = Optional[Union[int, List[int], Tuple[int, ...]]]
+
+
+class SubsetAttr(Subset):
+    """
+    Wrapper for Subset that allows to access attributes of the wrapped dataset.
+    """
+
+    def __getattr__(self, item):
+        return getattr(self.dataset, item)
+
+    def __str__(self) -> str:
+        return str(self.dataset)
 
 
 def get_stratified_coords(

@@ -9,21 +9,9 @@ from torch.utils.data import DataLoader
 
 from evaluate import evaluate
 from noise2same.dataset.getter import expand_dataset_cfg
+from noise2same.dataset.util import SubsetAttr
 from noise2same.denoiser import Denoiser
 from noise2same.evaluator import Evaluator
-from torch.utils.data import Subset
-
-
-class SubsetAttr(Subset):
-    """
-    Wrapper for Subset that allows to access attributes of the wrapped dataset.
-    """
-
-    def __getattr__(self, item):
-        return getattr(self.dataset, item)
-
-    def __str__(self) -> str:
-        return str(self.dataset)
 
 
 @pytest.fixture(scope="module", autouse=True)
