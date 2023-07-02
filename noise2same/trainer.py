@@ -142,7 +142,7 @@ class Trainer(object):
             if self.check and i > 3:
                 break
 
-            if i == len(iterator) - 1 or (self.check and i == 3):
+            if i == 0:
                 # backslash replacement to avoid unnecessary grouping in wandb
                 x_out = {f"val/out|{k.replace('/', '|')}": v for k, v in x_out.items()}
                 images = {
