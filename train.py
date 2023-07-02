@@ -63,9 +63,9 @@ def main(cfg: DictConfig) -> None:
 
     loader_valid = None
     if cfg.training.validate:
-        n_samples_val = int(cfg.training.val_partition * len(dataset_valid))
+        n_samples_val = int(cfg.training.val_partition * dataset_valid.get_number_of_images())
         loader_valid = DataLoader(
-            SubsetAttr(dataset_valid, range(min(4, n_samples_val))),
+            SubsetAttr(dataset_valid, range(n_samples_val)),
             batch_size=cfg.training.val_batch_size,
             num_workers=cfg.training.num_workers,
             shuffle=False,
