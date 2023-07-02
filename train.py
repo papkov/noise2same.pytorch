@@ -12,6 +12,7 @@ import evaluate
 import noise2same.trainer
 from noise2same import util
 from noise2same.dataset.getter import expand_dataset_cfg
+from noise2same.dataset.util import SubsetAttr
 from noise2same.psf.psf_convolution import instantiate_psf
 import logging
 
@@ -64,11 +65,7 @@ def main(cfg: DictConfig) -> None:
     if cfg.training.validate:
         n_samples_val = int(cfg.training.val_partition * len(dataset_valid))
         loader_valid = DataLoader(
-            torch.utils.data.random_split(
-                dataset_valid,
-                [n_samples_val, len(dataset_valid) - n_samples_val],
-                generator=torch.Generator().manual_seed(42)
-            )[0],
+            SubsetAttr(dataset_valid, range(min(4, n_samples_val))),
             batch_size=cfg.training.val_batch_size,
             num_workers=cfg.training.num_workers,
             shuffle=False,
