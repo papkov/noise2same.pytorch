@@ -16,9 +16,10 @@ head:
   _target_: torch.nn.Identity
 
 optimizer:
-  lr: 1e-3
+  _target_: lion_pytorch.Lion
+  lr: 1e-6
 
 scheduler:
-  _target_: torch.optim.lr_scheduler.CosineAnnealingLR
-  T_max: ${training.steps}
-  eta_min: 1e-6
+  _target_: torch.optim.lr_scheduler.OneCycleLR
+  total_steps: ${training.steps}
+  max_lr: 1e-3
