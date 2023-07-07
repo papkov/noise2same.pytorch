@@ -61,7 +61,6 @@ class DiagonalWindowAttention(nn.Module):
         super().__init__()
         self.softmax = nn.Softmax(dim=-1)
         self.attn_drop = nn.Dropout(attn_drop)
-        self.norm = nn.LayerNorm(embed_dim)
         self.window_size = window_size
         self.num_patches = np.prod(window_size).item()
         self.num_heads = num_heads
@@ -76,7 +75,6 @@ class DiagonalWindowAttention(nn.Module):
         self.norm_q = nn.LayerNorm([shuffle ** 2, head_dim])
         self.norm_k = nn.LayerNorm([shuffle ** 2, head_dim])
         self.norm_v = nn.LayerNorm([shuffle ** 2, head_dim])
-        self.norm2 = nn.LayerNorm(embed_dim)
 
         window_bias_shape = [2 * s - 1 for s in window_size]
         self.relative_position_bias_table = nn.Parameter(torch.zeros(np.prod(window_bias_shape).item(), num_heads))
@@ -111,7 +109,6 @@ class DiagonalWindowAttention(nn.Module):
         value: T,
         mask: T,
     ) -> T:
-        shortcut = query
         query, key, value = map(self.head_partition, (query, key, value))
         query = self.norm_q(query)
         key = self.norm_k(key)
@@ -129,7 +126,6 @@ class DiagonalWindowAttention(nn.Module):
         attn = self.attn_drop(attn)
         query = torch.einsum("...qk,...ksc->...qsc", attn, value)
         query, key, value = map(self.head_partition_reversed, (query, key, value))
-        query = self.norm2(query + shortcut)
         query = self.proj(query)
         query = self.proj_drop(query)
         return query
@@ -156,8 +152,7 @@ class TransformerBlock(nn.Module):
             embed_dim, to_2tuple(window_size), dilation, shuffle, num_heads,
             attn_drop, proj_drop
         )
-        self.norm1 = nn.LayerNorm(embed_dim)
-        self.norm2 = nn.LayerNorm(embed_dim)
+        self.norm = nn.LayerNorm(embed_dim)
         self.window_size = window_size
         self.shift_size = np.array(shift_size)
         self.dilation = dilation
@@ -165,7 +160,6 @@ class TransformerBlock(nn.Module):
         self.embed_dim = embed_dim
         self.input_size = input_size
         self.attn_mask = self.calculate_mask(input_size)
-        self.shortcut = MLP(embed_dim * 2, embed_dim)
 
     def shift_image(self, x: T) -> T:
         if np.all(self.shift_size == 0):
@@ -223,8 +217,8 @@ class TransformerBlock(nn.Module):
         query = self.attn(query, key, value, mask=mask)
         query, key, value = map(self.window_partition_reversed, (query, key, value), [image_size] * 3)
         query, key, value = map(self.shift_image_reversed, (query, key, value))
-        query = query + self.mlp(query)
-        query = connect_shortcut(self.shortcut, query, shortcut)
+        query = query + shortcut
+        query = query + self.mlp(self.norm(query))
         return query
 
 
