@@ -5,6 +5,8 @@ dataset:
   path: ${cwd}/data/ImageNet/
   n_channels: 3
   version: 0
+  mean: [ 122.25141725, 116.91694356, 107.81185462 ]
+  std: [ 93.30611168, 92.57893674, 93.08634617 ]
 
 dataset_train:
   _target_: noise2same.dataset.ImagenetDataset

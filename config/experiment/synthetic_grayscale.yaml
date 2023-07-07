@@ -5,6 +5,8 @@ dataset:
   noise_type: gaussian
   noise_param: 25
   standardize: True
+  mean: 110.57722785493827
+  std: 58.52426823623527
 
 dataset_train:
   _target_: noise2same.dataset.BSD400SyntheticDataset

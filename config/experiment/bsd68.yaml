@@ -4,6 +4,8 @@ experiment: bsd68
 dataset:
   _target_: noise2same.dataset.BSD68Dataset
   path: ${cwd}/data/BSD68/
+  mean: 110.72957232412905
+  std: 63.656060106500874
 
 dataset_train:
   mode: train

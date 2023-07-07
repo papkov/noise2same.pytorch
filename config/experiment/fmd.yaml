@@ -6,6 +6,15 @@ dataset:
   path: ${cwd}/data/FMD/
   part: cf_fish
   add_blur_and_noise: False
+  # cf_fish
+  mean: 11.04213358828896
+  std: 23.33890890501579
+  # cf_mice
+#  mean: 16.706323270295794
+#  std: 20.639503771967224
+  # tp_mice
+#  mean: 29.132172016344573
+#  std: 24.15909340436342
 
 dataset_train:
   mode: train

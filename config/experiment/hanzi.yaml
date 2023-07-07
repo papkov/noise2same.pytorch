@@ -6,6 +6,8 @@ dataset:
   path: ${cwd}/data/Hanzi/tiles/
   version: 0
   noise_level: 3
+  mean: 0.33176495995914584
+  std: 0.38615528093933327
 
 dataset_train:
   mode: training

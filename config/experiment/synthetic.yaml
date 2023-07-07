@@ -6,6 +6,8 @@ dataset:
   noise_type: gaussian
   noise_param: 25
   standardize: True
+  mean: [ 119.54093579, 113.56837124, 100.93962098 ]
+  std: [ 71.68532506271968, 69.92508170348877, 73.11029057938798 ]
 
 dataset_train:
   _target_: noise2same.dataset.ImagenetSyntheticDataset
