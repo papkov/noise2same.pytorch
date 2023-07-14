@@ -70,8 +70,7 @@ class DiagonalWindowAttention(nn.Module):
 
         head_dim = embed_dim // num_heads
         self.scale = head_dim ** -0.5 / shuffle
-        # todo bias=False?
-        self.proj = nn.Linear(embed_dim, embed_dim, bias=False)
+        self.proj = nn.Linear(embed_dim, embed_dim)
         self.proj_drop = nn.Dropout(proj_drop)
         self.norm_q = nn.LayerNorm([shuffle ** 2, embed_dim])
         self.norm_k = nn.LayerNorm([shuffle ** 2, embed_dim])
