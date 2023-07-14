@@ -334,13 +334,11 @@ class SwinIA(nn.Module):
         shortcuts = []
         mid = len(self.groups) // 2
         for i, group in enumerate(self.groups):
+            q = group(q, k, v)
             if i < mid:
-                q_ = group(q, k, v)
-                shortcuts.append(q_)
-            else:
-                q = group(q, k, v)
-                if shortcuts:
-                    q = connect_shortcut(self.shortcut1 if len(shortcuts) == 1 else self.shortcut2, q, shortcuts.pop())
+                shortcuts.append(q)
+            elif shortcuts:
+                q = connect_shortcut(self.shortcut1 if len(shortcuts) == 1 else self.shortcut2, q, shortcuts.pop())
         q = self.proj_last(q)
         q = einops.rearrange(q, 'b ... c -> b c ...')
         return q
