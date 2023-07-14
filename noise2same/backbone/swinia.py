@@ -32,7 +32,6 @@ class MLP(nn.Module):
         self.layers = nn.ModuleList([
             nn.Sequential(
                 nn.Linear(features[i], features[i + 1]),
-                # nn.LayerNorm(features[i + 1])
             ) for i in range(n_layers)
         ])
         self.act = act_layer()
