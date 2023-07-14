@@ -6,3 +6,6 @@ denoiser:
   masking: gaussian
   noise_mean: 0
   noise_std: 0.2
+  regularization_key: image
+  lambda_bound: 0
+  lambda_sharp: 0
