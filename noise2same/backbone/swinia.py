@@ -278,11 +278,13 @@ class SwinIA(nn.Module):
             num_heads: Tuple[int] = (6, 6, 6, 6, 6, 6, 6),
             dilations: Tuple[int] = (1, 1, 1, 1, 1, 1, 1),
             shuffles: Tuple[int] = (1, 1, 1, 1, 1, 1, 1),
+            full_encoder: bool = False,
             **kwargs: Any,
     ):
         super().__init__()
         self.window_size = window_size
         self.num_heads = num_heads
+        self.full_encoder = full_encoder
         self.embed_k = MLP(in_channels, embed_dim)
         self.embed_v = MLP(in_channels, embed_dim)
         self.proj_last = nn.Sequential(
@@ -334,10 +336,13 @@ class SwinIA(nn.Module):
         shortcuts = []
         mid = len(self.groups) // 2
         for i, group in enumerate(self.groups):
-            q = group(q, k, v)
             if i < mid:
-                shortcuts.append(q)
+                q_ = group(q, k, v)
+                shortcuts.append(q_)
+                if self.full_encoder:
+                    q = q_
             elif shortcuts:
+                q = group(q, k, v)
                 q = connect_shortcut(self.shortcut1 if len(shortcuts) == 1 else self.shortcut2, q, shortcuts.pop())
         q = self.proj_last(q)
         q = einops.rearrange(q, 'b ... c -> b c ...')

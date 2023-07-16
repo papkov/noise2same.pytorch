@@ -11,6 +11,7 @@ backbone:
   shuffles: [ 1, 2, 4, 2, 1 ]
   pad_divisor: ${eval:${.window_size} * ${max:${.dilations}} * ${max:${.shuffles}}}  # used in dataset config
   input_size: ${eval:${ceil:${dataset_train.input_size} / ${.pad_divisor}} * ${.pad_divisor}}
+  full_encoder: False
 
 head:
   _target_: torch.nn.Identity
