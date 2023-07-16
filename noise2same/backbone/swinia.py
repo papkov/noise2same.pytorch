@@ -125,7 +125,9 @@ class DiagonalWindowAttention(nn.Module):
             "(np1 np2) nh -> 1 nh np1 np2", np1=self.num_patches
         )
         attn = attn + relative_position_bias
-        attn += einops.repeat(mask, f"nw np1 np2 -> (b nw) 1 np1 np2", b=attn.shape[0] // mask.shape[0]).to(attn.device)
+        attn = attn + einops.repeat(
+            mask, f"nw np1 np2 -> (b nw) 1 np1 np2", b=attn.shape[0] // mask.shape[0]
+        ).to(attn.device)
 
         attn = self.softmax(attn)
         attn = self.attn_drop(attn)
