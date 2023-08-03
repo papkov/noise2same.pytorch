@@ -293,6 +293,7 @@ class SwinIA(nn.Module):
             nn.LayerNorm(embed_dim),
             nn.Linear(embed_dim, in_channels)
         )
+        self.project_shortcut = nn.ModuleList([nn.Linear(embed_dim * 2, embed_dim) for _ in range(len(depths) // 2)])
         self.shortcut1 = nn.Linear(embed_dim * 2, embed_dim)
         self.shortcut2 = nn.Linear(embed_dim * 2, embed_dim)
         self.shuffles = shuffles
@@ -354,7 +355,7 @@ class SwinIA(nn.Module):
             else:
                 q = group(q, k, v)
                 if shortcuts:
-                    q = connect_shortcut(self.shortcut1 if len(shortcuts) == 1 else self.shortcut2, q, shortcuts.pop())
+                    q = connect_shortcut(self.project_shortcut[i-mid], q, shortcuts.pop())
         q = self.proj_last(q)
         q = einops.rearrange(q, 'b ... c -> b c ...')
         return q
