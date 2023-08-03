@@ -67,7 +67,7 @@ class SyntheticDataset(AbstractNoiseDataset):
 
         Adopted from Neighbor2Neighbor https://github.com/TaoHuang2018/Neighbor2Neighbor/blob/2fff2978/train.py#L124
         """
-        lam = self._noise_param()
+        lam = self._noise_param() / self.data_range
         return torch.poisson(lam * x) / lam
 
     def _create_image_index(self) -> Dict[str, Union[List[str], np.ndarray]]:
