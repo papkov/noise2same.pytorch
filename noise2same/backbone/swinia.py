@@ -295,8 +295,12 @@ class SwinIA(nn.Module):
         )
         self.shortcut1 = nn.Linear(embed_dim * 2, embed_dim)
         self.shortcut2 = nn.Linear(embed_dim * 2, embed_dim)
-        self.absolute_pos_embed = nn.Parameter(torch.zeros(window_size ** 2, embed_dim // num_heads[0]))
-        trunc_normal_(self.absolute_pos_embed, std=.02)
+        self.shuffles = shuffles
+        self.absolute_pos_embed = nn.ParameterDict({
+            str(s): nn.Parameter(torch.zeros((window_size * s) ** 2, embed_dim // num_heads[0])) for s in set(shuffles)
+        })
+        for ape in self.absolute_pos_embed.values():
+            trunc_normal_(ape, std=.02)
         self.groups = nn.ModuleList([
             ResidualGroup(
                 embed_dim=embed_dim,
@@ -332,20 +336,25 @@ class SwinIA(nn.Module):
         k = self.embed_k(x)
         v = self.embed_v(x)
         wh, ww = x.shape[1] // self.window_size, x.shape[2] // self.window_size
-        full_pos_embed = einops.repeat(self.absolute_pos_embed, "(ws1 ws2) ch -> b (wh ws1) (ww ws2) (nh ch)",
-                                       b=x.shape[0], ws1=self.window_size, wh=wh, ww=ww, nh=self.num_heads[0])
-        q, k, v = full_pos_embed, k + full_pos_embed, v + full_pos_embed
+        full_pos_embed = {int(s): einops.repeat(ape, "(ws1 ws2) ch -> b (wh ws1) (ww ws2) (nh ch)", b=x.shape[0],
+                                                ws1=self.window_size * int(s), wh=wh // int(s), ww=ww // int(s),
+                                                nh=self.num_heads[0]) for s, ape in self.absolute_pos_embed.items()}
         shortcuts = []
         mid = len(self.groups) // 2
-        for i, group in enumerate(self.groups):
+        q = full_pos_embed[1]
+        for s, (i, group) in zip(self.shuffles, enumerate(self.groups)):
+            if i <= mid and not self.full_encoder:
+                q = full_pos_embed[s]
+            k, v = k + full_pos_embed[s], v + full_pos_embed[s]
             if i < mid:
                 q_ = group(q, k, v)
                 shortcuts.append(q_)
                 if self.full_encoder:
                     q = q_
-            elif shortcuts:
+            else:
                 q = group(q, k, v)
-                q = connect_shortcut(self.shortcut1 if len(shortcuts) == 1 else self.shortcut2, q, shortcuts.pop())
+                if shortcuts:
+                    q = connect_shortcut(self.shortcut1 if len(shortcuts) == 1 else self.shortcut2, q, shortcuts.pop())
         q = self.proj_last(q)
         q = einops.rearrange(q, 'b ... c -> b c ...')
         return q
