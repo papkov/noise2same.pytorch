@@ -3,6 +3,7 @@ backbone_name: swinia
 
 backbone:
   _target_: noise2same.backbone.swinia.SwinIA
+  in_channels: ${dataset.n_channels}
   embed_dim: 144
   window_size: 8
   depths: [ 4, 4, 4, 4, 4 ]
