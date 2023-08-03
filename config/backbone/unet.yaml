@@ -20,3 +20,9 @@ head:
   in_channels: ${backbone.base_channels}
   out_channels: ${dataset.n_channels}
   n_dim: ${dataset.n_dim}
+
+scheduler:
+  _target_: noise2same.scheduler.ExponentialDecayScheduler
+  decay_rate: 0.5
+  decay_steps: 5e3  # how many steps to decrease by decay rate
+  staircase: True  # integer division

@@ -14,3 +14,9 @@ backbone:
 
 head:
   _target_: torch.nn.Identity
+
+scheduler:
+  _target_: noise2same.scheduler.ExponentialDecayScheduler
+  decay_rate: 0.5
+  decay_steps: 5e3  # how many steps to decrease by decay rate
+  staircase: True  # integer division

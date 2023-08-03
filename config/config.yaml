@@ -37,9 +37,3 @@ optimizer:
   _target_: torch.optim.Adam
   lr: 0.0004
   weight_decay: 0
-
-scheduler:
-  _target_: noise2same.scheduler.ExponentialDecayScheduler
-  decay_rate: 0.5
-  decay_steps: 5e3  # how many steps to decrease by decay rate
-  staircase: True  # integer division
