@@ -89,7 +89,7 @@ class Noise2Self(Denoiser):
         return super().forward(x)
 
     def compute_loss(self, x_in: Dict[str, T], x_out: Dict[str, T]) -> Tuple[T, Dict[str, float]]:
-        loss = self.compute_mse(x_in['image'], x_out['image'], mask=x_in['mask'])
+        loss = self.compute_mse(x_in[self.target_key], x_out['image'], mask=x_in['mask'])
         return loss, {'loss': loss.item(), 'bsp_mse': loss.item()}
 
 

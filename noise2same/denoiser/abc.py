@@ -14,16 +14,18 @@ class Denoiser(nn.Module):
     """
 
     def __init__(
-        self,
-        # TODO consider removing default values
-        backbone: nn.Module = nn.Identity(),
-        head: nn.Module = nn.Identity(),
-        residual: bool = False,
+            self,
+            # TODO consider removing default values
+            backbone: nn.Module = nn.Identity(),
+            head: nn.Module = nn.Identity(),
+            residual: bool = False,
+            target_key: str = "image",
     ):
         super().__init__()
         self.residual = residual
         self.backbone = backbone
         self.head = head
+        self.target_key = target_key
 
     def forward(self, x: T, mask: Optional[T] = None) -> Dict[str, T]:
         """
@@ -44,7 +46,7 @@ class Denoiser(nn.Module):
         :param x_out: model output dictionary, must contain 'image' key
         :return: loss tensor for backpropagation and dictionary with loss values for logging
         """
-        loss = self.compute_mse(x_in['ground_truth' if 'ground_truth' in x_in else 'image'], x_out['image'])
+        loss = self.compute_mse(x_in[self.target_key], x_out['image'])
         return loss, {'loss': loss.item(), 'rec_mse': loss.item()}
 
     @staticmethod
