@@ -46,3 +46,4 @@ training:
   steps: 50000
   batch_size: 64
   validate: True
+  monitor: val_mse
