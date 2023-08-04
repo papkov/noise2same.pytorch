@@ -24,5 +24,5 @@ optimizer:
 scheduler:
   _target_: torch.optim.lr_scheduler.OneCycleLR
   total_steps: ${training.steps}
-  max_lr: 1e-3
+  max_lr: 3e-4
   pct_start: 0.15
