@@ -159,6 +159,7 @@ def evaluate(
                                 key=cfg.evaluate.key,
                                 keep_images=keep_images,
                                 metrics=metrics,
+                                min_max_scale=cfg.experiment == 'imagenet'
                                 )
     # TODO do not create a list of None if there are no images
     predictions = {cfg.evaluate.key: [s.pop(cfg.evaluate.key, None) for s in scores]}

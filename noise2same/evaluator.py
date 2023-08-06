@@ -253,6 +253,7 @@ class Evaluator(object):
             empty_cache: bool = False,
             key: str = 'image',
             keep_images: bool = False,
+            min_max_scale: bool = False,
             metrics: Tuple[str, ...] = ("rmse", "psnr", "ssim"),
             num_workers: int = 0,
     ) -> List[Dict[str, Union[float, np.ndarray]]]:
@@ -296,7 +297,8 @@ class Evaluator(object):
                     if dataset.data_range == 1:
                         pred = pred * 255
                         gt = gt * 255
-                    pred = np.clip(pred + 0.5, 0, 255).astype(np.uint8).astype(np.float32)
+                    if not min_max_scale:
+                        pred = np.clip(pred + 0.5, 0, 255).astype(np.uint8).astype(np.float32)
                     gt = np.clip(gt + 0.5, 0, 255).astype(np.uint8).astype(np.float32)
                 scores = calculate_scores(
                     gt, pred,
@@ -305,6 +307,7 @@ class Evaluator(object):
                     normalize_pairs=dataset.n_dim > 2,
                     gaussuan_weights=True,
                     metrics=metrics,
+                    scale=min_max_scale
                 )
                 if keep_images:
                     scores[key] = pred
