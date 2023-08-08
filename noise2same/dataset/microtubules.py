@@ -21,6 +21,7 @@ log = logging.getLogger(__name__)
 class MicrotubulesDataset(AbstractNoiseDataset3DLarge):
     path: Union[Path, str] = "data/microtubules-simulation"
     input_name: str = "input.tif"
+    ground_truth_name: str = "ground-truth.tif"
     add_blur_and_noise: bool = False
 
     def __str__(self) -> str:
@@ -28,8 +29,9 @@ class MicrotubulesDataset(AbstractNoiseDataset3DLarge):
 
     def _read_large_image(self):
         self.image = io.imread(str(self.path / self.input_name)).astype(np.float32)
-        self.ground_truth = normalize_percentile(io.imread(str(self.path / 'ground-truth.tif')).astype(np.float32),
+        self.ground_truth = normalize_percentile(io.imread(str(self.path / self.ground_truth_name)).astype(np.float32),
                                                  0.1, 99.9)
+        # self.ground_truth = normalize(io.imread(str(self.path / self.ground_truth_name)).astype(np.float32))
         if self.add_blur_and_noise:
             log.info(f"Generating blur and noise for {self.input_name}")
             # self.image = normalize_percentile(self.image, 0.1, 99.9)
@@ -49,6 +51,7 @@ class MicrotubulesDataset(AbstractNoiseDataset3DLarge):
 class MicrotubulesTestDataset(AbstractNoiseDataset):
     path: Union[Path, str] = "data/microtubules-simulation"
     input_name: str = "input.tif"
+    ground_truth_name: str = "ground-truth.tif"
     add_blur_and_noise: bool = False
 
     def __str__(self) -> str:
@@ -57,8 +60,9 @@ class MicrotubulesTestDataset(AbstractNoiseDataset):
     def _create_image_index(self) -> Dict[str, Union[List[str], np.ndarray]]:
         # TODO remove duplicate code
         image = io.imread(str(self.path / self.input_name)).astype(np.float32)
-        ground_truth = normalize_percentile(io.imread(str(self.path / 'ground-truth.tif')).astype(np.float32),
-                                            0.1, 99.9)
+        # ground_truth = normalize_percentile(io.imread(str(self.path / self.ground_truth_name)).astype(np.float32),
+        #                                     0.1, 99.9)
+        ground_truth = normalize(io.imread(str(self.path / self.ground_truth_name)).astype(np.float32))
         if self.add_blur_and_noise:
             log.info(f"Generating blur and noise for {self.input_name}")
             # self.image = normalize_percentile(self.image, 0.1, 99.9)
