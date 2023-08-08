@@ -41,4 +41,4 @@ training:
   batch_size: 64
   validate: True
   val_partition: 0.1
-  monitor: bsp_mse
+  monitor: val_mse
