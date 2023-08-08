@@ -294,8 +294,6 @@ class SwinIA(nn.Module):
             nn.Linear(embed_dim, in_channels)
         )
         self.project_shortcut = nn.ModuleList([nn.Linear(embed_dim * 2, embed_dim) for _ in range(len(depths) // 2)])
-        self.shortcut1 = nn.Linear(embed_dim * 2, embed_dim)
-        self.shortcut2 = nn.Linear(embed_dim * 2, embed_dim)
         self.shuffles = shuffles
         self.absolute_pos_embed = nn.ParameterDict({
             str(s): nn.Parameter(torch.zeros((window_size * s) ** 2, embed_dim // num_heads[0])) for s in set(shuffles)
