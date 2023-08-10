@@ -7,6 +7,7 @@ from torch import Tensor as T
 from timm.models.layers import to_2tuple, trunc_normal_
 import numpy as np
 import einops
+from einops.layers.torch import Rearrange
 
 
 def connect_shortcut(layer: nn.Module, x: T, y: T) -> T:
@@ -49,14 +50,16 @@ class MLP(nn.Module):
 class DiagonalWindowAttention(nn.Module):
 
     def __init__(
-        self,
-        embed_dim: int = 96,
-        window_size: Tuple[int] = (8, 8),
-        dilation: int = 1,
-        shuffle: int = 1,
-        num_heads: int = 6,
-        attn_drop: float = 0.05,
-        proj_drop: float = 0.05,
+            self,
+            embed_dim: int = 96,
+            window_size: Tuple[int] = (8, 8),
+            dilation: int = 1,
+            shuffle: int = 1,
+            num_heads: int = 6,
+            attn_drop: float = 0.05,
+            proj_drop: float = 0.05,
+            post_norm: bool = False,
+            **kwargs: Any,
     ):
         super().__init__()
         self.softmax = nn.Softmax(dim=-1)
@@ -67,14 +70,13 @@ class DiagonalWindowAttention(nn.Module):
         self.embed_dim = embed_dim
         self.dilation = dilation
         self.shuffle = shuffle
+        self.post_norm = post_norm
 
         head_dim = embed_dim // num_heads
         self.scale = head_dim ** -0.5 / shuffle
         self.proj = nn.Linear(embed_dim, embed_dim)
         self.proj_drop = nn.Dropout(proj_drop)
-        self.norm_q = nn.LayerNorm([shuffle ** 2, embed_dim])
-        self.norm_k = nn.LayerNorm([shuffle ** 2, embed_dim])
-        self.norm_v = nn.LayerNorm([shuffle ** 2, embed_dim])
+        self.norm_q = nn.LayerNorm(embed_dim) if post_norm else nn.LayerNorm([shuffle ** 2, embed_dim])
 
         window_bias_shape = [2 * s - 1 for s in window_size]
         self.relative_position_bias_table = nn.Parameter(torch.zeros(np.prod(window_bias_shape).item(), num_heads))
@@ -116,7 +118,8 @@ class DiagonalWindowAttention(nn.Module):
         mask: T,
     ) -> T:
         query, key, value = map(self.group_partition, (query, key, value))
-        query, key, value = self.norm_q(query), self.norm_k(key), self.norm_v(value)
+        if not self.post_norm:
+            query = self.norm_q(query)
         query, key, value = map(self.head_partition, (query, key, value))
         query = query * self.scale
         attn = torch.einsum("...qsc,...ksc->...qk", query, key)
@@ -135,6 +138,8 @@ class DiagonalWindowAttention(nn.Module):
         query, key, value = map(self.head_partition_reversed, (query, key, value))
         query, key, value = map(self.group_partition_reversed, (query, key, value))
         query = self.proj(query)
+        if self.post_norm:
+            query = self.norm_q(query)
         query = self.proj_drop(query)
         return query
 
@@ -142,23 +147,25 @@ class DiagonalWindowAttention(nn.Module):
 class TransformerBlock(nn.Module):
 
     def __init__(
-        self,
-        embed_dim: int = 96,
-        window_size: int = 8,
-        shift_size: Tuple[int] = (0, 0),
-        num_heads: int = 6,
-        dilation: int = 1,
-        shuffle: int = 1,
-        input_size: Tuple[int] = (128, 128),
-        attn_drop: float = 0.05,
-        proj_drop: float = 0.05,
+            self,
+            embed_dim: int = 96,
+            window_size: int = 8,
+            shift_size: Tuple[int] = (0, 0),
+            num_heads: int = 6,
+            dilation: int = 1,
+            shuffle: int = 1,
+            input_size: Tuple[int] = (128, 128),
+            attn_drop: float = 0.05,
+            proj_drop: float = 0.05,
+            post_norm: bool = False,
+            **kwargs,
     ):
         super().__init__()
         self.softmax = nn.Softmax(dim=-1)
         self.mlp = MLP(embed_dim, embed_dim, n_layers=2)
         self.attn = DiagonalWindowAttention(
             embed_dim, to_2tuple(window_size), dilation, shuffle, num_heads,
-            attn_drop, proj_drop
+            attn_drop, proj_drop, post_norm, **kwargs,
         )
         self.norm = nn.LayerNorm(embed_dim)
         self.window_size = window_size
@@ -168,6 +175,7 @@ class TransformerBlock(nn.Module):
         self.embed_dim = embed_dim
         self.input_size = input_size
         self.attn_mask = self.calculate_mask(input_size)
+        self.post_norm = post_norm
 
     def shift_image(self, x: T) -> T:
         if np.all(self.shift_size == 0):
@@ -226,21 +234,26 @@ class TransformerBlock(nn.Module):
         query, key, value = map(self.window_partition_reversed, (query, key, value), [image_size] * 3)
         query, key, value = map(self.shift_image_reversed, (query, key, value))
         query = query + shortcut
-        query = query + self.mlp(self.norm(query))
+        if self.post_norm:
+            query = query + self.norm(self.mlp(query))
+        else:
+            query = query + self.mlp(self.norm(query))
         return query
 
 
 class ResidualGroup(nn.Module):
 
     def __init__(
-        self,
-        embed_dim: int = 96,
-        window_size: int = 8,
-        depth: int = 6,
-        num_heads: int = 6,
-        dilation: int = 1,
-        shuffle: int = 1,
-        input_size: Tuple[int] = (128, 128),
+            self,
+            embed_dim: int = 96,
+            window_size: int = 8,
+            depth: int = 6,
+            num_heads: int = 6,
+            dilation: int = 1,
+            shuffle: int = 1,
+            input_size: Tuple[int] = (128, 128),
+            post_norm: bool = False,
+            **kwargs: Any,
     ):
         super().__init__()
         shift_size = window_size // 2
@@ -254,18 +267,35 @@ class ResidualGroup(nn.Module):
                 dilation=dilation,
                 shuffle=shuffle,
                 input_size=input_size,
+                post_norm=post_norm,
+                **kwargs,
             ) for i in range(depth)
         ])
 
     def forward(
-        self,
-        query: T,
-        key: T,
-        value: T,
+            self,
+            query: T,
+            key: T,
+            value: T,
     ) -> T:
         for block in self.blocks:
             query = block(query, key, value)
         return query
+
+
+class ShuffleEmbed(nn.Module):
+    def __init__(self, in_channels: int, embed_dim: int, shuffle: int = 1):
+        super().__init__()
+        self.shuffle = Rearrange('b (h sh) (w sw) c -> b h w (sh sw c)', sh=shuffle, sw=shuffle)
+        self.mlp = MLP(in_channels * shuffle ** 2, embed_dim * shuffle ** 2)
+        self.unshuffle = Rearrange('b h w (sh sw c) -> b (h sh) (w sw) c', sh=shuffle, sw=shuffle)
+        self.norm = nn.LayerNorm(embed_dim * shuffle ** 2)
+
+    def forward(self, x: T, full_pos_embed: T) -> T:
+        x = self.mlp(self.shuffle(x))
+        x = self.norm(x + self.shuffle(full_pos_embed))
+        x = self.unshuffle(x)
+        return x
 
 
 class SwinIA(nn.Module):
@@ -273,24 +303,26 @@ class SwinIA(nn.Module):
     def __init__(
             self,
             in_channels: int = 1,
-            embed_dim: int = 96,
+            embed_dim: int = 144,
             window_size: int = 8,
             input_size: int = 128,
-            depths: Tuple[int] = (8, 4, 4, 4, 4, 4, 8),
-            num_heads: Tuple[int] = (6, 6, 6, 6, 6, 6, 6),
-            dilations: Tuple[int] = (1, 1, 1, 1, 1, 1, 1),
-            shuffles: Tuple[int] = (1, 1, 1, 1, 1, 1, 1),
+            depths: Tuple[int] = (4, 4, 4, 4, 4),
+            num_heads: Tuple[int] = (16, 16, 16, 16, 16),
+            dilations: Tuple[int] = (1, 1, 1, 1, 1),
+            shuffles: Tuple[int] = (1, 2, 4, 2, 1),
             full_encoder: bool = False,
+            post_norm: bool = False,
             **kwargs: Any,
     ):
         super().__init__()
         self.window_size = window_size
         self.num_heads = num_heads
         self.full_encoder = full_encoder
-        self.embed_k = MLP(in_channels, embed_dim)
-        self.embed_v = MLP(in_channels, embed_dim)
+        self.embed_k = nn.ModuleDict({str(s): ShuffleEmbed(in_channels, embed_dim, s) for s in set(shuffles)})
+        self.embed_v = nn.ModuleDict({str(s): ShuffleEmbed(in_channels, embed_dim, s) for s in set(shuffles)})
+
         self.proj_last = nn.Sequential(
-            nn.LayerNorm(embed_dim),
+            nn.Identity() if post_norm else nn.LayerNorm(embed_dim),
             nn.Linear(embed_dim, in_channels)
         )
         self.project_shortcut = nn.ModuleList([nn.Linear(embed_dim * 2, embed_dim) for _ in range(len(depths) // 2)])
@@ -308,7 +340,9 @@ class SwinIA(nn.Module):
                 num_heads=n,
                 dilation=dl,
                 shuffle=sh,
-                input_size=to_2tuple(input_size)
+                input_size=to_2tuple(input_size),
+                post_norm=post_norm,
+                **kwargs,
             ) for i, (d, n, dl, sh) in enumerate(zip(depths, num_heads, dilations, shuffles))
         ])
         self.apply(self._init_weights)
@@ -332,26 +366,25 @@ class SwinIA(nn.Module):
 
     def forward(self, x: T) -> T:
         x = einops.rearrange(x, 'b c ... -> b ... c')
-        k = self.embed_k(x)
-        v = self.embed_v(x)
         wh, ww = x.shape[1] // self.window_size, x.shape[2] // self.window_size
-        full_pos_embed = {int(s): einops.repeat(ape, "(ws1 ws2) ch -> b (wh ws1) (ww ws2) (nh ch)", b=x.shape[0],
-                                                ws1=self.window_size * int(s), wh=wh // int(s), ww=ww // int(s),
-                                                nh=self.num_heads[0]) for s, ape in self.absolute_pos_embed.items()}
+        full_pos_embed = {s: einops.repeat(ape, "(ws1 ws2) ch -> b (wh ws1) (ww ws2) (nh ch)", b=x.shape[0],
+                                           ws1=self.window_size * int(s), wh=wh // int(s), ww=ww // int(s),
+                                           nh=self.num_heads[0]) for s, ape in self.absolute_pos_embed.items()}
+        k = {s: emb(x, full_pos_embed[s]) for s, emb in self.embed_k.items()}
+        v = {s: emb(x, full_pos_embed[s]) for s, emb in self.embed_v.items()}
         shortcuts = []
         mid = len(self.groups) // 2
-        q = full_pos_embed[1]
-        for s, (i, group) in zip(self.shuffles, enumerate(self.groups)):
+        q = full_pos_embed["1"]  # initial query is the positional embedding with shuffle 1
+        for s, (i, group) in zip(map(str, self.shuffles), enumerate(self.groups)):
             if i <= mid and not self.full_encoder:
                 q = full_pos_embed[s]
-            k, v = k + full_pos_embed[s], v + full_pos_embed[s]
             if i < mid:
-                q_ = group(q, k, v)
+                q_ = group(q, k[s], v[s])
                 shortcuts.append(q_)
                 if self.full_encoder:
                     q = q_
             else:
-                q = group(q, k, v)
+                q = group(q, k[s], v[s])
                 if shortcuts:
                     q = connect_shortcut(self.project_shortcut[i-mid], q, shortcuts.pop())
         q = self.proj_last(q)
