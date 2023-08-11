@@ -114,7 +114,7 @@ def calculate_scores(
     :param x: ndarray, prediction
     :param data_range: The data range of the input image, 1 by default (0-1 normalized images)
     :param normalize_pairs: bool, normalize and affinely scale pairs gt-x (needed for Planaria dataset)
-    :param scale: bool, scale images by min and max (needed for Imagenet dataset)
+    :param scale: bool, scale images by min and max (needed for Imagenet and Hanzi datasets)
     :param clip: bool, clip an image to [0, data_range]
     :param multichannel: If True, treat the last dimension of the array as channels for SSIM. Similarity
         calculations are done independently for each channel then averaged.

@@ -265,6 +265,7 @@ class Evaluator(object):
         :param empty_cache: bool, if empty CUDA cache after each iteration
         :param key: str, key to use for the output [image, deconv]
         :param keep_images: bool, if add prediction arrays to result
+        :param min_max_scale: bool, scale images by min and max
         :param metrics: tuple of metrics to calculate
         :param num_workers: int, number of workers for DataLoader
         :return: List[Dict[key, output]]
