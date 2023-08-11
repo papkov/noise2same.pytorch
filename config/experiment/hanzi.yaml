@@ -14,7 +14,7 @@ dataset_train:
   transforms:
     _target_: noise2same.dataset.util.training_augmentations_2d
     crop: 64
-    input_size: ${.transforms.crop}  # needed for some models
+  input_size: ${.transforms.crop}  # needed for some models
 
 dataset_valid:
   mode: validation
