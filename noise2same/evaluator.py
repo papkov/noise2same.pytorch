@@ -300,7 +300,7 @@ class Evaluator(object):
                         gt = gt * 255
                     if not min_max_scale:
                         pred = np.clip(pred + 0.5, 0, 255).astype(np.uint8).astype(np.float32)
-                    gt = np.clip(gt + 0.5, 0, 255).astype(np.uint8).astype(np.float32)
+                        gt = np.clip(gt + 0.5, 0, 255).astype(np.uint8).astype(np.float32)
                 scores = calculate_scores(
                     gt, pred,
                     multichannel=True,
