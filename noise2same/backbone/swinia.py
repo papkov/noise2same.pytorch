@@ -262,7 +262,7 @@ class ResidualGroup(nn.Module):
             TransformerBlock(
                 embed_dim=embed_dim,
                 window_size=window_size,
-                shift_size=shifts[i % 4],
+                shift_size=shifts[i % len(shifts)],
                 num_heads=num_heads,
                 dilation=dilation,
                 shuffle=shuffle,
@@ -311,6 +311,7 @@ class SwinIA(nn.Module):
             dilations: Tuple[int, ...] = (1, 1, 1, 1, 1),
             shuffles: Tuple[int, ...] = (1, 2, 4, 2, 1),
             full_encoder: bool = False,
+            u_shape: bool = True,
             post_norm: bool = False,
             **kwargs: Any,
     ):
@@ -318,6 +319,7 @@ class SwinIA(nn.Module):
         self.window_size = window_size
         self.num_heads = num_heads
         self.full_encoder = full_encoder
+        self.u_shape = u_shape
         self.embed_k = nn.ModuleDict({str(s): ShuffleEmbed(in_channels, embed_dim, s) for s in set(shuffles)})
         self.embed_v = nn.ModuleDict({str(s): ShuffleEmbed(in_channels, embed_dim, s) for s in set(shuffles)})
 
@@ -378,7 +380,7 @@ class SwinIA(nn.Module):
         for s, (i, group) in zip(map(str, self.shuffles), enumerate(self.groups)):
             if i <= mid and not self.full_encoder:
                 q = full_pos_embed[s]
-            if i < mid:
+            if i < mid and self.u_shape:
                 q_ = group(q, k[s], v[s])
                 shortcuts.append(q_)
                 if self.full_encoder:
