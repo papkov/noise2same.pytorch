@@ -253,11 +253,15 @@ class ResidualGroup(nn.Module):
             shuffle: int = 1,
             input_size: Tuple[int, int] = (128, 128),
             post_norm: bool = False,
+            cyclic_shift: bool = True,
             **kwargs: Any,
     ):
         super().__init__()
         shift_size = window_size // 2
-        shifts = ((0, 0), (0, shift_size), (shift_size, shift_size), (shift_size, 0))
+        if cyclic_shift:
+            shifts = ((0, 0), (0, shift_size), (shift_size, shift_size), (shift_size, 0))
+        else:
+            shifts = ((0, 0), (shift_size, shift_size))
         self.blocks = nn.ModuleList([
             TransformerBlock(
                 embed_dim=embed_dim,
@@ -312,6 +316,7 @@ class SwinIA(nn.Module):
             shuffles: Tuple[int, ...] = (1, 2, 4, 2, 1),
             full_encoder: bool = False,
             u_shape: bool = True,
+            cyclic_shift: bool = True,
             post_norm: bool = False,
             **kwargs: Any,
     ):
@@ -343,6 +348,7 @@ class SwinIA(nn.Module):
                 dilation=dl,
                 shuffle=sh,
                 input_size=to_2tuple(input_size),
+                cyclic_shift=cyclic_shift,
                 post_norm=post_norm,
                 **kwargs,
             ) for i, (d, n, dl, sh) in enumerate(zip(depths, num_heads, dilations, shuffles))

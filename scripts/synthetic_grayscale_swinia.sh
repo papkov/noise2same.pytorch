@@ -1,6 +1,6 @@
 #!/bin/bash
 
-#SBATCH -J ggauss50
+#SBATCH -J ggauss25
 #SBATCH --output=slurm_outputs/slurm-%x.%j.out
 #SBATCH -N 1
 #SBATCH --ntasks-per-node=1
@@ -16,4 +16,4 @@ conda activate n2s_env
 cd noise2same || return
 
 python train.py +backbone=swinia +experiment=synthetic_grayscale project=synthetic_grayscale \
-                dataset.noise_param=50 # backbone.full_encoder=true
+                dataset.noise_param=25 # backbone.full_encoder=true

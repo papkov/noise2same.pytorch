@@ -14,6 +14,7 @@ backbone:
   input_size: ${eval:${ceil:${dataset_train.input_size} / ${.pad_divisor}} * ${.pad_divisor}}
   full_encoder: False
   u_shape: True
+  cyclic_shift: True
   post_norm: False
 
 head:
