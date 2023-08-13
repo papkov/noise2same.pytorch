@@ -76,7 +76,7 @@ class DiagonalWindowAttention(nn.Module):
         self.scale = head_dim ** -0.5 / shuffle
         self.proj = nn.Linear(embed_dim, embed_dim)
         self.proj_drop = nn.Dropout(proj_drop)
-        self.norm_q = nn.LayerNorm(embed_dim) if post_norm else nn.LayerNorm([shuffle ** 2, embed_dim])
+        self.norm_q = nn.LayerNorm([shuffle ** 2, embed_dim])
 
         window_bias_shape = [2 * s - 1 for s in window_size]
         self.relative_position_bias_table = nn.Parameter(torch.zeros(np.prod(window_bias_shape).item(), num_heads))
@@ -136,11 +136,11 @@ class DiagonalWindowAttention(nn.Module):
         attn = self.attn_drop(attn)
         query = torch.einsum("...qk,...ksc->...qsc", attn, value)
         query, key, value = map(self.head_partition_reversed, (query, key, value))
-        query, key, value = map(self.group_partition_reversed, (query, key, value))
         query = self.proj(query)
         if self.post_norm:
             query = self.norm_q(query)
         query = self.proj_drop(query)
+        query, key, value = map(self.group_partition_reversed, (query, key, value))
         return query
 
 
