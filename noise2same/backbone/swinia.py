@@ -384,7 +384,7 @@ class SwinIA(nn.Module):
         mid = len(self.groups) // 2
         q = full_pos_embed[str(self.shuffles[0])]  # initial query is the positional embedding for the first shuffle
         for s, (i, group) in zip(map(str, self.shuffles), enumerate(self.groups)):
-            if i <= mid and not self.full_encoder:
+            if i <= mid and self.u_shape and not self.full_encoder:
                 q = full_pos_embed[s]
             if i < mid and self.u_shape:
                 q_ = group(q, k[s], v[s])
@@ -394,7 +394,7 @@ class SwinIA(nn.Module):
             else:
                 q = group(q, k[s], v[s])
                 if shortcuts:
-                    q = connect_shortcut(self.project_shortcut[i-mid], q, shortcuts.pop())
+                    q = connect_shortcut(self.project_shortcut[i - mid], q, shortcuts.pop())
         q = self.proj_last(q)
         q = einops.rearrange(q, 'b ... c -> b c ...')
         return q
