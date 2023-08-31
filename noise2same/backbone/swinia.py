@@ -382,7 +382,7 @@ class SwinIA(nn.Module):
         v = {s: emb(x, full_pos_embed[s]) for s, emb in self.embed_v.items()}
         shortcuts = []
         mid = len(self.groups) // 2
-        q = full_pos_embed["1"]  # initial query is the positional embedding with shuffle 1
+        q = full_pos_embed[str(self.shuffles[0])]  # initial query is the positional embedding for the first shuffle
         for s, (i, group) in zip(map(str, self.shuffles), enumerate(self.groups)):
             if i <= mid and not self.full_encoder:
                 q = full_pos_embed[s]
