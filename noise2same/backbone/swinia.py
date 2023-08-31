@@ -321,6 +321,7 @@ class SwinIA(nn.Module):
             **kwargs: Any,
     ):
         super().__init__()
+        assert len(depths) == len(num_heads) == len(dilations) == len(shuffles)
         self.window_size = window_size
         self.num_heads = num_heads
         self.full_encoder = full_encoder
@@ -332,7 +333,8 @@ class SwinIA(nn.Module):
             nn.Identity() if post_norm else nn.LayerNorm(embed_dim),
             nn.Linear(embed_dim, in_channels)
         )
-        self.project_shortcut = nn.ModuleList([nn.Linear(embed_dim * 2, embed_dim) for _ in range(len(depths) // 2)])
+        self.n_shortcuts = (len(depths) - 1) // 2
+        self.project_shortcut = nn.ModuleList([nn.Linear(embed_dim * 2, embed_dim) for _ in range(self.n_shortcuts)])
         self.shuffles = shuffles
         self.absolute_pos_embed = nn.ParameterDict({
             str(s): nn.Parameter(torch.zeros((window_size * s) ** 2, embed_dim // num_heads[0])) for s in set(shuffles)
@@ -381,20 +383,19 @@ class SwinIA(nn.Module):
         k = {s: emb(x, full_pos_embed[s]) for s, emb in self.embed_k.items()}
         v = {s: emb(x, full_pos_embed[s]) for s, emb in self.embed_v.items()}
         shortcuts = []
-        mid = len(self.groups) // 2
         q = full_pos_embed[str(self.shuffles[0])]  # initial query is the positional embedding for the first shuffle
         for s, (i, group) in zip(map(str, self.shuffles), enumerate(self.groups)):
-            if i <= mid and self.u_shape and not self.full_encoder:
+            if i <= self.n_shortcuts and self.u_shape and not self.full_encoder:
                 q = full_pos_embed[s]
-            if i < mid and self.u_shape:
+            if i < self.n_shortcuts and self.u_shape:
                 q_ = group(q, k[s], v[s])
                 shortcuts.append(q_)
                 if self.full_encoder:
                     q = q_
             else:
+                if i >= len(self.groups) - self.n_shortcuts:
+                    q = connect_shortcut(self.project_shortcut[i - len(self.groups)], q, shortcuts.pop())
                 q = group(q, k[s], v[s])
-                if shortcuts:
-                    q = connect_shortcut(self.project_shortcut[i - mid], q, shortcuts.pop())
         q = self.proj_last(q)
         q = einops.rearrange(q, 'b ... c -> b c ...')
         return q
