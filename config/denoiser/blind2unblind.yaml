@@ -1,0 +1,8 @@
+# @package _global_
+denoiser:
+  _target_: noise2same.denoiser.Blind2Unblind
+  n_dim: ${dataset.n_dim}
+  in_channels: ${dataset.n_channels}
+  mask_window_size: 4
+  lambda_rev: 2
+  lambda_reg: 0.1
