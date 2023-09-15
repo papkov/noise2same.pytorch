@@ -108,3 +108,13 @@ class Blind2Unblind(Denoiser):
 
     def unshuffle(self, x: T) -> T:
         return unshuffle(x, self.mask_window_size)
+
+
+def schedule_lambda_rev(step: int, lambda_rev: float, lambda_rev_max: float, total_steps: int,
+                        step_threshold: float) -> float:
+    progress = step / total_steps
+    if progress <= step_threshold:
+        return lambda_rev
+    else:
+        return lambda_rev + (progress - step_threshold) * \
+               (lambda_rev_max - lambda_rev) / (1 - step_threshold)

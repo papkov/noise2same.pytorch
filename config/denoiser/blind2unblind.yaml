@@ -5,4 +5,14 @@ denoiser:
   in_channels: ${dataset.n_channels}
   mask_window_size: 4
   lambda_rev: 2
-  lambda_reg: 0.1
+  lambda_reg: 1
+
+hyperparameter_scheduler:
+  _target_: noise2same.scheduler.HyperparameterScheduler
+  lambda_rev:
+    _target_: noise2same.denoiser.blind2unblind.schedule_lambda_rev
+    _partial_: True
+    lambda_rev: 2
+    lambda_rev_max: 20
+    step_threshold: 0.8  # 0.8 for gauss25 and poisson30, 0.4 for others
+    total_steps: ${training.steps}

@@ -77,6 +77,7 @@ def main(cfg: DictConfig) -> None:
     backbone = instantiate(cfg.backbone)
     head = instantiate(cfg.head)
     denoiser = instantiate(cfg.denoiser, backbone=backbone, head=head, **instantiate_psf(cfg, dataset_train))
+    hyperparameter_scheduler = instantiate(cfg.hyperparameter_scheduler, denoiser)
 
     if torch.cuda.device_count() > 1:
         log.info(f'Using data parallel with {torch.cuda.device_count()} GPUs')
@@ -92,6 +93,7 @@ def main(cfg: DictConfig) -> None:
         denoiser=denoiser,
         optimizer=optimizer,
         scheduler=scheduler,
+        hyperparameter_scheduler=hyperparameter_scheduler,
         check=cfg.check,
         monitor=cfg.training.monitor,
         amp=cfg.training.amp,

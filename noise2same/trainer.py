@@ -27,6 +27,7 @@ class Trainer(object):
             denoiser: Denoiser,
             optimizer,
             scheduler=None,
+            hyperparameter_scheduler=None,
             device: str = "cuda",
             checkpoint_path: str = "checkpoints",
             monitor: str = "val_rec_mse",
@@ -39,6 +40,7 @@ class Trainer(object):
         self.inner_model = denoiser if not isinstance(denoiser, torch.nn.DataParallel) else denoiser.module
         self.optimizer = optimizer
         self.scheduler = scheduler
+        self.hyperparameter_scheduler = hyperparameter_scheduler
         self.device = device
         self.checkpoint_path = Path(checkpoint_path)
         self.monitor = monitor
@@ -71,8 +73,11 @@ class Trainer(object):
         if self.scheduler is not None:
             self.scheduler.step()
 
+        if self.hyperparameter_scheduler is not None:
+            self.hyperparameter_scheduler.step()
+
     def one_epoch(
-        self, loader: DataLoader
+            self, loader: DataLoader
     ) -> Tuple[Dict[str, float], Dict[str, np.ndarray]]:
         self.model.train()
         iterator = tqdm(loader, desc="train")
@@ -110,6 +115,8 @@ class Trainer(object):
         total_loss = {k: v / len(loader) for k, v in total_loss.items()}
         if self.scheduler is not None:
             total_loss["lr"] = self.scheduler.get_last_lr()[0]
+        if self.hyperparameter_scheduler is not None:
+            total_loss.update(self.hyperparameter_scheduler.get_last_values())
         return total_loss, images
 
     @torch.no_grad()
