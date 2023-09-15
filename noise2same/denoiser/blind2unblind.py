@@ -38,8 +38,8 @@ class Blind2Unblind(Denoiser):
             n_dim: int = 2,
             in_channels: int = 1,
             mask_window_size: int = 4,
-            lambda_rev: int = 2,
-            lambda_reg: int = 1,
+            lambda_rev: float = 2,
+            lambda_reg: float = 1,
             **kwargs: Any,
     ):
         super().__init__(**kwargs)
@@ -58,13 +58,18 @@ class Blind2Unblind(Denoiser):
         :param mask:
         :return:
         """
+
+        masked = []
+        for i in range(self.mask_window_size ** 2):
+            x_masked = self.interpolate_mask(x, i)
+            out_masked = super().forward(x_masked)['image']
+            masked.append(self.shuffle(out_masked)[i])
+        masked = self.unshuffle(torch.stack(masked, dim=0))
+
         with torch.no_grad():
             out = super().forward(x)
 
-        masked = self.shuffle(torch.zeros_like(x))
-        for i in range(self.mask_window_size ** 2):
-            masked[i] = self.shuffle(super().forward(self.interpolate_mask(x, i))['image'])[i]
-        out['image/masked'] = self.unshuffle(masked)
+        out['image/masked'] = masked
         out['image/combined'] = (out['image/masked'] + out['image'] * self.lambda_rev) / (1 + self.lambda_rev)
         return out
 
