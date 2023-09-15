@@ -74,9 +74,17 @@ class Blind2Unblind(Denoiser):
         return out
 
     def compute_loss(self, x_in: Dict[str, T], x_out: Dict[str, T]) -> Tuple[T, Dict[str, float]]:
-        loss_rev = self.compute_mse(x_in[self.target_key], x_out['image/combined'])
-        loss_reg = self.compute_mse(x_in[self.target_key], x_out['image/masked'])
-        loss = loss_rev + self.lambda_reg * loss_reg
+        diff = x_out['image/masked'] - x_in[self.target_key]
+        exp_diff = x_out['image'] - x_in[self.target_key]
+
+        revisible = diff + self.lambda_rev * exp_diff
+        loss_reg = self.lambda_reg * torch.mean(diff ** 2)
+        loss_rev = torch.mean(revisible ** 2)
+        loss = loss_reg + loss_rev
+
+        # loss_rev = self.compute_mse(x_in[self.target_key], x_out['image/combined'])
+        # loss_reg = self.compute_mse(x_in[self.target_key], x_out['image/masked'])
+        # loss = loss_rev + loss_reg * self.lambda_reg
 
         loss_dict = {'loss': loss.item(),
                      'loss_rev': loss_rev.item(),
