@@ -5,9 +5,9 @@ backbone:
   _target_: noise2same.backbone.unet_b2u.UNetB2U
   in_channels: ${dataset.n_channels}
   n_dim: ${dataset.n_dim}
-  base_channels: 24
+  base_channels: 48
   kernel_size: 3
-  depth: 3
+  depth: 5
   factor: 2
   #  factor: [[1, 2, 2], 2, [1, 2, 2]]  # downsample once in Z
   leak_slope: 0.1
@@ -16,8 +16,11 @@ backbone:
 head:
   _target_: torch.nn.Identity
 
+optimizer:
+  lr: 0.0003
+  weight_decay: 1e-8
+
 scheduler:
-  _target_: noise2same.scheduler.ExponentialDecayScheduler
-  decay_rate: 0.5
-  decay_steps: 5e3  # how many steps to decrease by decay rate
-  staircase: True  # integer division
+  _target_: torch.optim.lr_scheduler.MultiStepLR
+  milestones: [ 10000, 20000, 30000, 40000 ]
+  gamma: 0.5  # decrease LR by half every 10 epochs (20 in the paper)
