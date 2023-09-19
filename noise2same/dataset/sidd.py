@@ -3,9 +3,12 @@ from pathlib import Path
 from typing import List, Union, Dict
 import os
 import cv2
+import einops
+import h5py
 import lmdb
 
 import numpy as np
+from scipy.io import loadmat
 from noise2same.dataset.abc import AbstractNoiseDataset
 
 
@@ -68,15 +71,23 @@ def paired_paths_from_lmdb(folders, keys) -> List[Dict[str, str]]:
         return paths
 
 
+def collapse_batch_dims(x: np.ndarray) -> np.ndarray:
+    return einops.rearrange(x, 'b s h w c -> (b s) h w c')
+
+
+def unfold(x: np.ndarray):
+    return einops.rearrange(x, '... (h ch) (w cw) -> ... h w (ch cw)', ch=2, cw=2)
+
+
 @dataclass
-class SIDDDataset(AbstractNoiseDataset):
+class SIDDsRGBDataset(AbstractNoiseDataset):
     path: Union[Path, str] = Path("data/SIDD-NAFNet")
     mode: str = "train"
     standardize_by_channel: bool = True
     n_channels: int = 3
 
     def __str__(self) -> str:
-        return f'sidd_{self.mode}'
+        return f'sidd_srgb_{self.mode}'
 
     def _validate(self) -> None:
         assert self.mode in ("train", "val", "test")
@@ -114,3 +125,68 @@ class SIDDDataset(AbstractNoiseDataset):
 
     def _get_image(self, i: int) -> Dict[str, np.ndarray]:
         return {k: v[i] for k, v in self.image_index.items()}
+
+
+@dataclass
+class SIDDRawDataset(AbstractNoiseDataset):
+    path: Union[Path, str] = Path("data/SIDD")
+    mode: str = "train"
+    standardize_by_channel: bool = True
+    n_channels: int = 4
+    data_range: int = 1
+
+    def __str__(self) -> str:
+        return f'sidd_raw_{self.mode}'
+
+    def _validate(self) -> None:
+        assert self.mode in ("train", "val", "test")
+
+    def _create_image_index(self) -> Dict[str, Union[List[str], np.ndarray]]:
+        if self.mode == 'train':
+            path = self.path / 'train/SIDD_Medium_Raw/Data'
+            image_paths = sorted(path.glob('*/*NOISY*.MAT'))
+            gt_paths = sorted(path.glob('*/*GT*.MAT'))
+            return {
+                'image': [self.unfold(np.array(h5py.File(p)['x'])) for p in image_paths],
+                'ground_truth': [self.unfold(np.array(h5py.File(p)['x'])) for p in gt_paths]
+            }
+        else:
+            images = loadmat(self.path / 'val' / 'ValidationNoisyBlocksRaw.mat')['ValidationNoisyBlocksRaw']
+            ground_truth = loadmat(self.path / 'val' / 'ValidationGtBlocksRaw.mat')['ValidationGtBlocksRaw']
+            return {
+                'image': collapse_batch_dims(unfold(images)),
+                'ground_truth': collapse_batch_dims(unfold(ground_truth))
+            }
+
+    def _get_image(self, i: int) -> Dict[str, np.ndarray]:
+        # if self.mode == 'train':
+        #     return {
+        #         'image': self.unfold(np.array(self.image_index['image'][i]['x'])),
+        #         'ground_truth': self.unfold(np.array(self.image_index['ground_truth'][i]['x']))
+        #     }
+        return {k: self.image_index[k][i] for k in self.image_index}
+
+
+@dataclass
+class SIDDBenchmarkDataset(AbstractNoiseDataset):
+    path: Union[Path, str] = Path("data/SIDD/benchmark")
+    part: str = "srgb"
+    standardize_by_channel: bool = True
+    data_range: int = 1
+
+    def __post_init__(self):
+        self.n_channels = 3 if self.part == 'srgb' else 4
+        super().__post_init__()
+
+    def _validate(self) -> None:
+        assert self.part in ("srgb", "raw")
+
+    def _create_image_index(self) -> Dict[str, Union[List[str], np.ndarray]]:
+        path = self.path / f'BenchmarkNoisyBlocks{self.part.capitalize()}.mat'
+        images = loadmat(path)[f'BenchmarkNoisyBlocks{self.part.capitalize()}']
+        return {
+            'image': collapse_batch_dims(unfold(images) if self.n_channels == 4 else images),
+        }
+
+    def _get_image(self, i: int) -> Dict[str, np.ndarray]:
+        return {k: self.image_index[k][i] for k in self.image_index}

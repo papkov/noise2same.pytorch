@@ -4,7 +4,7 @@ from noise2same.dataset.hanzi import HanziDataset
 from noise2same.dataset.imagenet import ImagenetDataset, ImagenetTestDataset
 from noise2same.dataset.microtubules import MicrotubulesDataset, MicrotubulesTestDataset
 from noise2same.dataset.planaria import PlanariaDataset, PlanariaTiffDataset, PlanariaTestDataset
-from noise2same.dataset.sidd import SIDDDataset
+from noise2same.dataset.sidd import SIDDsRGBDataset, SIDDRawDataset, SIDDBenchmarkDataset
 from noise2same.dataset.ssi import SSIDataset
 from noise2same.dataset.synthetic import ImagenetSyntheticDataset, KodakSyntheticDataset, Set14SyntheticDataset, \
     BSD300SyntheticDataset, SyntheticTestDataset

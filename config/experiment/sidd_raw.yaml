@@ -1,0 +1,37 @@
+# @package _global_
+experiment: sidd
+
+dataset:
+  _target_: noise2same.dataset.SIDDRawDataset
+  path: ${cwd}/data/SIDD/
+  n_channels: 4
+
+dataset_train:
+  transforms:
+    _target_: noise2same.dataset.util.training_augmentations_2d
+    crop: 64
+  input_size: ${.transforms.crop}  # needed for some models
+
+dataset_valid:
+  mode: val
+  transforms:
+    _target_: noise2same.dataset.util.validation_transforms_2d
+    crop: 64
+
+dataset_test:
+  mode: test
+  input_size: null
+
+training:
+  steps: 50000
+  crop: 64
+  batch_size: 64
+  validate: True
+  val_partition: 0.1
+  monitor: val_mse
+
+optimizer:
+  lr: 1e-8
+
+scheduler:
+  max_lr: 1e-5
