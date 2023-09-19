@@ -488,3 +488,5 @@ def register_config_resolvers():
     OmegaConf.register_new_resolver('max', max)
     OmegaConf.register_new_resolver('ceil', lambda x: math.ceil(eval(x)))
     OmegaConf.register_new_resolver('suffix', lambda: ''.join(random.choices(string.ascii_uppercase, k=5)))
+    OmegaConf.register_new_resolver('max_sd', lambda shuffles, dilations: max(s * d for s, d
+                                                                              in zip(shuffles, dilations)))
