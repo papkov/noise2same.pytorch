@@ -1,5 +1,5 @@
 # @package _global_
-experiment: sidd
+experiment: sidd_raw
 
 dataset:
   _target_: noise2same.dataset.SIDDRawDataset
