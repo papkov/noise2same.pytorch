@@ -18,12 +18,14 @@ class Denoiser(nn.Module):
             # TODO consider removing default values
             backbone: nn.Module = nn.Identity(),
             head: nn.Module = nn.Identity(),
+            refinement: nn.Module = None,
             residual: bool = False,
             target_key: str = "image",
     ):
         super().__init__()
         self.residual = residual
         self.backbone = backbone
+        self.refinement = refinement
         self.head = head
         self.target_key = target_key
 
@@ -37,6 +39,9 @@ class Denoiser(nn.Module):
         out = self.head(self.backbone(x))
         if self.residual:
             out += x
+        if self.refinement is not None and not self.training:
+            model = nn.Sequential(self.backbone, self.head)
+            out = self.refinement(model, x, out)
         return {'image': out}
 
     def compute_loss(self, x_in: Dict[str, T], x_out: Dict[str, T]) -> Tuple[T, Dict[str, float]]:

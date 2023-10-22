@@ -1,0 +1,36 @@
+# @package _global_
+backbone_name: swinia
+
+backbone:
+  _target_: noise2same.backbone.swinia.SwinIA
+  in_channels: ${dataset.n_channels}
+  embed_dim: 144
+  window_size: 8
+  depths: [ 4, 4, 4, 4, 4 ]
+  num_heads: [ 16, 16, 16, 16, 16 ]
+  dilations: [ 1, 1, 1, 1, 1 ]
+  shuffles: [ 1, 2, 4, 2, 1 ]
+  pad_divisor: ${eval:${.window_size} * ${max_sd:${.dilations},${.shuffles}}}  # used in dataset config
+  input_size: ${eval:${ceil:${dataset_train.input_size} / ${.pad_divisor}} * ${.pad_divisor}}
+  full_encoder: False
+  u_shape: True
+  cyclic_shift: True
+  post_norm: False
+
+head:
+  _target_: torch.nn.Identity
+
+refinement:
+  _target_: noise2same.refinement.RandomReplacementRefinement
+  num_iter: 8
+  p: 0.16
+
+optimizer:
+  _target_: lion_pytorch.Lion
+  lr: 1e-6
+
+scheduler:
+  _target_: torch.optim.lr_scheduler.OneCycleLR
+  total_steps: ${training.steps}
+  max_lr: 3e-4
+  pct_start: 0.15
