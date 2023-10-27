@@ -11,6 +11,8 @@ dataset_train:
     _target_: noise2same.dataset.util.training_augmentations_2d
     crop: 160
   input_size: ${.transforms.crop}  # needed for some models
+  mean: [ 50.93562527, 52.17103344, 65.92013 ]
+  std: [ 23.43218746, 23.68724754, 27.03064957 ]
 
 dataset_valid:
   mode: val
