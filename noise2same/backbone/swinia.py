@@ -289,20 +289,28 @@ class ResidualGroup(nn.Module):
 
 class ShuffleEmbed(nn.Module):
 
-    def __init__(self, in_channels: int, embed_dim: int, shuffle: int = 1, dilation: int = 1):
+    def __init__(self, in_channels: int, embed_dim: int, shuffle: int = 1):
         super().__init__()
-        self.shuffle = Rearrange('b (h sh dh) (w sw dw) c -> b (h dh) (w dw) (sh sw c)',
-                                 sh=shuffle, sw=shuffle, dh=dilation, dw=dilation)
+        self.shuffle = shuffle
         self.mlp = MLP(in_channels * shuffle ** 2, embed_dim * shuffle ** 2)
-        self.unshuffle = Rearrange('b (h dh) (w dw) (sh sw c) -> b (h sh dh) (w sw dw) c',
-                                   sh=shuffle, sw=shuffle, dh=dilation, dw=dilation)
         self.norm = nn.LayerNorm(embed_dim * shuffle ** 2)
+        self.cache = dict()
 
-    def forward(self, x: T, full_pos_embed: T) -> T:
-        x = self.mlp(self.shuffle(x))
-        x = self.norm(x + self.shuffle(full_pos_embed))
-        x = self.unshuffle(x)
+    def forward(self, x: T, full_pos_embed: T, dilation: int = 1) -> T:
+        if dilation in self.cache:
+            return self.cache[dilation]
+        shuffle = Rearrange('b (h sh dh) (w sw dw) c -> b (h dh) (w dw) (sh sw c)',
+                            sh=self.shuffle, sw=self.shuffle, dh=dilation, dw=dilation)
+        unshuffle = Rearrange('b (h dh) (w dw) (sh sw c) -> b (h sh dh) (w sw dw) c',
+                              sh=self.shuffle, sw=self.shuffle, dh=dilation, dw=dilation)
+        x = self.mlp(shuffle(x))
+        x = self.norm(x + shuffle(full_pos_embed))
+        x = unshuffle(x)
+        self.cache[dilation] = x
         return x
+
+    def clear_cache(self):
+        self.cache = dict()
 
 
 class SwinIA(nn.Module):
@@ -329,9 +337,9 @@ class SwinIA(nn.Module):
         self.num_heads = num_heads
         self.full_encoder = full_encoder
         self.u_shape = u_shape
-        sd_set = {(s, d) for s, d in zip(shuffles, dilations)}
-        self.embed_k = nn.ModuleDict({f'{s},{d}': ShuffleEmbed(in_channels, embed_dim, s, d) for s, d in sd_set})
-        self.embed_v = nn.ModuleDict({f'{s},{d}': ShuffleEmbed(in_channels, embed_dim, s, d) for s, d in sd_set})
+        shuffle_set = set(shuffles)
+        self.embed_k = nn.ModuleDict({f'{s}': ShuffleEmbed(in_channels, embed_dim, s) for s in shuffle_set})
+        self.embed_v = nn.ModuleDict({f'{s}': ShuffleEmbed(in_channels, embed_dim, s) for s in shuffle_set})
 
         self.proj_last = nn.Sequential(
             nn.Identity() if post_norm else nn.LayerNorm(embed_dim),
@@ -342,8 +350,9 @@ class SwinIA(nn.Module):
         self.shuffles = shuffles
         self.dilations = dilations
         self.absolute_pos_embed = nn.ParameterDict({
-            f'{s},{d}': nn.Parameter(torch.zeros((window_size * s) ** 2, embed_dim // num_heads[0])) for s, d in sd_set
+            f'{s}': nn.Parameter(torch.zeros((window_size * s) ** 2, embed_dim // num_heads[0])) for s in shuffle_set
         })
+        self.ape_cache = dict()
         for ape in self.absolute_pos_embed.values():
             trunc_normal_(ape, std=.02)
         self.groups = nn.ModuleList([
@@ -379,31 +388,44 @@ class SwinIA(nn.Module):
     def no_weight_decay_keywords(self) -> Set[str]:
         return {'relative_position_bias_table'}
 
+    def repeat_ape(self, x: T, shuffle: int, dilation: int, num_heads: int) -> T:
+        if (dilation, num_heads) in self.ape_cache:
+            return self.ape_cache[(dilation, num_heads)]
+        wh, ww = x.shape[1] // self.window_size, x.shape[2] // self.window_size
+        full_ape = einops.repeat(self.absolute_pos_embed[str(shuffle)],
+                                 "(ws1 ws2) ch -> b (wh ws1 d1) (ww ws2 d2) (nh ch)",
+                                 d1=dilation, d2=dilation, ws1=self.window_size * shuffle, nh=num_heads,
+                                 b=x.shape[0], ww=ww // shuffle // dilation, wh=wh // shuffle // dilation)
+        self.ape_cache[(dilation, num_heads)] = full_ape
+        return full_ape
+
+    def clear_cache(self) -> None:
+        self.ape_cache = dict()
+        for key in self.embed_k:
+            self.embed_k[key].clear_cache()
+            self.embed_v[key].clear_cache()
+
     def forward(self, x: T) -> T:
         x = einops.rearrange(x, 'b c ... -> b ... c')
-        wh, ww = x.shape[1] // self.window_size, x.shape[2] // self.window_size
-        full_pos_embed = {f'{s},{d}': einops.repeat(ape, "(ws1 ws2) ch -> b (wh ws1 d1) (ww ws2 d2) (nh ch)",
-                                                    d1=d, d2=d, ws1=self.window_size * s, nh=self.num_heads[0],
-                                                    b=x.shape[0], ww=ww // s // d, wh=wh // s // d) for (s, d), ape in
-                          ((map(int, key.split(',')), ape) for key, ape in self.absolute_pos_embed.items())}
-        k = {key: emb(x, full_pos_embed[key]) for key, emb in self.embed_k.items()}
-        v = {key: emb(x, full_pos_embed[key]) for key, emb in self.embed_v.items()}
+        self.clear_cache()
         shortcuts = []
         # initial query is the positional embedding for the first shuffle and dilation
-        q = full_pos_embed[f'{self.shuffles[0]},{self.dilations[0]}']
-        for s, d, (i, group) in zip(self.shuffles, self.dilations, enumerate(self.groups)):
-            key = f'{s},{d}'
+        q = self.repeat_ape(x, self.shuffles[0], self.dilations[0], self.num_heads[0])
+        for s, d, h, (i, group) in zip(self.shuffles, self.dilations, self.num_heads, enumerate(self.groups)):
+            full_ape = self.repeat_ape(x, s, d, h)
+            k = self.embed_k[str(s)](x, full_ape, d)
+            v = self.embed_v[str(s)](x, full_ape, d)
             if i <= self.n_shortcuts and self.u_shape and not self.full_encoder:
-                q = full_pos_embed[key]
+                q = full_ape
             if i < self.n_shortcuts and self.u_shape:
-                q_ = group(q, k[key], v[key])
+                q_ = group(q, k, v)
                 shortcuts.append(q_)
                 if self.full_encoder:
                     q = q_
             else:
                 if i >= len(self.groups) - self.n_shortcuts:
                     q = connect_shortcut(self.project_shortcut[i - len(self.groups)], q, shortcuts.pop())
-                q = group(q, k[key], v[key])
+                q = group(q, k, v)
         q = self.proj_last(q)
         q = einops.rearrange(q, 'b ... c -> b c ...')
         return q
