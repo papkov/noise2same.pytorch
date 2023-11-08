@@ -215,7 +215,8 @@ class TransformerBlock(nn.Module):
                 cnt += 1
         attn_mask = self.mask_window_partition(attn_mask)
         attn_mask = einops.rearrange(attn_mask, "nw np 1 -> nw 1 np") - attn_mask
-        torch.diagonal(attn_mask, dim1=-2, dim2=-1).fill_(1)
+        if self.training:
+            torch.diagonal(attn_mask, dim1=-2, dim2=-1).fill_(1)
         attn_mask = attn_mask.masked_fill(attn_mask != 0, -10 ** 9)
         return attn_mask
 
