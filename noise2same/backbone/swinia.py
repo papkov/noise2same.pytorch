@@ -390,14 +390,14 @@ class SwinIA(nn.Module):
         return {'relative_position_bias_table'}
 
     def repeat_ape(self, x: T, shuffle: int, dilation: int, num_heads: int) -> T:
-        if (dilation, num_heads) in self.ape_cache:
-            return self.ape_cache[(dilation, num_heads)]
+        if (shuffle, dilation, num_heads) in self.ape_cache:
+            return self.ape_cache[(shuffle, dilation, num_heads)]
         wh, ww = x.shape[1] // self.window_size, x.shape[2] // self.window_size
         full_ape = einops.repeat(self.absolute_pos_embed[str(shuffle)],
                                  "(ws1 ws2) ch -> b (wh ws1 d1) (ww ws2 d2) (nh ch)",
                                  d1=dilation, d2=dilation, ws1=self.window_size * shuffle, nh=num_heads,
                                  b=x.shape[0], ww=ww // shuffle // dilation, wh=wh // shuffle // dilation)
-        self.ape_cache[(dilation, num_heads)] = full_ape
+        self.ape_cache[(shuffle, dilation, num_heads)] = full_ape
         return full_ape
 
     def clear_cache(self) -> None:
