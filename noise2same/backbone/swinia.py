@@ -22,12 +22,12 @@ class MLP(nn.Module):
             in_features: int = 96,
             out_features: int = 96,
             n_layers: int = 1,
-            hidden_features: Optional[int] = None,
+            hidden_ratio: int = 1,
             act_layer: nn.Module = nn.GELU,
-            drop=0.,
+            drop: float = 0.,
     ):
         super().__init__()
-        hidden_features = hidden_features or out_features
+        hidden_features = out_features * hidden_ratio
         features = [hidden_features] * (n_layers + 1)
         features[0], features[-1] = in_features, out_features
         self.layers = nn.ModuleList([
