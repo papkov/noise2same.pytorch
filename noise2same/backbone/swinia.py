@@ -424,9 +424,9 @@ class SwinIA(nn.Module):
                 if self.full_encoder:
                     q = q_
             else:
+                q = group(q, k, v)
                 if i >= len(self.groups) - self.n_shortcuts:
                     q = connect_shortcut(self.project_shortcut[i - len(self.groups)], q, shortcuts.pop())
-                q = group(q, k, v)
         q = self.proj_last(q)
         q = einops.rearrange(q, 'b ... c -> b c ...')
         return q
