@@ -1,5 +1,5 @@
 import itertools
-from typing import Any, Tuple, Optional, Iterable, Set
+from typing import Any, Tuple, Iterable, Set
 
 import torch
 import torch.nn as nn
