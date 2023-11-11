@@ -162,7 +162,7 @@ class TransformerBlock(nn.Module):
     ):
         super().__init__()
         self.softmax = nn.Softmax(dim=-1)
-        self.mlp = MLP(embed_dim, embed_dim, n_layers=2)
+        self.mlp = MLP(embed_dim, embed_dim, hidden_ratio=4, n_layers=2)
         self.attn = DiagonalWindowAttention(
             embed_dim, to_2tuple(window_size), dilation, shuffle, num_heads,
             attn_drop, proj_drop, post_norm, **kwargs,
