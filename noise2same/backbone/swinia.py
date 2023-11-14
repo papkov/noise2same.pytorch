@@ -78,24 +78,6 @@ class DiagonalWindowAttention(nn.Module):
         self.proj_drop = nn.Dropout(proj_drop)
         self.norm_q = nn.LayerNorm([shuffle ** 2, embed_dim])
 
-        window_bias_shape = [2 * s - 1 for s in window_size]
-        self.relative_position_bias_table = nn.Parameter(torch.zeros(np.prod(window_bias_shape).item(), num_heads))
-
-        coords = torch.stack(torch.meshgrid([torch.arange(s) for s in window_size], indexing='ij'))
-        coords_flatten = torch.flatten(coords, 1)
-        relative_coords = coords_flatten[:, :, None] - coords_flatten[:, None, :]
-        relative_coords = torch.einsum("n...->...n", relative_coords)
-
-        coefficients = [np.prod(window_bias_shape[i:]) for i in range(1, len(window_size))]
-        for dim, size in enumerate(window_size):
-            relative_coords[..., dim] += size - 1
-            if dim < len(window_size) - 1:
-                relative_coords[..., dim] *= coefficients[dim]
-
-        relative_position_index = relative_coords.sum(-1).flatten()
-        self.register_buffer("relative_position_index", relative_position_index)
-        trunc_normal_(self.relative_position_bias_table, std=.02)
-
     def group_partition(self, x: T) -> T:
         return einops.rearrange(x, 'nw (wh sh ww sw) ch -> nw (wh ww) (sh sw) ch',
                                 wh=self.window_size[0], sh=self.shuffle, sw=self.shuffle)
@@ -123,11 +105,6 @@ class DiagonalWindowAttention(nn.Module):
         query, key, value = map(self.head_partition, (query, key, value))
         query = query * self.scale
         attn = torch.einsum("...qsc,...ksc->...qk", query, key)
-        relative_position_bias = einops.rearrange(
-            self.relative_position_bias_table[self.relative_position_index],
-            "(np1 np2) nh -> 1 nh np1 np2", np1=self.num_patches
-        )
-        attn = attn + relative_position_bias
         attn = attn + einops.repeat(
             mask, f"nw np1 np2 -> (b nw) 1 np1 np2", b=attn.shape[0] // mask.shape[0]
         ).to(attn.device)
