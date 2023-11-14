@@ -16,6 +16,8 @@ backbone:
   u_shape: True
   cyclic_shift: True
   post_norm: False
+  attn_drop: 0.1
+  proj_drop: 0.1
 
 head:
   _target_: torch.nn.Identity

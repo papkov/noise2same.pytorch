@@ -56,8 +56,8 @@ class DiagonalWindowAttention(nn.Module):
             dilation: int = 1,
             shuffle: int = 1,
             num_heads: int = 6,
-            attn_drop: float = 0.05,
-            proj_drop: float = 0.05,
+            attn_drop: float = 0.1,
+            proj_drop: float = 0.1,
             post_norm: bool = False,
             **kwargs: Any,
     ):
@@ -132,8 +132,8 @@ class TransformerBlock(nn.Module):
             dilation: int = 1,
             shuffle: int = 1,
             input_size: Tuple[int, int] = (128, 128),
-            attn_drop: float = 0.05,
-            proj_drop: float = 0.05,
+            attn_drop: float = 0.1,
+            proj_drop: float = 0.1,
             post_norm: bool = False,
             **kwargs,
     ):
@@ -232,6 +232,8 @@ class ResidualGroup(nn.Module):
             input_size: Tuple[int, int] = (128, 128),
             post_norm: bool = False,
             cyclic_shift: bool = True,
+            attn_drop: float = 0.1,
+            proj_drop: float = 0.1,
             **kwargs: Any,
     ):
         super().__init__()
@@ -250,6 +252,8 @@ class ResidualGroup(nn.Module):
                 shuffle=shuffle,
                 input_size=input_size,
                 post_norm=post_norm,
+                attn_drop=attn_drop,
+                proj_drop=proj_drop,
                 **kwargs,
             ) for i in range(depth)
         ])
@@ -307,6 +311,8 @@ class SwinIA(nn.Module):
             u_shape: bool = True,
             cyclic_shift: bool = True,
             post_norm: bool = False,
+            attn_drop: float = 0.1,
+            proj_drop: float = 0.1,
             **kwargs: Any,
     ):
         super().__init__()
@@ -344,6 +350,8 @@ class SwinIA(nn.Module):
                 input_size=to_2tuple(input_size),
                 cyclic_shift=cyclic_shift,
                 post_norm=post_norm,
+                attn_drop=attn_drop,
+                proj_drop=proj_drop,
                 **kwargs,
             ) for i, (d, n, dl, sh) in enumerate(zip(depths, num_heads, dilations, shuffles))
         ])
