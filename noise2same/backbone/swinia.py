@@ -370,10 +370,6 @@ class SwinIA(nn.Module):
     def no_weight_decay(self) -> Set[str]:
         return {'absolute_pos_embed'}
 
-    @torch.jit.ignore
-    def no_weight_decay_keywords(self) -> Set[str]:
-        return {'relative_position_bias_table'}
-
     def repeat_ape(self, x: T, shuffle: int, dilation: int, num_heads: int) -> T:
         if (shuffle, dilation, num_heads) in self.ape_cache:
             return self.ape_cache[(shuffle, dilation, num_heads)]
