@@ -107,7 +107,7 @@ class DiagonalWindowAttention(nn.Module):
         attn = torch.einsum("...qsc,...ksc->...qk", query, key)
         attn = attn + einops.repeat(
             mask, f"nw np1 np2 -> (b nw) 1 np1 np2", b=attn.shape[0] // mask.shape[0]
-        ).to(attn.device)
+        )
 
         attn = self.softmax(attn)
         attn = self.attn_drop(attn)
@@ -151,7 +151,7 @@ class TransformerBlock(nn.Module):
         self.shuffle = shuffle
         self.embed_dim = embed_dim
         self.input_size = input_size
-        self.attn_mask = self.calculate_mask(input_size)
+        self.register_buffer('attn_mask', self.calculate_mask(input_size))
         self.post_norm = post_norm
 
     def shift_image(self, x: T) -> T:
