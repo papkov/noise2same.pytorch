@@ -59,6 +59,7 @@ class DiagonalWindowAttention(nn.Module):
             attn_drop: float = 0.1,
             proj_drop: float = 0.1,
             post_norm: bool = False,
+            normalize_query: bool = True,
             **kwargs: Any,
     ):
         super().__init__()
@@ -71,12 +72,14 @@ class DiagonalWindowAttention(nn.Module):
         self.dilation = dilation
         self.shuffle = shuffle
         self.post_norm = post_norm
+        self.normalize_query = normalize_query
 
         head_dim = embed_dim // num_heads
         self.scale = head_dim ** -0.5 / shuffle
         self.proj = nn.Linear(embed_dim, embed_dim)
         self.proj_drop = nn.Dropout(proj_drop)
-        self.norm_q = nn.LayerNorm([shuffle ** 2, embed_dim])
+        if not self.post_norm and self.normalize_query:
+            self.norm_q = nn.LayerNorm([shuffle ** 2, embed_dim])
 
     def group_partition(self, x: T) -> T:
         return einops.rearrange(x, 'nw (wh sh ww sw) ch -> nw (wh ww) (sh sw) ch',
@@ -100,7 +103,7 @@ class DiagonalWindowAttention(nn.Module):
         mask: T,
     ) -> T:
         query, key, value = map(self.group_partition, (query, key, value))
-        if not self.post_norm:
+        if not self.post_norm and self.normalize_query:
             query = self.norm_q(query)
         query, key, value = map(self.head_partition, (query, key, value))
         query = query * self.scale
@@ -135,6 +138,7 @@ class TransformerBlock(nn.Module):
             attn_drop: float = 0.1,
             proj_drop: float = 0.1,
             post_norm: bool = False,
+            normalize_query: bool = True,
             **kwargs,
     ):
         super().__init__()
@@ -142,7 +146,7 @@ class TransformerBlock(nn.Module):
         self.mlp = MLP(embed_dim, embed_dim, hidden_ratio=4, n_layers=2)
         self.attn = DiagonalWindowAttention(
             embed_dim, to_2tuple(window_size), dilation, shuffle, num_heads,
-            attn_drop, proj_drop, post_norm, **kwargs,
+            attn_drop, proj_drop, post_norm, normalize_query, **kwargs,
         )
         self.norm = nn.LayerNorm(embed_dim)
         self.window_size = window_size
@@ -234,6 +238,7 @@ class ResidualGroup(nn.Module):
             cyclic_shift: bool = True,
             attn_drop: float = 0.1,
             proj_drop: float = 0.1,
+            is_encoder: bool = True,
             **kwargs: Any,
     ):
         super().__init__()
@@ -254,6 +259,7 @@ class ResidualGroup(nn.Module):
                 post_norm=post_norm,
                 attn_drop=attn_drop,
                 proj_drop=proj_drop,
+                normalize_query=not (is_encoder and i == 0),
                 **kwargs,
             ) for i in range(depth)
         ])
@@ -352,6 +358,7 @@ class SwinIA(nn.Module):
                 post_norm=post_norm,
                 attn_drop=attn_drop,
                 proj_drop=proj_drop,
+                is_encoder=not full_encoder and i <= len(depths) // 2 or full_encoder and i == 0,
                 **kwargs,
             ) for i, (d, n, dl, sh) in enumerate(zip(depths, num_heads, dilations, shuffles))
         ])
