@@ -78,7 +78,7 @@ class DiagonalWindowAttention(nn.Module):
         self.scale = head_dim ** -0.5 / shuffle
         self.proj = nn.Linear(embed_dim, embed_dim)
         self.proj_drop = nn.Dropout(proj_drop)
-        if not self.post_norm and self.normalize_query:
+        if self.post_norm or self.normalize_query:
             self.norm_q = nn.LayerNorm([shuffle ** 2, embed_dim])
 
     def group_partition(self, x: T) -> T:
