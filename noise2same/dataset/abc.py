@@ -36,7 +36,8 @@ class AbstractNoiseDataset(Dataset, ABC):
     n_channels: int = 1
     data_range: int = 255
     n_repeats: int = 1
-    input_size: Optional[float] = None
+    input_size: Optional[int] = None
+    crop_size: Optional[int] = None
     mean: Optional[Union[float, np.ndarray]] = None
     std: Optional[Union[float, np.ndarray]] = None
     transforms: Optional[
@@ -84,6 +85,13 @@ class AbstractNoiseDataset(Dataset, ABC):
         self.transforms = self._compose_transforms(
             self.transforms + self._get_post_transforms(), additional_targets={"ground_truth": "image"}
         )
+        for transform in self.transforms:
+            if isinstance(transform, (albu.RandomCrop, albu.CenterCrop)):
+                self.crop_size = transform.height
+                break
+            if isinstance(transform, t3d.RandomCrop):
+                self.crop_size = transform.patch_size
+                break
 
         # Convert mean and std to torch tensors
         if self.mean is not None and not isinstance(self.mean, torch.Tensor):
@@ -170,7 +178,8 @@ class AbstractNoiseDataset(Dataset, ABC):
         i = i % self.get_number_of_images()
         image = self._get_image(i)
         image = self._handle_image(image)
-        image['shape'] = np.array(image['image'].shape)
+        image['shape'] = np.array(image['image'].shape) if self.crop_size is None else \
+            np.array([self.crop_size] * self.n_dim + [self.n_channels])
         ret = self._apply_transforms(image)
         if self.standardize:
             # by default, self.mean and self.std are None, and normalization is done by patch
