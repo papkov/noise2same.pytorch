@@ -8,7 +8,7 @@ import h5py
 import lmdb
 
 import numpy as np
-from scipy.io import loadmat
+from scipy.io import loadmat, savemat
 from noise2same.dataset.abc import AbstractNoiseDataset
 
 
@@ -72,11 +72,19 @@ def paired_paths_from_lmdb(folders, keys) -> List[Dict[str, str]]:
 
 
 def collapse_batch_dims(x: np.ndarray) -> np.ndarray:
-    return einops.rearrange(x, 'b s h w c -> (b s) h w c')
+    return einops.rearrange(x, 'b s ... -> (b s) ...')
 
 
-def unfold(x: np.ndarray):
+def split_batch_dims(x: np.ndarray, n_scenes: int) -> np.ndarray:
+    return einops.rearrange(x, '(b s) ... -> b s ...', b=n_scenes)
+
+
+def unfold_raw(x: np.ndarray):
     return einops.rearrange(x, '... (h ch) (w cw) -> ... h w (ch cw)', ch=2, cw=2)
+
+
+def fold_raw(x: np.ndarray):
+    return einops.rearrange(x, '... h w (ch cw) -> ... (h ch) (w cw)', ch=2)
 
 
 @dataclass
@@ -129,7 +137,7 @@ class SIDDsRGBDataset(AbstractNoiseDataset):
 
 @dataclass
 class SIDDRawDataset(AbstractNoiseDataset):
-    path: Union[Path, str] = Path("data/SIDD")
+    path: Union[Path, str] = Path("data/SIDD_Raw")
     mode: str = "train"
     standardize_by_channel: bool = True
     n_channels: int = 4
@@ -143,27 +151,22 @@ class SIDDRawDataset(AbstractNoiseDataset):
 
     def _create_image_index(self) -> Dict[str, Union[List[str], np.ndarray]]:
         if self.mode == 'train':
-            path = self.path / 'train/SIDD_Medium_Raw/Data'
-            image_paths = sorted(path.glob('*/*NOISY*.MAT'))
-            gt_paths = sorted(path.glob('*/*GT*.MAT'))
+            crops_path = self.path / 'crops/crops.npy'
+            arrays = np.load(crops_path)
+            arrays = einops.rearrange(arrays, 'b (h ch) (w cw) ... -> b h w (ch cw) ...', ch=2, cw=2)
             return {
-                'image': [self.unfold(np.array(h5py.File(p)['x'])) for p in image_paths],
-                'ground_truth': [self.unfold(np.array(h5py.File(p)['x'])) for p in gt_paths]
+                'image': arrays[..., 0],
+                'ground_truth': arrays[..., 1]
             }
         else:
             images = loadmat(self.path / 'val' / 'ValidationNoisyBlocksRaw.mat')['ValidationNoisyBlocksRaw']
             ground_truth = loadmat(self.path / 'val' / 'ValidationGtBlocksRaw.mat')['ValidationGtBlocksRaw']
             return {
-                'image': collapse_batch_dims(unfold(images)),
-                'ground_truth': collapse_batch_dims(unfold(ground_truth))
+                'image': collapse_batch_dims(unfold_raw(images)),
+                'ground_truth': collapse_batch_dims(unfold_raw(ground_truth))
             }
 
     def _get_image(self, i: int) -> Dict[str, np.ndarray]:
-        # if self.mode == 'train':
-        #     return {
-        #         'image': self.unfold(np.array(self.image_index['image'][i]['x'])),
-        #         'ground_truth': self.unfold(np.array(self.image_index['ground_truth'][i]['x']))
-        #     }
         return {k: self.image_index[k][i] for k in self.image_index}
 
 
@@ -184,9 +187,26 @@ class SIDDBenchmarkDataset(AbstractNoiseDataset):
     def _create_image_index(self) -> Dict[str, Union[List[str], np.ndarray]]:
         path = self.path / f'BenchmarkNoisyBlocks{self.part.capitalize()}.mat'
         images = loadmat(path)[f'BenchmarkNoisyBlocks{self.part.capitalize()}']
+        self.n_scenes = images.shape[0]
         return {
-            'image': collapse_batch_dims(unfold(images) if self.n_channels == 4 else images),
+            'image': collapse_batch_dims(unfold_raw(images) if self.n_channels == 4 else images),
         }
 
     def _get_image(self, i: int) -> Dict[str, np.ndarray]:
         return {k: self.image_index[k][i] for k in self.image_index}
+
+    def save_predictions(
+            self,
+            predictions: Dict[str, Union[List[np.ndarray], np.ndarray]],
+            save_dir: Union[str, Path],
+            key: str = 'image'
+    ) -> None:
+        images = np.stack(predictions[key])
+        if self.part == 'raw':
+            images = fold_raw(images)
+        images = split_batch_dims(images, self.n_scenes)
+        savemat(
+            save_dir / f'Submit{self.part.capitalize()}.mat',
+            {f'DenoisedBlocks{self.part.capitalize()}': images}
+        )
+

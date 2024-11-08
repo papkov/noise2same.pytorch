@@ -3,34 +3,37 @@ experiment: sidd_raw
 
 dataset:
   _target_: noise2same.dataset.SIDDRawDataset
-  path: ${cwd}/data/SIDD/
+  path: ${cwd}/data/SIDD_Raw/
   n_channels: 4
 
 dataset_train:
   transforms:
     _target_: noise2same.dataset.util.training_augmentations_2d
-    crop: 64
+    crop: 128
   input_size: ${.transforms.crop}  # needed for some models
   mean: [ 0.01548233, 0.01548233, 0.01548233, 0.01548233 ]
   std: [ 0.11033608, 0.09512568, 0.09357122, 0.11341186 ]
 
 dataset_valid:
   mode: val
-  transforms:
-    _target_: noise2same.dataset.util.validation_transforms_2d
-    crop: 64
 
 dataset_test:
   mode: test
   input_size: null
 
+dataset_benchmark:
+  _target_: noise2same.dataset.SIDDBenchmarkDataset
+  path: ${cwd}/data/SIDD/benchmark
+  part: raw
+  input_size: null
+
 training:
   steps: 50000
-  crop: 64
+  crop: 128
   batch_size: 64
   validate: True
   val_partition: 0.1
-  monitor: val_mse
+  monitor: val_psnr
 
 optimizer:
   lr: 1e-8

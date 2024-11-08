@@ -9,7 +9,7 @@ dataset:
 dataset_train:
   transforms:
     _target_: noise2same.dataset.util.training_augmentations_2d
-    crop: 160
+    crop: 64
   input_size: ${.transforms.crop}  # needed for some models
   mean: [ 50.93562527, 52.17103344, 65.92013 ]
   std: [ 23.43218746, 23.68724754, 27.03064957 ]
@@ -18,17 +18,17 @@ dataset_valid:
   mode: val
   transforms:
     _target_: noise2same.dataset.util.validation_transforms_2d
-    crop: 160
+    crop: 64
 
 dataset_test:
   mode: test
   input_size: null
 
-#dataset_benchmark:
-#  target_: noise2same.dataset.SIDDBenchmarkDataset
-#    path: ${cwd}/data/SIDD/
-#    part: srgb
-#    input_size: null
+dataset_benchmark:
+  _target_: noise2same.dataset.SIDDBenchmarkDataset
+  path: ${cwd}/data/SIDD/benchmark
+  part: srgb
+  input_size: null
 
 training:
   steps: 50000
