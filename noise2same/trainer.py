@@ -127,17 +127,23 @@ class Trainer(object):
         iterator = tqdm(loader, desc="valid")
 
         total_loss = 0
-        val_mse_log = []
+        val_metrics_log = []
         images = {}
         for i, x_in in enumerate(iterator):
-            x_in = {k: v.to(self.device) for k, v in x_in.items()}
+            x_in["image"] = x_in["image"].to(self.device)
 
-            with autocast(enabled=self.amp):
-                x_out = self.model(x_in["image"])
+            x_out = self.model(x_in['image'])
 
             if "ground_truth" in x_in.keys():
-                val_mse = torch.mean(torch.square(x_out["image"] - x_in["ground_truth"].to(self.device)))
-                val_mse_log.append(val_mse.item())
+                batch = {
+                    "image": x_out["image"],
+                    "ground_truth": x_in["ground_truth"],
+                    "mean": x_in["mean"],
+                    "std": x_in["std"],
+                    "shape": x_in["shape"],
+                }
+                out = self.evaluator._revert_batch(batch, ['image', 'ground_truth'])
+                val_metrics_log.extend(self.evaluator.evaluate_batch(out, loader.dataset))
 
             rec_mse = torch.mean(torch.square(x_out["image"] - x_in["image"]))
             total_loss += rec_mse.item()
@@ -158,8 +164,9 @@ class Trainer(object):
                     images['val/ground_truth'] = x_in['ground_truth']
                 images = detach_to_np(images, mean=x_in["mean"], std=x_in["std"])
                 images = normalize_zero_one_dict(images)
-        if len(val_mse_log) > 0:
-            return {"val_rec_mse": total_loss / len(loader), "val_mse": np.mean(val_mse_log)}, images
+        if len(val_metrics_log) > 0:
+            val_metrics = {f'val_{k}': np.mean([m[k] for m in val_metrics_log]) for k in val_metrics_log[0].keys()}
+            return {"val_rec_mse": total_loss / len(loader), **val_metrics}, images
         return {"val_rec_mse": total_loss / len(loader)}, images
 
     def inference(self, *args: Any, **kwargs: Any):

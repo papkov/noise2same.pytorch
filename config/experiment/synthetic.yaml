@@ -21,9 +21,6 @@ dataset_train:
 dataset_valid:
   _target_: noise2same.dataset.Set14SyntheticDataset
   path: ${cwd}/data/Set14/
-  transforms:
-    _target_: noise2same.dataset.util.validation_transforms_2d
-    crop: 64
 
 dataset_test:
   _target_: noise2same.dataset.SyntheticTestDataset
@@ -46,4 +43,5 @@ training:
   steps: 50000
   batch_size: 64
   validate: True
-  monitor: val_mse
+  monitor: val_psnr
+  val_batch_size: 1
