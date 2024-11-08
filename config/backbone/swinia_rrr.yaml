@@ -1,5 +1,5 @@
 # @package _global_
-backbone_name: swinia
+backbone_name: swinia_rrr
 
 backbone:
   _target_: noise2same.backbone.swinia.SwinIA
