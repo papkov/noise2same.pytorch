@@ -39,3 +39,6 @@ training:
 
 optimizer:
   weight_decay: 1e-8
+
+scheduler:
+  max_lr: 1e-4
