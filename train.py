@@ -112,6 +112,7 @@ def main(cfg: DictConfig) -> None:
     if 'evaluate' in cfg:
         dataset_test = instantiate(cfg.dataset_test)
         factory = instantiate(cfg.factory_test) if 'factory_test' in cfg else None
+        dataset_benchmark = instantiate(cfg.dataset_benchmark) if 'dataset_benchmark' in cfg else None
 
         scores = evaluate.evaluate(
             evaluator=trainer.evaluator,
@@ -119,7 +120,17 @@ def main(cfg: DictConfig) -> None:
             cfg=cfg,
             factory=factory,
             train_dir=os.getcwd(),
+            keep_images=True
         )
+
+        if dataset_benchmark is not None:
+            benchmark_pred = evaluate.get_predictions(
+                evaluator=trainer.evaluator,
+                dataset=dataset_benchmark,
+                cfg=cfg,
+                factory=factory,
+                train_dir=os.getcwd(),
+            )
 
         if not cfg.check:
             wandb.log(scores)

@@ -213,6 +213,14 @@ class AbstractNoiseDataset(Dataset, ABC):
         image = (image - mean) / std
         return image, mean, std
 
+    def save_predictions(
+        self,
+        predictions: Dict[str, Union[List[np.ndarray], np.ndarray]],
+        save_dir: Union[str, Path],
+        key: str = 'image'
+    ) -> None:
+        np.savez(save_dir / "predictions.npz", **predictions)
+
 
 @dataclass
 class AbstractNoiseDataset3DLarge(AbstractNoiseDataset, ABC):

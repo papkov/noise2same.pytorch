@@ -293,31 +293,94 @@ class Evaluator(object):
             # TODO might not be optimal to copy the batch. Consider popping the keys
             out.update(batch)  # merge input batch and output
             out = self._revert_batch(out, [key, 'ground_truth'])
-            for j, (pred, gt) in enumerate(zip(out[key], out['ground_truth'])):
-                if dataset.n_dim == 2:
-                    if dataset.data_range == 1:
-                        pred = pred * 255
-                        gt = gt * 255
-                    if not min_max_scale:
-                        pred = np.clip(pred + 0.5, 0, 255).astype(np.uint8).astype(np.float32)
-                        gt = np.clip(gt + 0.5, 0, 255).astype(np.uint8).astype(np.float32)
-                scores = calculate_scores(
-                    gt, pred,
-                    multichannel=True,
-                    data_range=255.0 if dataset.n_dim == 2 else 1.0,
-                    normalize_pairs=dataset.n_dim > 2,
-                    gaussuan_weights=True,
-                    metrics=metrics,
-                    scale=min_max_scale
-                )
-                if keep_images:
-                    scores[key] = pred
-                outputs.append(scores)
+            outputs.extend(self.evaluate_batch(out, dataset, key, keep_images, min_max_scale, metrics))
             full_inference_time += inference_time
             test_size += batch['ground_truth'].shape[0]
 
         log.info(f"Average inference time: {full_inference_time / test_size * 1000:.2f} ms")
         return outputs
+
+    def evaluate_batch(
+            self,
+            batch: Dict[str, np.ndarray],
+            dataset: AbstractNoiseDataset,
+            key: str = 'image',
+            keep_images: bool = False,
+            min_max_scale: bool = False,
+            metrics: Tuple[str, ...] = ("rmse", "psnr", "ssim"),
+    ):
+        outputs = []
+        for j, (pred, gt) in enumerate(zip(batch[key], batch['ground_truth'])):
+            if dataset.n_dim == 2:
+                if dataset.data_range == 1:
+                    pred = pred * 255
+                    gt = gt * 255
+                if not min_max_scale:
+                    pred = np.clip(pred + 0.5, 0, 255).astype(np.uint8).astype(np.float32)
+                    gt = np.clip(gt + 0.5, 0, 255).astype(np.uint8).astype(np.float32)
+            scores = calculate_scores(
+                gt, pred,
+                multichannel=True,
+                data_range=255.0 if dataset.n_dim == 2 else 1.0,
+                normalize_pairs=dataset.n_dim > 2,
+                gaussuan_weights=True,
+                metrics=metrics,
+                scale=min_max_scale
+            )
+            if keep_images:
+                scores[key] = pred
+            outputs.append(scores)
+        return outputs
+
+    @torch.no_grad()
+    def get_predictions(
+            self,
+            dataset: AbstractNoiseDataset,
+            factory: Optional[TiledImageFactory] = None,
+            half: bool = False,
+            empty_cache: bool = False,
+            key: str = 'image',
+            num_workers: int = 0,
+    ) -> Dict[str, Union[List[np.ndarray], np.ndarray]]:
+        """
+        Get predictions for a given dataset
+        :param dataset: AbstractNoiseDataset
+        :param factory: Optional[TiledImageFactory]
+        :param half: bool, if use half precision
+        :param empty_cache: bool, if empty CUDA cache after each iteration
+        :param key: str, key to use for the output [image, deconv]
+        :param num_workers: int, number of workers for DataLoader
+        :return: List[Dict[key, output]]
+        """
+        loader = DataLoader(
+            dataset,
+            batch_size=1,
+            num_workers=num_workers,
+            shuffle=False,
+            pin_memory=True,
+            drop_last=False,
+        )
+        self.model.eval()
+        outputs = []
+        iterator = tqdm(loader, desc="inference", position=0, leave=True)
+        full_inference_time, test_size = 0, 0
+        if factory is None:
+            inference = partial(self._inference_batch, half=half, empty_cache=empty_cache)
+        else:
+            inference = partial(self._inference_large_batch, factory=factory, half=half,
+                                empty_cache=empty_cache, keys=(key,))
+        for i, batch in enumerate(iterator):
+            out, inference_time = inference(batch)
+            batch['input/image'] = batch.pop('image')  # rename to avoid key collision
+            out.update(batch)
+            out = self._revert_batch(out, [key])
+            out[key] = np.clip(out[key] + 0.5, 0, 255).astype(np.uint8)
+            outputs.extend(out[key])
+            full_inference_time += inference_time
+            test_size += out[key].shape[0]
+
+        log.info(f"Average inference time: {full_inference_time / test_size * 1000:.2f} ms")
+        return {key: outputs}
 
     def _inference_large_batch(
             self,

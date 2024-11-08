@@ -5,7 +5,7 @@ import os
 from argparse import ArgumentParser
 from pathlib import Path
 from pprint import pformat
-from typing import Dict, Optional, Tuple
+from typing import Dict, Optional, Tuple, Union, List
 
 import numpy as np
 import pandas as pd
@@ -171,10 +171,10 @@ def evaluate(
         dataset_name=np.concatenate([[str(ds)] * len(ds) for ds in datasets]),
         repeat_id=np.concatenate([np.arange(len(ds)) // (len(ds) // ds.n_repeats) for ds in datasets])
     )
-    evaluation_dir = Path(train_dir) / f'evaluate' / datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-    evaluation_dir.mkdir(parents=True, exist_ok=True)
 
     if save_results:
+        evaluation_dir = Path(train_dir) / f'evaluate' / datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+        evaluation_dir.mkdir(parents=True, exist_ok=True)
         log.info(f"Saving results to {evaluation_dir / 'scores.csv'}")
         scores.to_csv(evaluation_dir / "scores.csv")
         if keep_images:
@@ -194,6 +194,27 @@ def evaluate(
               for metric, dataset_dict in scores.items()
               for dataset_name, score in dataset_dict.items()}
     return scores
+
+
+def get_predictions(
+    evaluator: Evaluator,
+    dataset: AbstractNoiseDataset,
+    cfg: DictConfig,
+    factory: Optional[TiledImageFactory] = None,
+    train_dir: Optional[str] = None,
+    save_results: bool = True,
+) -> Dict[str, Union[List[np.ndarray], np.ndarray]]:
+    predictions = evaluator.get_predictions(dataset, factory,
+                                            half=cfg.training.amp,
+                                            empty_cache=False,
+                                            key=cfg.evaluate.key,
+                                            num_workers=cfg.training.num_workers
+                                            )
+    if save_results:
+        save_dir = Path(train_dir) / f'predictions' / datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+        save_dir.mkdir(parents=True, exist_ok=True)
+        dataset.save_predictions(predictions, save_dir, key=cfg.evaluate.key)
+    return predictions
 
 
 def main(train_dir: Path, checkpoint: str = 'last', other_args: list = None) -> None:
@@ -216,6 +237,7 @@ def main(train_dir: Path, checkpoint: str = 'last', other_args: list = None) -> 
     factory = instantiate(cfg.factory_test) if 'factory_test' in cfg else None
     dataset = instantiate(cfg.dataset_test)
     denoiser = instantiate(cfg.denoiser, backbone=backbone, head=head, **instantiate_psf(cfg, dataset))
+    dataset_benchmark = instantiate(cfg.dataset_benchmark) if 'dataset_benchmark' in cfg else None
 
     checkpoint_path = train_dir / Path(f"checkpoints/model{'_last' if checkpoint == 'last' else ''}.pth")
 
@@ -227,9 +249,18 @@ def main(train_dir: Path, checkpoint: str = 'last', other_args: list = None) -> 
         cfg=cfg,
         factory=factory,
         train_dir=train_dir,
+        save_results=False,
         verbose=True,
         keep_images=True,
     )
+    if dataset_benchmark is not None:
+        benchmark_pred = get_predictions(
+            evaluator=evaluator,
+            dataset=dataset_benchmark,
+            cfg=cfg,
+            factory=factory,
+            train_dir=train_dir,
+        )
 
 
 if __name__ == "__main__":
