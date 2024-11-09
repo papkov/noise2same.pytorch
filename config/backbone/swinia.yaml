@@ -5,6 +5,7 @@ backbone:
   _target_: noise2same.backbone.swinia.SwinIA
   in_channels: ${dataset.n_channels}
   embed_dim: 144
+  mlp_ratio: 4
   window_size: 8
   depths: [ 4, 4, 4, 4, 4 ]
   num_heads: [ 16, 16, 16, 16, 16 ]

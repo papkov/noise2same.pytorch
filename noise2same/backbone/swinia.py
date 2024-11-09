@@ -129,6 +129,7 @@ class TransformerBlock(nn.Module):
     def __init__(
             self,
             embed_dim: int = 96,
+            mlp_ratio: int = 4,
             window_size: int = 8,
             shift_size: Tuple[int, int] = (0, 0),
             num_heads: int = 6,
@@ -143,7 +144,7 @@ class TransformerBlock(nn.Module):
     ):
         super().__init__()
         self.softmax = nn.Softmax(dim=-1)
-        self.mlp = MLP(embed_dim, embed_dim, hidden_ratio=4, n_layers=2)
+        self.mlp = MLP(embed_dim, embed_dim, hidden_ratio=mlp_ratio, n_layers=2)
         self.attn = DiagonalWindowAttention(
             embed_dim, to_2tuple(window_size), dilation, shuffle, num_heads,
             attn_drop, proj_drop, post_norm, normalize_query, **kwargs,
@@ -228,6 +229,7 @@ class ResidualGroup(nn.Module):
     def __init__(
             self,
             embed_dim: int = 96,
+            mlp_ratio: int = 4,
             window_size: int = 8,
             depth: int = 6,
             num_heads: int = 6,
@@ -250,6 +252,7 @@ class ResidualGroup(nn.Module):
         self.blocks = nn.ModuleList([
             TransformerBlock(
                 embed_dim=embed_dim,
+                mlp_ratio=mlp_ratio,
                 window_size=window_size,
                 shift_size=shifts[i % len(shifts)],
                 num_heads=num_heads,
@@ -307,6 +310,7 @@ class SwinIA(nn.Module):
             self,
             in_channels: int = 1,
             embed_dim: int = 144,
+            mlp_ratio: int = 4,
             window_size: int = 8,
             input_size: int = 128,
             depths: Tuple[int, ...] = (4, 4, 4, 4, 4),
@@ -348,6 +352,7 @@ class SwinIA(nn.Module):
         self.groups = nn.ModuleList([
             ResidualGroup(
                 embed_dim=embed_dim,
+                mlp_ratio=mlp_ratio,
                 window_size=window_size,
                 depth=d,
                 num_heads=n,
